@@ -6,6 +6,12 @@ var blessed  = require('blessed'),
     duration = require("moment-duration-format"),
     screen   = blessed.screen();
 
+var session = {
+  pods: {}
+};
+
+// https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
+// https://github.com/openshift/openshift-docs/issues/707
 var authorize = {
   hostname: '192.168.64.3',
   protocol: 'https:',
@@ -15,7 +21,7 @@ var authorize = {
   auth    : 'admin:admin'
 };
 
-var pods = token => ({
+var get_pods = token => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
@@ -27,27 +33,21 @@ var pods = token => ({
   }
 });
 
-get(authorize)
-  .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
-  .then(token => get(pods(token)))
-  .then(response => JSON.parse(response.body.toString('utf8')))
-  .then(pods => {
-    table.setData({
-      headers: ['NAME', 'STATUS', 'AGE'],
-      data   : pods.items.reduce((data, pod) => {
-        data.push([
-          pod.metadata.name,
-          pod.status.phase,
-          moment.duration(moment().diff(moment(pod.status.startTime))).format()
-        ]);
-        return data;
-      }, [])
-    });
-  })
-  .then(() => screen.render())
-  .catch(console.error);
+var watch_pods = (token, resourceVersion) => ({
+  hostname: '192.168.64.3',
+  protocol: 'https:',
+  port    : 8443,
+  path    : `/api/v1/namespaces/default/pods?watch=true&resourceVersion=${resourceVersion}&access_token=${token}`,
+  method  : 'GET',
+  headers : {
+    'Authorization': `Bearer ${token}`,
+    'Accept'       : 'application/json, text/plain, */*'
+  }
+});
 
-var table = contrib.table({
+var grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
+
+var table = grid.set(0, 0, 6, 6, contrib.table, {
   keys         : true,
   fg           : 'white',
   selectedFg   : 'white',
@@ -62,11 +62,39 @@ var table = contrib.table({
 });
 
 table.focus();
-screen.append(table);
+
+var log = grid.set(0, 6, 6, 6, contrib.log, {
+  fg        : "green",
+  selectedFg: "green",
+  label     : 'Logs'
+});
 
 screen.key(['escape', 'q', 'C-c'], (ch, key) => process.exit(0));
-
 screen.render();
+
+get(authorize)
+  .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
+  .then(token => session.access_token = token)
+  .then(token => get(get_pods(session.access_token)))
+  .then(response => JSON.parse(response.body.toString('utf8')))
+  .then(pods => {
+    table.setData({
+      headers: ['NAME', 'STATUS', 'AGE'],
+      data   : pods.items.reduce((data, pod) => {
+        data.push([
+          pod.metadata.name,
+          pod.status.phase,
+          moment.duration(moment().diff(moment(pod.status.startTime))).format()
+        ]);
+        return data;
+      }, [])
+    });
+    session.pods.resourceVersion = pods.metadata.resourceVersion;
+  })
+  .then(() => log.log('watching...'))
+  .then(() => screen.render())
+  .then(() => get(watch_pods(session.access_token, session.pods.resourceVersion)))
+  .catch(console.error);
 
 function get(options) {
   return new Promise((resolve, reject) => {
@@ -77,7 +105,11 @@ function get(options) {
       }
       // response.setEncoding('utf8');
       const body = [];
-      response.on('data', chunk => body.push(chunk));
+      response.on('data', chunk => {
+        log.log(chunk.toString('utf8'));
+        body.push(chunk);
+      });
+      // FIXME: do not resolve when the promise on end if already rejected!
       response.on('end', () => resolve({
         statusCode   : response.statusCode,
         statusMessage: response.statusMessage,
