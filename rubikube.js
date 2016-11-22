@@ -1,9 +1,9 @@
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 var blessed  = require('blessed'),
     contrib  = require('blessed-contrib'),
     moment   = require('moment'),
-    duration = require("moment-duration-format"),
+    duration = require('moment-duration-format'),
     screen   = blessed.screen();
 
 var session = {
@@ -61,16 +61,23 @@ var table = grid.set(0, 0, 6, 6, contrib.table, {
   columnWidth  : [32, 9, 15]
 });
 
-table.focus();
-
-var log = grid.set(0, 6, 6, 6, contrib.log, {
-  fg        : "green",
-  selectedFg: "green",
+var debug = grid.set(0, 0, 12, 12, contrib.log, {
+  fg        : 'green',
+  selectedFg: 'green',
   label     : 'Logs'
 });
 
 screen.key(['escape', 'q', 'C-c'], (ch, key) => process.exit(0));
-screen.render();
+
+var carousel = new contrib.carousel([screen => {
+  screen.append(table);
+  table.focus();
+}, screen => screen.append(debug)], {
+  screen     : screen,
+  interval   : 0,
+  controlKeys: true
+});
+carousel.start();
 
 get(authorize)
   .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
@@ -91,7 +98,7 @@ get(authorize)
     });
     session.pods.resourceVersion = pods.metadata.resourceVersion;
   })
-  .then(() => log.log('watching...'))
+  .then(() => debug.log('watching...'))
   .then(() => screen.render())
   .then(() => get(watch_pods(session.access_token, session.pods.resourceVersion)))
   .catch(console.error);
@@ -106,7 +113,7 @@ function get(options) {
       // response.setEncoding('utf8');
       const body = [];
       response.on('data', chunk => {
-        log.log(chunk.toString('utf8'));
+        debug.log(chunk.toString('utf8'));
         body.push(chunk);
       });
       // FIXME: do not resolve when the promise on end if already rejected!
