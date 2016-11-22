@@ -100,28 +100,40 @@ get(authorize)
   })
   .then(() => debug.log('watching...'))
   .then(() => screen.render())
-  .then(() => get(watch_pods(session.access_token, session.pods.resourceVersion)))
+  .then(() => get(watch_pods(session.access_token, session.pods.resourceVersion), function*() {
+    while (true)
+      debug.log((yield).toString('utf8'));
+  }))
   .catch(console.error);
 
-function get(options) {
+// TODO: add a parameter to control whether to block until the generator is done
+// TODO: resolve the promise with the generator return value if it's done or throw if an error occurs
+function get(options, generator) {
   return new Promise((resolve, reject) => {
     const lib = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     lib.get(options, response => {
       if (response.statusCode < 200 || response.statusCode >= 400) {
         reject(new Error('Failed to load page, status code: ' + response.statusCode));
       }
-      // response.setEncoding('utf8');
-      const body = [];
+      if (generator) {
+        var gen = generator();
+        gen.next();
+      } else {
+        var body = [];
+      }
       response.on('data', chunk => {
-        debug.log(chunk.toString('utf8'));
-        body.push(chunk);
+        if (gen) {
+          gen.next(chunk);
+        } else {
+          body.push(chunk);
+        }
       });
       // FIXME: do not resolve when the promise on end if already rejected!
       response.on('end', () => resolve({
         statusCode   : response.statusCode,
         statusMessage: response.statusMessage,
         headers      : response.headers,
-        body         : Buffer.concat(body)
+        body         : body ? Buffer.concat(body) : undefined
       }));
     }).on('error', reject);
   })
