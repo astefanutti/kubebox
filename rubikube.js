@@ -7,8 +7,9 @@ var blessed  = require('blessed'),
     screen   = blessed.screen();
 
 var session = {
-  namespace: 'default',
-  pods     : {}
+  access_token: null,
+  namespace   : 'default',
+  pods        : {}
 };
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
@@ -34,11 +35,11 @@ var get_namespaces = token => ({
   }
 });
 
-var get_pods = token => ({
+var get_pods = (namespace, token) => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
-  path    : `/api/v1/namespaces/${session.namespace}/pods`,
+  path    : `/api/v1/namespaces/${namespace}/pods`,
   method  : 'GET',
   headers : {
     'Authorization': `Bearer ${token}`,
@@ -46,11 +47,11 @@ var get_pods = token => ({
   }
 });
 
-var watch_pods = (token, resourceVersion) => ({
+var watch_pods = (namespace, token, resourceVersion) => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
-  path    : `/api/v1/namespaces/${session.namespace}/pods?watch=true&resourceVersion=${resourceVersion}&access_token=${token}`,
+  path    : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}&access_token=${token}`,
   method  : 'GET',
   headers : {
     'Authorization': `Bearer ${token}`,
@@ -143,7 +144,7 @@ get(authorize)
   .catch(console.error);
 
 function dashboard() {
-  return get(get_pods(session.access_token))
+  return get(get_pods(session.namespace, session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(pods => {
       table.setData({
@@ -161,10 +162,11 @@ function dashboard() {
     })
     .then(() => screen.render())
     .then(() => debug.log(`Watching for pods changes in namespace ${session.namespace} ...`))
-    .then(() => get(watch_pods(session.access_token, session.pods.resourceVersion), function*() {
-      while (true)
-        debug.log((yield).toString('utf8'));
-    }));
+    .then(() => get(watch_pods(session.namespace, session.access_token, session.pods.resourceVersion),
+      function*() {
+        while (true)
+          debug.log((yield).toString('utf8'));
+      }));
 }
 
 // TODO: add a parameter to control whether to block until the generator is done
