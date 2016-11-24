@@ -166,38 +166,53 @@ function dashboard() {
       function*() {
         while (true)
           debug.log((yield).toString('utf8'));
+        // TODO: update the pods table
       }));
 }
 
-// TODO: add a parameter to control whether to block until the generator is done
-// TODO: resolve the promise with the generator return value if it's done or throw if an error occurs
-function get(options, generator) {
+function get(options, generator, async = true) {
+  return generator ? getStream(options, generator, async) : getBody(options);
+}
+
+function getBody(options) {
   return new Promise((resolve, reject) => {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     client.get(options, response => {
-      if (response.statusCode < 200 || response.statusCode >= 400) {
-        reject(new Error('Failed to load page, status code: ' + response.statusCode));
+      if (response.statusCode >= 400) {
+        reject(new Error(`Failed to get resource, status code: ${response.statusCode}`));
+        // FIXME: should the request be aborted to avoid to resolve the rejected promise on end
       }
-      if (generator) {
-        var gen = generator();
-        gen.next();
+      const body = [];
+      response.on('data', chunk => body.push(chunk))
+        .on('end', () => {
+          response.body = Buffer.concat(body);
+          resolve(response);
+        });
+    }).on('error', reject);
+  })
+}
+
+// TODO: throw / return the generator if the request is aborted / closed
+function getStream(options, generator, async = true) {
+  return new Promise((resolve, reject) => {
+    const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
+    client.get(options, response => {
+      if (response.statusCode >= 400) {
+        reject(new Error(`Failed to get resource, status code: ${response.statusCode}`));
+        // FIXME: should the request be aborted to avoid to resolve the rejected promise on end
+      }
+      const gen = generator();
+      gen.next();
+      response.on('data', chunk => gen.next(chunk));
+      if (async) {
+        resolve(response);
+        response.on('end', () => gen.return());
       } else {
-        var body = [];
+        response.on('end', () => {
+          response.body = gen.next().value;
+          resolve(response);
+        });
       }
-      response.on('data', chunk => {
-        if (gen) {
-          gen.next(chunk);
-        } else {
-          body.push(chunk);
-        }
-      });
-      // FIXME: do not resolve when the promise on end if already rejected!
-      response.on('end', () => resolve({
-        statusCode   : response.statusCode,
-        statusMessage: response.statusMessage,
-        headers      : response.headers,
-        body         : body ? Buffer.concat(body) : undefined
-      }));
     }).on('error', reject);
   })
 }
