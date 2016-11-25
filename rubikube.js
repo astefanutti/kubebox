@@ -179,8 +179,8 @@ function getBody(options) {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     client.get(options, response => {
       if (response.statusCode >= 400) {
-        reject(new Error(`Failed to get resource, status code: ${response.statusCode}`));
-        // FIXME: should the request be aborted to avoid to resolve the rejected promise on end
+        response.destroy(new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`));
+        return;
       }
       const body = [];
       response.on('data', chunk => body.push(chunk))
@@ -192,14 +192,14 @@ function getBody(options) {
   })
 }
 
-// TODO: throw / return the generator if the request is aborted / closed
 function getStream(options, generator, async = true) {
   return new Promise((resolve, reject) => {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     client.get(options, response => {
       if (response.statusCode >= 400) {
-        reject(new Error(`Failed to get resource, status code: ${response.statusCode}`));
-        // FIXME: should the request be aborted to avoid to resolve the rejected promise on end
+        // we may want to throw the generator if the request is aborted / closed
+        response.destroy(new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`));
+        return;
       }
       const gen = generator();
       gen.next();
