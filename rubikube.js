@@ -203,14 +203,29 @@ function getStream(options, generator, async = true) {
       }
       const gen = generator();
       gen.next();
-      response.on('data', chunk => gen.next(chunk));
+      response.on('data', chunk => {
+        const res = gen.next(chunk);
+        if (res.done) {
+          // we may work on the http.ClientRequest if needed
+          response.destroy();
+          response.body = res.value;
+          // ignored for async as it's already been resolved
+          resolve(response);
+        }
+      });
       if (async) {
         resolve(response);
-        response.on('end', () => gen.return());
+        response.on('end', () => {
+          // ignored if the generator is done already
+          gen.return();
+        });
       } else {
         response.on('end', () => {
-          response.body = gen.next().value;
-          resolve(response);
+          const res = gen.next();
+          if (!res.done) {
+            response.body = res.value;
+            resolve(response);
+          }
         });
       }
     }).on('error', reject);
