@@ -1,12 +1,12 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-var blessed  = require('blessed'),
-    contrib  = require('blessed-contrib'),
-    moment   = require('moment'),
-    duration = require('moment-duration-format'),
-    screen   = blessed.screen();
+const blessed  = require('blessed'),
+      contrib  = require('blessed-contrib'),
+      moment   = require('moment'),
+      duration = require('moment-duration-format'),
+      screen   = blessed.screen();
 
-var session = {
+const session = {
   access_token: null,
   namespace   : 'default',
   pods        : {}
@@ -14,7 +14,7 @@ var session = {
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
-var authorize = {
+const authorize = {
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
@@ -23,7 +23,7 @@ var authorize = {
   auth    : 'admin:admin'
 };
 
-var get_namespaces = token => ({
+const get_namespaces = token => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
@@ -35,7 +35,7 @@ var get_namespaces = token => ({
   }
 });
 
-var get_pods = (namespace, token) => ({
+const get_pods = (namespace, token) => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
@@ -47,7 +47,7 @@ var get_pods = (namespace, token) => ({
   }
 });
 
-var watch_pods = (namespace, token, resourceVersion) => ({
+const watch_pods = (namespace, token, resourceVersion) => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
@@ -59,9 +59,9 @@ var watch_pods = (namespace, token, resourceVersion) => ({
   }
 });
 
-var grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
+const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
 
-var table = grid.set(0, 0, 6, 6, contrib.table, {
+const table = grid.set(0, 0, 6, 6, contrib.table, {
   keys         : true,
   fg           : 'white',
   selectedFg   : 'white',
@@ -75,14 +75,14 @@ var table = grid.set(0, 0, 6, 6, contrib.table, {
   columnWidth  : [32, 9, 15]
 });
 
-var debug = grid.set(0, 0, 12, 12, contrib.log, {
+const debug = grid.set(0, 0, 12, 12, contrib.log, {
   fg        : 'green',
   selectedFg: 'green',
   label     : 'Logs'
 });
 
 // TODO: display a list table with some high level info about the namespaces
-var list = blessed.list({
+const list = blessed.list({
   top   : 'center',
   left  : 'center',
   width : '50%',
@@ -127,7 +127,7 @@ screen.key(['n'], () => {
 
 screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 
-var carousel = new contrib.carousel([screen => {
+const carousel = new contrib.carousel([screen => {
   screen.append(table);
   table.focus();
 }, screen => screen.append(debug)], {
