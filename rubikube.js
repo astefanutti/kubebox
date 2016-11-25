@@ -75,6 +75,21 @@ const table = grid.set(0, 0, 6, 6, contrib.table, {
   columnWidth  : [32, 9, 15]
 });
 
+function setTableData(pods) {
+  table.setData({
+    headers: ['NAME', 'STATUS', 'AGE'],
+    data   : pods.items.reduce((data, pod) => {
+      data.push([
+        pod.metadata.name,
+        // TODO: be more fine grained for the status
+        pod.status.phase,
+        moment.duration(moment().diff(moment(pod.status.startTime))).format()
+      ]);
+      return data;
+    }, [])
+  })
+}
+
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
   fg        : 'green',
   selectedFg: 'green',
@@ -146,28 +161,31 @@ get(authorize)
 function dashboard() {
   return get(get_pods(session.namespace, session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
-    .then(pods => {
-      table.setData({
-        headers: ['NAME', 'STATUS', 'AGE'],
-        data   : pods.items.reduce((data, pod) => {
-          data.push([
-            pod.metadata.name,
-            pod.status.phase,
-            moment.duration(moment().diff(moment(pod.status.startTime))).format()
-          ]);
-          return data;
-        }, [])
-      });
-      session.pods.resourceVersion = pods.metadata.resourceVersion;
-    })
-    .then(() => screen.render())
+    .then(pods => session.pods = pods)
+    .then(() => setTableData(session.pods))
     .then(() => debug.log(`Watching for pods changes in namespace ${session.namespace} ...`))
-    .then(() => get(watch_pods(session.namespace, session.access_token, session.pods.resourceVersion),
+    .then(() => screen.render())
+    .then(() => get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion),
       function*() {
-        while (true)
-          debug.log((yield).toString('utf8'));
-        // TODO: update the pods table
-      }));
+        let change;
+        while (change = JSON.parse((yield).toString('utf8'))) {
+          const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
+          switch (change.type) {
+            case 'ADDED':
+              session.pods.items.push(change.object);
+              break;
+            case 'MODIFIED':
+              session.pods.items[index(change.object)] = change.object;
+              break;
+            case 'DELETED':
+              session.pods.items.splice(index(change.object), 1);
+              break;
+          }
+          setTableData(session.pods);
+          screen.render();
+        }
+      }
+    ));
 }
 
 function get(options, generator, async = true) {
