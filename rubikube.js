@@ -83,6 +83,7 @@ function setTableData(pods) {
         pod.metadata.name,
         // TODO: be more fine grained for the status
         pod.status.phase,
+        // TODO: better humanized duration h:mm:ss
         moment.duration(moment().diff(moment(pod.status.startTime))).format()
       ]);
       return data;
@@ -122,6 +123,7 @@ list.on('select', item => {
   screen.render();
   debug.log(`Switching to namespace ${session.namespace}`);
   // FIXME: cancel the promises / requests (watch) from the previous dashboard
+  // FIXME: cancel pod age refresh interval
   dashboard().catch(console.error);
 });
 
@@ -165,27 +167,35 @@ function dashboard() {
     .then(() => setTableData(session.pods))
     .then(() => debug.log(`Watching for pods changes in namespace ${session.namespace} ...`))
     .then(() => screen.render())
-    .then(() => get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion),
-      function*() {
-        let change;
-        while (change = JSON.parse((yield).toString('utf8'))) {
-          const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
-          switch (change.type) {
-            case 'ADDED':
-              session.pods.items.push(change.object);
-              break;
-            case 'MODIFIED':
-              session.pods.items[index(change.object)] = change.object;
-              break;
-            case 'DELETED':
-              session.pods.items.splice(index(change.object), 1);
-              break;
-          }
-          setTableData(session.pods);
-          screen.render();
-        }
-      }
-    ));
+    .then(() => get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion), updatePodTable))
+    .then(() => setInterval(refreshPodAges, 1000));
+}
+
+function* updatePodTable() {
+  let change;
+  while (change = JSON.parse((yield).toString('utf8'))) {
+    const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
+    switch (change.type) {
+      case 'ADDED':
+        session.pods.items.push(change.object);
+        break;
+      case 'MODIFIED':
+        session.pods.items[index(change.object)] = change.object;
+        break;
+      case 'DELETED':
+        session.pods.items.splice(index(change.object), 1);
+        break;
+    }
+    setTableData(session.pods);
+    screen.render();
+  }
+}
+
+function refreshPodAges() {
+  session.pods.items.forEach(pod => moment(pod.status.startTime).add(1, 's').toISOString());
+  // we may to avoid recreating the whole table data
+  setTableData(session.pods);
+  screen.render();
 }
 
 function get(options, generator, async = true) {
