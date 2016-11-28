@@ -7,9 +7,10 @@ const blessed  = require('blessed'),
       screen   = blessed.screen();
 
 const session = {
-  access_token: null,
-  namespace   : 'default',
-  pods        : {}
+  access_token : null,
+  namespace    : 'default',
+  pods         : {},
+  cancellations: []
 };
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
@@ -130,12 +131,13 @@ list.on('cancel', () => {
   screen.render();
 });
 list.on('select', item => {
-  session.namespace = item.content;
   list.detach();
   screen.render();
+  debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
+  session.cancellations.forEach(cancellation => cancellation());
+  session.cancellations = [];
   debug.log(`Switching to namespace ${session.namespace}`);
-  // FIXME: cancel the promises / requests (watch) from the previous dashboard
-  // FIXME: cancel pod age refresh interval
+  session.namespace = item.content;
   dashboard().catch(console.error);
 });
 
@@ -169,18 +171,25 @@ carousel.start();
 get(authorize)
   .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
   .then(token => session.access_token = token)
-  .then(dashboard)
+  .then(() => dashboard())
   .catch(console.error);
 
-function dashboard() {
+function dashboard(cancellations = session.cancellations) {
   return get(get_pods(session.namespace, session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(pods => session.pods = pods)
     .then(() => setTableData(session.pods))
     .then(() => debug.log(`Watching for pods changes in namespace ${session.namespace} ...`))
     .then(() => screen.render())
-    .then(() => get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion), updatePodTable))
-    .then(() => setInterval(refreshPodAges, 1000));
+    .then(() => {
+      const {promise, cancellation} = get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion), updatePodTable);
+      cancellations.push(cancellation);
+      return promise;
+    })
+    .then(() => {
+      const id = setInterval(refreshPodAges, 1000);
+      cancellations.push(() => clearInterval(id));
+    });
 }
 
 function* updatePodTable() {
@@ -214,6 +223,7 @@ function get(options, generator, async = true) {
   return generator ? getStream(options, generator, async) : getBody(options);
 }
 
+// we may want to support cancellation of the returned pending promise
 function getBody(options) {
   return new Promise((resolve, reject) => {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
@@ -233,9 +243,10 @@ function getBody(options) {
 }
 
 function getStream(options, generator, async = true) {
-  return new Promise((resolve, reject) => {
+  let request;
+  const promise = new Promise((resolve, reject) => {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
-    client.get(options, response => {
+    request      = client.get(options, response => {
       if (response.statusCode >= 400) {
         // we may want to throw the generator if the request is aborted / closed
         response.destroy(new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`));
@@ -269,5 +280,10 @@ function getStream(options, generator, async = true) {
         });
       }
     }).on('error', reject);
-  })
+  });
+  return {
+    promise     : promise,
+    // destroy the http.ClientRequest on cancellation
+    cancellation: request ? () => request.abort() : () => void 0
+  }
 }
