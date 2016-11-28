@@ -68,11 +68,9 @@ const table = grid.set(0, 0, 6, 6, contrib.table, {
   selectedBg   : 'blue',
   interactive  : true,
   label        : 'Pods',
-  width        : '50%',
-  height       : '30%',
   border       : {type: 'line', fg: 'cyan'},
   columnSpacing: 3,
-  columnWidth  : [32, 9, 15]
+  columnWidth  : [32, 12, 8]
 });
 
 function setTableData(pods) {
@@ -83,12 +81,26 @@ function setTableData(pods) {
         pod.metadata.name,
         // TODO: be more fine grained for the status
         pod.status.phase,
-        // TODO: better humanized duration h:mm:ss
-        moment.duration(moment().diff(moment(pod.status.startTime))).format()
+        formatDuration(moment.duration(moment().diff(moment(pod.status.startTime))))
       ]);
       return data;
     }, [])
   })
+}
+
+function formatDuration(duration) {
+  if (duration.years() > 0)
+    return duration.format('y[y] M[M]');
+  else if (duration.months() > 0)
+    return duration.format('M[M] d[d]');
+  else if (duration.days() > 0)
+    return duration.format('d[d] h[h]');
+  else if (duration.hours() > 0)
+    return duration.format('h[h] m[m]');
+  else if (duration.minutes() > 0)
+    return duration.format('m[m] s[s]');
+  else
+    return duration.format('s[s]');
 }
 
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
