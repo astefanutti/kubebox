@@ -9,11 +9,48 @@ const blessed  = require('blessed'),
       duration = require('moment-duration-format'),
       screen   = blessed.screen();
 
+class Cancellations {
+
+  constructor() {
+    this.cancellations = {};
+  }
+
+  add(key, cancellation) {
+    const leaf = key.split('.').reduce((node, k) => {
+      if (!(k in node))
+        node[k] = [];
+      return node[k];
+    }, this.cancellations);
+    leaf.push(cancellation);
+  }
+
+  run(key) {
+    const node = key.split('.').reduce((node, k) => node[k], this.cancellations);
+    if (!node) return;
+    // we may want to run the cancellations in reverse order
+    node.forEach(cancellation => cancellation());
+    node.length = 0;
+    for (const child in node) {
+      if (Array.isArray(node[child])) {
+        this.run(key + '.' + child);
+      }
+    }
+  }
+
+  // TODO: use a dedicated widget to dump current tasks
+  toString(node = this.cancellations, key = 'cancellations') {
+    debug.log(`key: ${key}, isArray: ${Array.isArray(node)}`);
+    for (const child in node) {
+      this.toString(node[child], key + '.' + child);
+    }
+  }
+}
+
 const session = {
   access_token : null,
   namespace    : 'default',
   pods         : {},
-  cancellations: []
+  cancellations: new Cancellations()
 };
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
@@ -94,7 +131,7 @@ const table = grid.set(0, 0, 6, 6, blessed.listtable, {
 });
 
 table.on('select', (item, i) => {
-  // FIXME: cancel previous request
+  session.cancellations.run('dashboard.logs');
   const pod = session.pods.items[i - 1].metadata.name;
   // logs.setLabel(`Logs [${pod}]`);
   // FIXME: provide container name for multi-containers pod
@@ -104,7 +141,7 @@ table.on('select', (item, i) => {
       logs.log((yield).toString('utf8'));
     }
   });
-  session.cancellations.push(cancellation);
+  session.cancellations.add('dashboard.logs', cancellation);
   promise.catch(console.error);
 });
 
@@ -117,6 +154,7 @@ function setTableData(pods) {
       pod.metadata.name,
       // TODO: be more fine grained for the status
       pod.status.phase,
+      // FIXME: negative duration is displayed when pod starts as clocks may not be synced
       formatDuration(moment.duration(moment().diff(moment(pod.status.startTime))))
     ]);
     return data;
@@ -178,9 +216,9 @@ list.on('select', item => {
   list.detach();
   screen.render();
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
-  session.cancellations.forEach(cancellation => cancellation());
-  session.cancellations = [];
+  session.cancellations.run('dashboard');
   // FIXME: clear logs
+  // FIXME: use index to retrieve the namespace
   debug.log(`Switching to namespace ${session.namespace}`);
   session.namespace = item.content;
   dashboard().catch(console.error);
@@ -232,12 +270,12 @@ function dashboard(cancellations = session.cancellations) {
     .then(() => screen.render())
     .then(() => {
       const {promise, cancellation} = get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion), updatePodTable);
-      cancellations.push(cancellation);
+      cancellations.add('dashboard', cancellation);
       return promise;
     })
     .then(() => {
       const id = setInterval(refreshPodAges, 1000);
-      cancellations.push(() => clearInterval(id));
+      cancellations.add('dashboard', () => clearInterval(id));
     });
 }
 
