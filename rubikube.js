@@ -1,4 +1,5 @@
 // TODO: display uncaught exception in a popup
+// TODO: retrieve k8s master URL from the env or as an arg
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -17,12 +18,14 @@ const session = {
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
+// TODO: try reading the token from ~/.kube/config
 const authorize = {
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
   path    : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
   method  : 'GET',
+  // TODO: prompt for credentials
   auth    : 'admin:admin'
 };
 
@@ -201,6 +204,7 @@ screen.key(['n'], () => {
 screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 
 const carousel = new contrib.carousel([screen => {
+  // TODO: restore selection if any
   screen.append(table);
   // work-around for https://github.com/chjj/blessed/issues/175
   // table.setLabel('Pods');
