@@ -238,9 +238,15 @@ function dashboard(cancellations = session.cancellations) {
 }
 
 function* updatePodTable() {
-  let change;
-  // FIXME: chunk may not be a complete JSON object
-  while (change = JSON.parse((yield).toString('utf8'))) {
+  let change, buffer = '';
+  while (change = (yield).toString('utf8')) {
+    buffer += change;
+    try {
+      change = JSON.parse(buffer);
+      buffer = '';
+    } catch (error) {
+      continue
+    }
     const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
     switch (change.type) {
       case 'ADDED':
