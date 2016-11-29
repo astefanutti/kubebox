@@ -1,3 +1,5 @@
+// TODO: display uncaught exception in a popup
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const blessed  = require('blessed'),
@@ -60,33 +62,63 @@ const watch_pods = (namespace, token, resourceVersion) => ({
   }
 });
 
-const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
-
-const table = grid.set(0, 0, 6, 6, contrib.table, {
-  keys         : true,
-  fg           : 'white',
-  selectedFg   : 'white',
-  selectedBg   : 'blue',
-  interactive  : true,
-  label        : 'Pods',
-  border       : {type: 'line', fg: 'cyan'},
-  columnSpacing: 3,
-  columnWidth  : [32, 12, 8]
+const get_logs = (namespace, pod, token) => ({
+  hostname: '192.168.64.3',
+  protocol: 'https:',
+  port    : 8443,
+  path    : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=10`,
+  method  : 'GET',
+  headers : {
+    'Authorization': `Bearer ${token}`,
+    'Accept'       : 'application/json, text/plain, */*'
+  }
 });
 
+const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
+
+const table = grid.set(0, 0, 6, 6, blessed.listtable, {
+  border       : 'line',
+  align        : 'left',
+  keys         : true,
+  tags         : true,
+  shrink       : false,
+  noCellBorders: true,
+  style        : {
+    border: {fg: 'white'},
+    header: {fg: 'blue', bold: true},
+    cell  : {fg: 'white', selected: {bg: 'blue'}}
+  }
+});
+
+table.on('select', (item, i) => {
+  // FIXME: cancel previous request
+  const pod = session.pods.items[i - 1].metadata.name;
+  // logs.setLabel(`Logs [${pod}]`);
+  // FIXME: provide container name for multi-containers pod
+  const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), function*() {
+    while (true) {
+      // FIXME: remove extra line
+      logs.log((yield).toString('utf8'));
+    }
+  });
+  session.cancellations.push(cancellation);
+  promise.catch(console.error);
+});
+
+table.on('select item', (item, i) => table.selected = i);
+
 function setTableData(pods) {
-  table.setData({
-    headers: ['NAME', 'STATUS', 'AGE'],
-    data   : pods.items.reduce((data, pod) => {
-      data.push([
-        pod.metadata.name,
-        // TODO: be more fine grained for the status
-        pod.status.phase,
-        formatDuration(moment.duration(moment().diff(moment(pod.status.startTime))))
-      ]);
-      return data;
-    }, [])
-  })
+  const selected = table.selected;
+  table.setData(pods.items.reduce((data, pod) => {
+    data.push([
+      pod.metadata.name,
+      // TODO: be more fine grained for the status
+      pod.status.phase,
+      formatDuration(moment.duration(moment().diff(moment(pod.status.startTime))))
+    ]);
+    return data;
+  }, [['NAME', 'STATUS', 'AGE']]));
+  table.select(selected);
 }
 
 function formatDuration(duration) {
@@ -103,6 +135,15 @@ function formatDuration(duration) {
   else
     return duration.format('s[s]');
 }
+
+const logs = grid.set(6, 0, 6, 12, blessed.log, {
+  border: 'line',
+  align : 'left',
+  label : 'Logs',
+  style : {
+    border: {fg: 'white'}
+  }
+});
 
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
   fg        : 'green',
@@ -136,6 +177,7 @@ list.on('select', item => {
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
   session.cancellations.forEach(cancellation => cancellation());
   session.cancellations = [];
+  // FIXME: clear logs
   debug.log(`Switching to namespace ${session.namespace}`);
   session.namespace = item.content;
   dashboard().catch(console.error);
@@ -160,6 +202,9 @@ screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 
 const carousel = new contrib.carousel([screen => {
   screen.append(table);
+  // work-around for https://github.com/chjj/blessed/issues/175
+  // table.setLabel('Pods');
+  screen.append(logs);
   table.focus();
 }, screen => screen.append(debug)], {
   screen     : screen,
@@ -194,6 +239,7 @@ function dashboard(cancellations = session.cancellations) {
 
 function* updatePodTable() {
   let change;
+  // FIXME: chunk may not be a complete JSON object
   while (change = JSON.parse((yield).toString('utf8'))) {
     const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
     switch (change.type) {
