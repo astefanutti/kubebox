@@ -112,6 +112,10 @@ table.on('select', (item, i) => {
 
 table.on('select item', (item, i) => table.selected = i);
 
+// work-around for https://github.com/chjj/blessed/issues/175
+table.on('remove', () => table.removeLabel());
+table.on('prerender', () => table.setLabel('Pods'));
+
 function setTableData(pods) {
   const selected = table.selected;
   table.setData(pods.items.reduce((data, pod) => {
@@ -210,8 +214,6 @@ screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 const carousel = new contrib.carousel([screen => {
   // TODO: restore selection if any
   screen.append(table);
-  // work-around for https://github.com/chjj/blessed/issues/175
-  // table.setLabel('Pods');
   screen.append(logs);
   table.focus();
 }, screen => screen.append(debug)], {
