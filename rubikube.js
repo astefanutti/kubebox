@@ -208,9 +208,9 @@ screen.key(['n'], () => {
   get(get_namespaces(session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(namespaces => session.namespaces = namespaces)
-    // TODO: add a visual hint for the current namespace
     .then(namespaces => list.setItems(namespaces.items.reduce((data, namespace) => {
-      data.push(namespace.metadata.name);
+      data.push(namespace.metadata.name === session.namespace ?
+        `{blue-fg}${namespace.metadata.name}{/blue-fg}` : namespace.metadata.name);
       return data;
     }, [])))
     .then(() => screen.render())
