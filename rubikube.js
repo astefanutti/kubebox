@@ -98,7 +98,7 @@ const table = grid.set(0, 0, 6, 6, blessed.listtable, {
 table.on('select', (item, i) => {
   session.cancellations.run('dashboard.logs');
   const pod = session.pods.items[i - 1].metadata.name;
-  // logs.setLabel(`Logs [${pod}]`);
+  logs.setLabel(`Logs {blue-fg}[${pod}]{/blue-fg}`);
   // FIXME: provide container name for multi-containers pod
   const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), function*() {
     while (true) {
@@ -117,6 +117,7 @@ table.on('remove', () => table.removeLabel());
 table.on('prerender', () => table.setLabel('Pods'));
 
 function setTableData(pods) {
+  // TODO: add a visual hint for the selected pod
   const selected = table.selected;
   table.setData(pods.items.reduce((data, pod) => {
     data.push([
@@ -150,6 +151,7 @@ const logs = grid.set(6, 0, 6, 12, blessed.log, {
   border: 'line',
   align : 'left',
   label : 'Logs',
+  tags  : true,
   style : {
     border: {fg: 'white'}
   }
@@ -184,10 +186,15 @@ list.on('cancel', () => {
 list.on('select', (item, i) => {
   list.detach();
   screen.render();
+  // TODO: check if selection is current namespace
+  // cancel current running tasks and open requests
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
   session.cancellations.run('dashboard');
+  // reset dashboard widgets
+  logs.setLabel('Logs');
   logs.setText('');
   table.select(0);
+  // switch dashboard to new namespace
   session.namespace = session.namespaces.items[i].metadata.name;
   debug.log(`Switching to namespace ${session.namespace}`);
   dashboard().catch(console.error);
@@ -201,6 +208,7 @@ screen.key(['n'], () => {
   get(get_namespaces(session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(namespaces => session.namespaces = namespaces)
+    // TODO: add a visual hint for the current namespace
     .then(namespaces => list.setItems(namespaces.items.reduce((data, namespace) => {
       data.push(namespace.metadata.name);
       return data;
