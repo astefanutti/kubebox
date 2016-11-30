@@ -188,7 +188,9 @@ list.on('cancel', () => {
 list.on('select', (item, i) => {
   list.detach();
   screen.render();
-  // TODO: check if selection is current namespace
+  const namespace = session.namespaces.items[i].metadata.name;
+  if (namespace === session.namespace)
+    return;
   // cancel current running tasks and open requests
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
   session.cancellations.run('dashboard');
@@ -197,8 +199,8 @@ list.on('select', (item, i) => {
   logs.setText('');
   table.select(0);
   // switch dashboard to new namespace
-  session.namespace = session.namespaces.items[i].metadata.name;
-  debug.log(`Switching to namespace ${session.namespace}`);
+  debug.log(`Switching to namespace ${namespace}`);
+  session.namespace = namespace;
   dashboard().catch(console.error);
 });
 
