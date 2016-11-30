@@ -106,8 +106,8 @@ table.on('select', (item, i) => {
       logs.log((yield).toString('utf8'));
     }
   });
+  promise.then(() => logs.setText('')).catch(console.error);
   session.cancellations.add('dashboard.logs', cancellation);
-  promise.catch(console.error);
 });
 
 table.on('select item', (item, i) => table.selected = i);
@@ -182,7 +182,8 @@ list.on('select', (item, i) => {
   screen.render();
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
   session.cancellations.run('dashboard');
-  // FIXME: clear logs and reset pod selection
+  logs.setText('');
+  table.select(0);
   session.namespace = session.namespaces.items[i].metadata.name;
   debug.log(`Switching to namespace ${session.namespace}`);
   dashboard().catch(console.error);
