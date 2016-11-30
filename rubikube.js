@@ -158,9 +158,11 @@ const logs = grid.set(6, 0, 6, 12, blessed.log, {
 });
 
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
-  fg        : 'green',
-  selectedFg: 'green',
-  label     : 'Logs'
+  label: 'Logs',
+  style: {
+    fg    : 'white',
+    border: {fg: 'white'}
+  }
 });
 
 // TODO: display a list table with some high level info about the namespaces
