@@ -15,6 +15,7 @@ const session = {
   cancellations: new task.Cancellations(),
   namespace    : 'default',
   namespaces   : {},
+  pod          : null,
   pods         : {}
 };
 
@@ -96,9 +97,10 @@ const table = grid.set(0, 0, 6, 6, blessed.listtable, {
 });
 
 table.on('select', (item, i) => {
-  session.cancellations.run('dashboard.logs');
   const pod = session.pods.items[i - 1].metadata.name;
-  logs.setLabel(`Logs {blue-fg}[${pod}]{/blue-fg}`);
+  if (pod === session.pod)
+    return;
+  session.cancellations.run('dashboard.logs');
   // FIXME: provide container name for multi-containers pod
   const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), function*() {
     while (true) {
@@ -106,22 +108,23 @@ table.on('select', (item, i) => {
       logs.log((yield).toString('utf8'));
     }
   });
-  promise.then(() => logs.setText('')).catch(console.error);
   session.cancellations.add('dashboard.logs', cancellation);
+  promise
+    .then(() => session.pod = pod)
+    .then(() => logs.setLabel(`Logs {blue-fg}[${pod}]{/blue-fg}`))
+    .then(() => logs.setText(''))
+    .then(() => setTableData(session.pods))
+    .catch(console.error);
 });
-
-table.on('select item', (item, i) => table.selected = i);
-
 // work-around for https://github.com/chjj/blessed/issues/175
 table.on('remove', () => table.removeLabel());
 table.on('prerender', () => table.setLabel('Pods'));
 
 function setTableData(pods) {
-  // TODO: add a visual hint for the selected pod
   const selected = table.selected;
   table.setData(pods.items.reduce((data, pod) => {
     data.push([
-      pod.metadata.name,
+      pod.metadata.name === session.pod ? `{blue-fg}${pod.metadata.name}{/blue-fg}` : pod.metadata.name,
       // TODO: be more fine grained for the status
       pod.status.phase,
       // FIXME: negative duration is displayed when pod starts as clocks may not be synced
@@ -201,6 +204,7 @@ list.on('select', (item, i) => {
   // switch dashboard to new namespace
   debug.log(`Switching to namespace ${namespace}`);
   session.namespace = namespace;
+  session.pod       = null;
   dashboard().catch(console.error);
 });
 
