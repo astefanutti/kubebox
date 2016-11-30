@@ -12,9 +12,10 @@ const blessed  = require('blessed'),
 
 const session = {
   access_token : null,
+  cancellations: new task.Cancellations(),
   namespace    : 'default',
-  pods         : {},
-  cancellations: new task.Cancellations()
+  namespaces   : {},
+  pods         : {}
 };
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
@@ -176,15 +177,14 @@ list.on('cancel', () => {
   list.detach();
   screen.render();
 });
-list.on('select', item => {
+list.on('select', (item, i) => {
   list.detach();
   screen.render();
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
   session.cancellations.run('dashboard');
-  // FIXME: clear logs
-  // FIXME: use index to retrieve the namespace
+  // FIXME: clear logs and reset pod selection
+  session.namespace = session.namespaces.items[i].metadata.name;
   debug.log(`Switching to namespace ${session.namespace}`);
-  session.namespace = item.content;
   dashboard().catch(console.error);
 });
 
@@ -195,6 +195,7 @@ screen.key(['n'], () => {
   // TODO: watch for namespace changes when the selection list is open
   get(get_namespaces(session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
+    .then(namespaces => session.namespaces = namespaces)
     .then(namespaces => list.setItems(namespaces.items.reduce((data, namespace) => {
       data.push(namespace.metadata.name);
       return data;
