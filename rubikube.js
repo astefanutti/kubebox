@@ -89,6 +89,14 @@ const table = grid.set(0, 0, 6, 6, blessed.listtable, {
   tags         : true,
   shrink       : false,
   noCellBorders: true,
+  // FIXME: margin isn't incremented for child list in scrollable list table
+  scrollbar    : {
+    ch   : ' ',
+    style: {bg: 'white'},
+    track: {
+      style: {bg: 'black'}
+    }
+  },
   style        : {
     border: {fg: 'white'},
     header: {fg: 'blue', bold: true},
@@ -170,17 +178,24 @@ const debug = grid.set(0, 0, 12, 12, contrib.log, {
 
 // TODO: display a list table with some high level info about the namespaces
 const list = blessed.list({
-  top   : 'center',
-  left  : 'center',
-  width : '50%',
-  height: '50%',
-  label : 'Namespaces',
-  keys  : true,
-  tags  : true,
-  border: {type: 'line'},
-  style : {
+  top      : 'center',
+  left     : 'center',
+  width    : '50%',
+  height   : '50%',
+  label    : 'Namespaces',
+  keys     : true,
+  tags     : true,
+  border   : {type: 'line'},
+  scrollbar: {
+    ch   : ' ',
+    style: {bg: 'white'},
+    track: {
+      style: {bg: 'black'}
+    }
+  },
+  style    : {
     fg      : 'white',
-    border  : {fg: '#ffffff'},
+    border  : {fg: 'white'},
     selected: {bg: 'blue'}
   }
 });
