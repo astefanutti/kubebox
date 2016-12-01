@@ -158,6 +158,7 @@ function formatDuration(duration) {
     return duration.format('s[s]');
 }
 
+// TODO: enable user scrolling
 const logs = grid.set(6, 0, 6, 12, blessed.log, {
   border: 'line',
   align : 'left',
@@ -166,6 +167,16 @@ const logs = grid.set(6, 0, 6, 12, blessed.log, {
   style : {
     border: {fg: 'white'}
   }
+});
+// work around the error thrown when logs are added while the widget is detached
+logs.on('detach', () => {
+  logs.scrollOnInput = false;
+  logs._userScrolled = true;
+});
+logs.on('attach', () => {
+  logs.scrollOnInput = true;
+  logs.setScrollPerc(100);
+  screen.render();
 });
 
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
