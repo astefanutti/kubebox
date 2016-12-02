@@ -109,6 +109,11 @@ table.on('select', (item, i) => {
   if (pod === session.pod)
     return;
   session.cancellations.run('dashboard.logs');
+  session.pod = pod;
+  setTableData(session.pods);
+  logs.setLabel('Logs');
+  logs.setText('');
+  screen.render();
   // FIXME: provide container name for multi-containers pod
   const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), function*() {
     while (true) {
@@ -118,10 +123,8 @@ table.on('select', (item, i) => {
   });
   session.cancellations.add('dashboard.logs', cancellation);
   promise
-    .then(() => session.pod = pod)
-    .then(() => logs.setLabel(`Logs {blue-fg}[${pod}]{/blue-fg}`))
-    .then(() => logs.setText(''))
-    .then(() => setTableData(session.pods))
+    .then(() => logs.setLabel(`Logs {grey-fg}[${pod}]{/grey-fg}`))
+    .then(() => screen.render())
     .catch(console.error);
 });
 // work-around for https://github.com/chjj/blessed/issues/175
@@ -224,18 +227,20 @@ list.on('select', (item, i) => {
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
   session.cancellations.run('dashboard');
   // reset dashboard widgets
+  table.clearItems();
   logs.setLabel('Logs');
   logs.setText('');
-  table.select(0);
   // switch dashboard to new namespace
-  debug.log(`Switching to namespace ${namespace}`);
   session.namespace = namespace;
   session.pod       = null;
+  debug.log(`Switching to namespace ${session.namespace}`);
+  screen.render();
   dashboard().catch(console.error);
 });
 
 screen.key(['n'], () => {
   screen.append(list);
+  list.clearItems();
   list.focus();
   screen.render();
   // TODO: watch for namespace changes when the selection list is open
@@ -318,7 +323,7 @@ function* updatePodTable() {
 
 function refreshPodAges() {
   session.pods.items.forEach(pod => moment(pod.status.startTime).add(1, 's').toISOString());
-  // we may to avoid recreating the whole table data
+  // we may want to avoid recreating the whole table data
   setTableData(session.pods);
   screen.render();
 }
