@@ -112,12 +112,12 @@ table.on('select', (item, i) => {
   session.pod = pod;
   setTableData(session.pods);
   logs.setLabel('Logs');
-  logs.setText('');
+  logs.logLines = [];
+  logs.setItems([]);
   screen.render();
   // FIXME: provide container name for multi-containers pod
   const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), function*() {
     while (true) {
-      // FIXME: remove extra line
       logs.log((yield).toString('utf8'));
     }
   });
@@ -162,7 +162,7 @@ function formatDuration(duration) {
 }
 
 // TODO: enable user scrolling
-const logs = grid.set(6, 0, 6, 12, blessed.log, {
+const logs = grid.set(6, 0, 6, 12, contrib.log, {
   border: 'line',
   align : 'left',
   label : 'Logs',
@@ -229,7 +229,8 @@ list.on('select', (item, i) => {
   // reset dashboard widgets
   table.clearItems();
   logs.setLabel('Logs');
-  logs.setText('');
+  logs.logLines = [];
+  logs.setItems([]);
   // switch dashboard to new namespace
   session.namespace = namespace;
   session.pod       = null;
