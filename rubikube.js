@@ -82,7 +82,7 @@ const get_logs = (namespace, pod, token) => ({
 
 const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
 
-const table = grid.set(0, 0, 6, 6, blessed.listtable, {
+const pods_table = grid.set(0, 0, 6, 6, blessed.listtable, {
   border       : 'line',
   align        : 'left',
   keys         : true,
@@ -104,36 +104,36 @@ const table = grid.set(0, 0, 6, 6, blessed.listtable, {
   }
 });
 
-table.on('select', (item, i) => {
+pods_table.on('select', (item, i) => {
   const pod = session.pods.items[i - 1].metadata.name;
   if (pod === session.pod)
     return;
   session.cancellations.run('dashboard.logs');
   session.pod = pod;
   setTableData(session.pods);
-  logs.setLabel('Logs');
-  logs.logLines = [];
-  logs.setItems([]);
+  pod_logs.setLabel('Logs');
+  pod_logs.logLines = [];
+  pod_logs.setItems([]);
   screen.render();
   // FIXME: provide container name for multi-containers pod
   const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), function*() {
     while (true) {
-      logs.log((yield).toString('utf8'));
+      pod_logs.log((yield).toString('utf8'));
     }
   });
   session.cancellations.add('dashboard.logs', cancellation);
   promise
-    .then(() => logs.setLabel(`Logs {grey-fg}[${pod}]{/grey-fg}`))
+    .then(() => pod_logs.setLabel(`Logs {grey-fg}[${pod}]{/grey-fg}`))
     .then(() => screen.render())
     .catch(console.error);
 });
 // work-around for https://github.com/chjj/blessed/issues/175
-table.on('remove', () => table.removeLabel());
-table.on('prerender', () => table.setLabel('Pods'));
+pods_table.on('remove', () => pods_table.removeLabel());
+pods_table.on('prerender', () => pods_table.setLabel('Pods'));
 
 function setTableData(pods) {
-  const selected = table.selected;
-  table.setData(pods.items.reduce((data, pod) => {
+  const selected = pods_table.selected;
+  pods_table.setData(pods.items.reduce((data, pod) => {
     data.push([
       pod.metadata.name === session.pod ? `{blue-fg}${pod.metadata.name}{/blue-fg}` : pod.metadata.name,
       // TODO: be more fine grained for the status
@@ -143,7 +143,7 @@ function setTableData(pods) {
     ]);
     return data;
   }, [['NAME', 'STATUS', 'AGE']]));
-  table.select(selected);
+  pods_table.select(selected);
 }
 
 function formatDuration(duration) {
@@ -162,7 +162,7 @@ function formatDuration(duration) {
 }
 
 // TODO: enable user scrolling
-const logs = grid.set(6, 0, 6, 12, contrib.log, {
+const pod_logs = grid.set(6, 0, 6, 12, contrib.log, {
   border: 'line',
   align : 'left',
   label : 'Logs',
@@ -172,13 +172,13 @@ const logs = grid.set(6, 0, 6, 12, contrib.log, {
   }
 });
 // work around the error thrown when logs are added while the widget is detached
-logs.on('detach', () => {
-  logs.scrollOnInput = false;
-  logs._userScrolled = true;
+pod_logs.on('detach', () => {
+  pod_logs.scrollOnInput = false;
+  pod_logs._userScrolled = true;
 });
-logs.on('attach', () => {
-  logs.scrollOnInput = true;
-  logs.setScrollPerc(100);
+pod_logs.on('attach', () => {
+  pod_logs.scrollOnInput = true;
+  pod_logs.setScrollPerc(100);
   screen.render();
 });
 
@@ -191,7 +191,7 @@ const debug = grid.set(0, 0, 12, 12, contrib.log, {
 });
 
 // TODO: display a list table with some high level info about the namespaces
-const list = blessed.list({
+const namespaces_list = blessed.list({
   top      : 'center',
   left     : 'center',
   width    : '50%',
@@ -213,12 +213,12 @@ const list = blessed.list({
     selected: {bg: 'blue'}
   }
 });
-list.on('cancel', () => {
-  list.detach();
+namespaces_list.on('cancel', () => {
+  namespaces_list.detach();
   screen.render();
 });
-list.on('select', (item, i) => {
-  list.detach();
+namespaces_list.on('select', (item, i) => {
+  namespaces_list.detach();
   screen.render();
   const namespace = session.namespaces.items[i].metadata.name;
   if (namespace === session.namespace)
@@ -227,10 +227,10 @@ list.on('select', (item, i) => {
   debug.log(`Cancelling background tasks for namespace ${session.namespace}`);
   session.cancellations.run('dashboard');
   // reset dashboard widgets
-  table.clearItems();
-  logs.setLabel('Logs');
-  logs.logLines = [];
-  logs.setItems([]);
+  pods_table.clearItems();
+  pod_logs.setLabel('Logs');
+  pod_logs.logLines = [];
+  pod_logs.setItems([]);
   // switch dashboard to new namespace
   session.namespace = namespace;
   session.pod       = null;
@@ -240,15 +240,15 @@ list.on('select', (item, i) => {
 });
 
 screen.key(['n'], () => {
-  screen.append(list);
-  list.clearItems();
-  list.focus();
+  screen.append(namespaces_list);
+  namespaces_list.clearItems();
+  namespaces_list.focus();
   screen.render();
   // TODO: watch for namespace changes when the selection list is open
   get(get_namespaces(session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(namespaces => session.namespaces = namespaces)
-    .then(namespaces => list.setItems(namespaces.items.reduce((data, namespace) => {
+    .then(namespaces => namespaces_list.setItems(namespaces.items.reduce((data, namespace) => {
       data.push(namespace.metadata.name === session.namespace ?
         `{blue-fg}${namespace.metadata.name}{/blue-fg}` : namespace.metadata.name);
       return data;
@@ -261,9 +261,9 @@ screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 
 const carousel = new contrib.carousel([screen => {
   // TODO: restore selection if any
-  screen.append(table);
-  screen.append(logs);
-  table.focus();
+  screen.append(pods_table);
+  screen.append(pod_logs);
+  pods_table.focus();
 }, screen => screen.append(debug)], {
   screen     : screen,
   interval   : 0,
