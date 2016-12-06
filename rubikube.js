@@ -314,6 +314,7 @@ function* updatePodTable() {
         session.pods.items[index(change.object)] = change.object;
         break;
       case 'DELETED':
+        // TODO: check if that's the selected pod and remove selection / cancel logs
         session.pods.items.splice(index(change.object), 1);
         break;
     }
