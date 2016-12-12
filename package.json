@@ -1,13 +1,13 @@
 {
-  "name": "rubikube",
+  "name": "kubik",
   "version": "0.0.1",
   "description": "Kubernetes CLI Dashboard",
-  "main": "rubikube.js",
+  "main": "kubik.js",
   "scripts": {
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/astefanutti/rubikube.git"
+    "url": "https://github.com/astefanutti/kubik.git"
   },
   "author": "Antonin Stefanutti",
   "license": "MIT",

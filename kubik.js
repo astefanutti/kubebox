@@ -7,7 +7,7 @@ const blessed  = require('blessed'),
       contrib  = require('blessed-contrib'),
       moment   = require('moment'),
       duration = require('moment-duration-format'),
-      task     = require('./lib/task'),
+      task     = require('./libs/task'),
       screen   = blessed.screen();
 
 const session = {
