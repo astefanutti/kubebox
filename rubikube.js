@@ -72,7 +72,8 @@ const get_logs = (namespace, pod, token) => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
-  path    : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=10`,
+  // we may want to adapt the amount of lines based on the widget height
+  path    : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=25`,
   method  : 'GET',
   headers : {
     'Authorization': `Bearer ${token}`,
