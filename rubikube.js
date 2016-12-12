@@ -32,6 +32,7 @@ const authorize = {
   auth    : 'admin:admin'
 };
 
+// TODO: detect k8s / OS and work on namespaces / projects
 const get_namespaces = token => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
