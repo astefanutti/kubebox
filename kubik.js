@@ -355,42 +355,49 @@ function getBody(options) {
   })
 }
 
+// TODO: deal with WebSocket protocol upgrade event
 function getStream(options, generator, async = true) {
   let request;
   const promise = new Promise((resolve, reject) => {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     request      = client.get(options, response => {
       if (response.statusCode >= 400) {
-        // we may want to throw the generator if the request is aborted / closed
         response.destroy(new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`));
         return;
       }
       const gen = generator();
       gen.next();
-      response.on('data', chunk => {
-        const res = gen.next(chunk);
-        if (res.done) {
-          // we may work on the http.ClientRequest if needed
-          response.destroy();
-          response.body = res.value;
-          // ignored for async as it's already been resolved
-          resolve(response);
-        }
-      });
-      if (async) {
-        resolve(response);
-        response.on('end', () => {
-          // ignored if the generator is done already
-          gen.return();
-        });
-      } else {
-        response.on('end', () => {
+
+      response
+        .on('close', () => gen.return()) // ignored if the generator is done already
+        .on('aborted', () => {
+          try {
+            gen.throw(new Error('Request aborted'));
+          } catch (e) {
+            // swallow for generators that ignore aborted request
+          }
+        })
+        .on('data', chunk => {
+          const res = gen.next(chunk);
+          if (res.done) {
+            // we may work on the http.ClientRequest if needed
+            response.destroy();
+            response.body = res.value;
+            // ignored for async as it's already been resolved
+            resolve(response);
+          }
+        })
+        .on('end', () => {
           const res = gen.next();
-          if (!res.done) {
+          // the generator may have already return from the 'data' event
+          if (!async && !res.done) {
             response.body = res.value;
             resolve(response);
           }
         });
+
+      if (async) {
+        resolve(response);
       }
     }).on('error', reject);
   });
