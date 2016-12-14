@@ -177,21 +177,23 @@ function formatDuration(duration) {
 
 // TODO: enable user scrolling
 const pod_logs = grid.set(6, 0, 6, 12, contrib.log, {
-  border: 'line',
-  align : 'left',
-  label : 'Logs',
-  tags  : true,
-  style : {
+  border      : 'line',
+  align       : 'left',
+  label       : 'Logs',
+  tags        : true,
+  style       : {
     border: {fg: 'white'}
-  }
+  },
+  bufferLength: 50
 });
 
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
-  label: 'Logs',
-  style: {
+  label       : 'Logs',
+  style       : {
     fg    : 'white',
     border: {fg: 'white'}
-  }
+  },
+  bufferLength: 100
 });
 
 // TODO: display a list table with some high level info about the namespaces
