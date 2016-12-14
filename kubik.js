@@ -346,7 +346,8 @@ function getBody(options) {
         return;
       }
       const body = [];
-      response.on('data', chunk => body.push(chunk))
+      response
+        .on('data', chunk => body.push(chunk))
         .on('end', () => {
           response.body = Buffer.concat(body);
           resolve(response);
