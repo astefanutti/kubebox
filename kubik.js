@@ -357,7 +357,7 @@ function getBody(options) {
 
 // TODO: deal with WebSocket protocol upgrade event
 function getStream(options, generator, async = true) {
-  let request;
+  let request, clientAbort;
   const promise = new Promise((resolve, reject) => {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     request      = client.get(options, response => {
@@ -371,11 +371,12 @@ function getStream(options, generator, async = true) {
       response
         .on('close', () => gen.return()) // ignored if the generator is done already
         .on('aborted', () => {
-          try {
-            gen.throw(new Error('Request aborted'));
-          } catch (e) {
-            // swallow for generators that ignore aborted request
-          }
+          if (!clientAbort)
+            try {
+              gen.throw(new Error('Request aborted'));
+            } catch (e) {
+              // swallow for generators that ignore aborted request
+            }
         })
         .on('data', chunk => {
           const res = gen.next(chunk);
@@ -399,7 +400,8 @@ function getStream(options, generator, async = true) {
       if (async) {
         resolve(response);
       }
-    }).on('error', reject);
+    }).on('error', reject)
+      .on('abort', () => clientAbort = true);
   });
   return {
     promise     : promise,
