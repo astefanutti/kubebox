@@ -173,16 +173,6 @@ const pod_logs = grid.set(6, 0, 6, 12, contrib.log, {
     border: {fg: 'white'}
   }
 });
-// work around the error thrown when logs are added while the widget is detached
-pod_logs.on('detach', () => {
-  pod_logs.scrollOnInput = false;
-  pod_logs._userScrolled = true;
-});
-pod_logs.on('attach', () => {
-  pod_logs.scrollOnInput = true;
-  pod_logs.setScrollPerc(100);
-  screen.render();
-});
 
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
   label: 'Logs',
