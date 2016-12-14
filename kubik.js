@@ -117,12 +117,24 @@ pods_table.on('select', (item, i) => {
   pod_logs.logLines = [];
   pod_logs.setItems([]);
   screen.render();
-  // FIXME: provide container name for multi-containers pod
-  const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), function*() {
-    while (true) {
-      pod_logs.log((yield).toString('utf8'));
+
+  const logger = function*() {
+    try {
+      let log;
+      while (log = yield) {
+        pod_logs.log(log.toString('utf8'));
+      }
+    } catch (e) {
+      // log 'follow' requests close after an hour, so let's retry the request
+      // FIXME: log timestamp continuation (use the timestamps parameter)
+      const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), logger);
+      session.cancellations.add('dashboard.logs', cancellation);
+      promise.catch(console.error);
     }
-  });
+  };
+
+  // FIXME: deal with multi-containers pod
+  const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), logger);
   session.cancellations.add('dashboard.logs', cancellation);
   promise
     .then(() => pod_logs.setLabel(`Logs {grey-fg}[${pod}]{/grey-fg}`))
