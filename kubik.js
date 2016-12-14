@@ -299,8 +299,8 @@ function dashboard(cancellations = session.cancellations) {
 
 function* updatePodTable() {
   let change, buffer = '';
-  while (change = (yield).toString('utf8')) {
-    buffer += change;
+  while (change = yield) {
+    buffer += change.toString('utf8');
     try {
       change = JSON.parse(buffer);
       buffer = '';
