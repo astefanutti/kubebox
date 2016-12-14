@@ -69,12 +69,12 @@ const watch_pods = (namespace, token, resourceVersion) => ({
   }
 });
 
-const get_logs = (namespace, pod, token) => ({
+const get_logs = (namespace, pod, token, sinceTime) => ({
   hostname: '192.168.64.3',
   protocol: 'https:',
   port    : 8443,
   // we may want to adapt the amount of lines based on the widget height
-  path    : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=25`,
+  path    : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=25&timestamps=true` + (sinceTime ? `&sinceTime=${sinceTime}` : ''),
   method  : 'GET',
   headers : {
     'Authorization': `Bearer ${token}`,
@@ -118,16 +118,24 @@ pods_table.on('select', (item, i) => {
   pod_logs.setItems([]);
   screen.render();
 
+  let sinceTime;
   const logger = function*() {
+    let log, timestamp;
     try {
-      let log;
       while (log = yield) {
-        pod_logs.log(log.toString('utf8'));
+        log       = log.toString('utf8');
+        const i   = log.indexOf(' ');
+        timestamp = log.substring(0, i);
+        const msg = log.substring(i + 1);
+        // avoid scanning the whole buffer if the timestamp differs from the since time
+        if (!timestamp.startsWith(sinceTime) || !pod_logs.logLines.includes(msg))
+          pod_logs.log(msg);
       }
     } catch (e) {
-      // log 'follow' requests close after an hour, so let's retry the request
-      // FIXME: log timestamp continuation (use the timestamps parameter)
-      const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), logger);
+      // log 'follow' requests close after an hour, so let's retry the request...
+      // sub-second info from the 'sinceTime' parameter are not taken into account
+      sinceTime                     = timestamp.substring(0, timestamp.indexOf('.'));
+      const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token, timestamp), logger);
       session.cancellations.add('dashboard.logs', cancellation);
       promise.catch(console.error);
     }
