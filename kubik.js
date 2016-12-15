@@ -288,10 +288,10 @@ carousel.start();
 get(authorize)
   .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
   .then(token => session.access_token = token)
-  .then(() => dashboard())
+  .then(dashboard)
   .catch(console.error);
 
-function dashboard(cancellations = session.cancellations) {
+function dashboard() {
   return get(get_pods(session.namespace, session.access_token))
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(pods => session.pods = pods)
@@ -300,12 +300,12 @@ function dashboard(cancellations = session.cancellations) {
     .then(() => screen.render())
     .then(() => {
       const {promise, cancellation} = get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion), updatePodTable);
-      cancellations.add('dashboard', cancellation);
+      session.cancellations.add('dashboard', cancellation);
       return promise;
     })
     .then(() => {
       const id = setInterval(refreshPodAges, 1000);
-      cancellations.add('dashboard', () => clearInterval(id));
+      session.cancellations.add('dashboard', () => clearInterval(id));
     });
 }
 
