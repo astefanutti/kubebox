@@ -409,8 +409,7 @@ function getStream(options, generator, async = true) {
               }
               // else swallow for generators that ignore aborted requests
             }
-          }
-          else {
+          } else if (!(clientAbort && async)) {
             const res = gen.next();
             // the generator may have already returned from the 'data' event
             if (!async && !res.done) {
