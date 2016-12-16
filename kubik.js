@@ -132,6 +132,7 @@ pods_table.on('select', (item, i) => {
           pod_logs.log(msg);
       }
     } catch (e) {
+      // TODO: find a way to delegate the retry logic to a separate generator with yield*
       // log 'follow' requests close after an hour, so let's retry the request...
       // sub-second info from the 'sinceTime' parameter are not taken into account
       sinceTime                     = timestamp.substring(0, timestamp.indexOf('.'));
@@ -299,13 +300,13 @@ function dashboard() {
     .then(() => debug.log(`Watching for pods changes in namespace ${session.namespace} ...`))
     .then(() => screen.render())
     .then(() => {
+      const id = setInterval(refreshPodAges, 1000);
+      session.cancellations.add('dashboard.refreshPodAges', () => clearInterval(id));
+    })
+    .then(() => {
       const {promise, cancellation} = get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion), updatePodTable);
       session.cancellations.add('dashboard', cancellation);
       return promise;
-    })
-    .then(() => {
-      const id = setInterval(refreshPodAges, 1000);
-      session.cancellations.add('dashboard', () => clearInterval(id));
     });
 }
 
@@ -335,6 +336,11 @@ function* updatePodTable() {
     setTableData(session.pods);
     screen.render();
   }
+  // TODO: find a way to delegate the retry logic to a separate generator with yield*
+  // watch requests are closed after an hour (or 'timeoutSeconds') by Kubernetes,
+  // so let's retry watching for pods...
+  session.cancellations.run('dashboard.refreshPodAges');
+  dashboard().catch(console.error);
 }
 
 function refreshPodAges() {
