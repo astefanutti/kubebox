@@ -1,5 +1,4 @@
 // TODO: display uncaught exception in a popup
-// TODO: retrieve k8s master URL from the env or as an arg
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -19,68 +18,46 @@ const session = {
   pods         : {}
 };
 
+// TODO: retrieve k8s master URL from an argument or k8s config current context
+const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(process.env.KUBERNETES_MASTER);
+const base_api                     = {
+  protocol, hostname, port,
+  headers: {
+    'Accept': 'application/json, text/plain, */*'
+  }
+};
+
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
 // TODO: try reading the token from ~/.kube/config
-const authorize = {
-  hostname: '192.168.64.3',
-  protocol: 'https:',
-  port    : 8443,
-  path    : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
-  method  : 'GET',
+const authorize = Object.assign({
+  path  : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
+  method: 'GET',
   // TODO: prompt for credentials
-  auth    : 'admin:admin'
-};
+  auth  : 'admin:admin'
+}, base_api);
 
 // TODO: detect k8s / OS and work on namespaces / projects
-const get_namespaces = token => ({
-  hostname: '192.168.64.3',
-  protocol: 'https:',
-  port    : 8443,
-  path    : '/api/v1/namespaces',
-  method  : 'GET',
-  headers : {
-    'Authorization': `Bearer ${token}`,
-    'Accept'       : 'application/json, text/plain, */*'
-  }
-});
+const get_namespaces = token => Object.assign({
+  path  : '/api/v1/namespaces',
+  method: 'GET'
+}, base_api);
 
-const get_pods = (namespace, token) => ({
-  hostname: '192.168.64.3',
-  protocol: 'https:',
-  port    : 8443,
-  path    : `/api/v1/namespaces/${namespace}/pods`,
-  method  : 'GET',
-  headers : {
-    'Authorization': `Bearer ${token}`,
-    'Accept'       : 'application/json, text/plain, */*'
-  }
-});
+const get_pods = (namespace, token) => Object.assign({
+  path  : `/api/v1/namespaces/${namespace}/pods`,
+  method: 'GET'
+}, base_api);
 
-const watch_pods = (namespace, token, resourceVersion) => ({
-  hostname: '192.168.64.3',
-  protocol: 'https:',
-  port    : 8443,
-  path    : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}&access_token=${token}`,
-  method  : 'GET',
-  headers : {
-    'Authorization': `Bearer ${token}`,
-    'Accept'       : 'application/json, text/plain, */*'
-  }
-});
+const watch_pods = (namespace, token, resourceVersion) => Object.assign({
+  path  : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}&access_token=${token}`,
+  method: 'GET'
+}, base_api);
 
-const get_logs = (namespace, pod, token, sinceTime) => ({
-  hostname: '192.168.64.3',
-  protocol: 'https:',
-  port    : 8443,
+const get_logs = (namespace, pod, token, sinceTime) => Object.assign({
   // we may want to adapt the amount of lines based on the widget height
-  path    : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=25&timestamps=true` + (sinceTime ? `&sinceTime=${sinceTime}` : ''),
-  method  : 'GET',
-  headers : {
-    'Authorization': `Bearer ${token}`,
-    'Accept'       : 'application/json, text/plain, */*'
-  }
-});
+  path  : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=25&timestamps=true` + (sinceTime ? `&sinceTime=${sinceTime}` : ''),
+  method: 'GET'
+}, base_api);
 
 const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
 
@@ -289,6 +266,7 @@ carousel.start();
 get(authorize)
   .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
   .then(token => session.access_token = token)
+  .then(() => base_api.headers['Authorization'] = `Bearer ${session.access_token}`)
   .then(dashboard)
   .catch(console.error);
 
