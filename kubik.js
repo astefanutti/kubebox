@@ -272,8 +272,10 @@ get(authorize)
 
 function dashboard() {
   return get(get_pods(session.namespace, session.access_token))
-    .then(response => JSON.parse(response.body.toString('utf8')))
-    .then(pods => session.pods = pods)
+    .then(response => {
+      session.pods       = JSON.parse(response.body.toString('utf8'));
+      session.pods.items = session.pods.items || [];
+    })
     .then(() => setTableData(session.pods))
     .then(() => debug.log(`Watching for pods changes in namespace ${session.namespace} ...`))
     .then(() => screen.render())
