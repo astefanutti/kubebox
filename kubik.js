@@ -18,8 +18,8 @@ const session = {
   pods         : {}
 };
 
-// TODO: retrieve k8s master URL from an argument or k8s config current context
-const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(process.env.KUBERNETES_MASTER);
+// TODO: retrieve the k8s master URL from the k8s config current context
+const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(process.argv[2] || process.env.KUBERNETES_MASTER);
 const base_api                     = {
   protocol, hostname, port,
   headers: {
