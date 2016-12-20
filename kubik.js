@@ -33,6 +33,7 @@ const base_api                     = {
 const authorize = Object.assign({
   path  : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
   method: 'GET',
+  // TODO: support passing credentials as command line options
   // TODO: prompt for credentials
   auth  : 'admin:admin'
 }, base_api);
@@ -84,6 +85,7 @@ const pods_table = grid.set(0, 0, 6, 6, blessed.listtable, {
 });
 
 pods_table.on('select', (item, i) => {
+  // FIXME: logs resources are not available for pods in non running state
   const pod = session.pods.items[i - 1].metadata.name;
   if (pod === session.pod)
     return;
@@ -137,6 +139,7 @@ function setTableData(pods) {
     data.push([
       pod.metadata.name === session.pod ? `{blue-fg}${pod.metadata.name}{/blue-fg}` : pod.metadata.name,
       // TODO: be more fine grained for the status
+      // TODO: add a visual hint depending on the status
       pod.status.phase,
       // FIXME: negative duration is displayed when pod starts as clocks may not be synced
       formatDuration(moment.duration(moment().diff(moment(pod.status.startTime))))
