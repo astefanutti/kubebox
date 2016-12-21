@@ -75,9 +75,14 @@ function getMasterApi(kube_config) {
   return master_api;
 }
 
+const get_apis = () => Object.assign({
+  path  : '/',
+  method: 'GET'
+}, master_api);
+
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
-const authorize = Object.assign({
+const oauth_authorize = () => Object.assign({
   path  : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
   method: 'GET',
   // TODO: support passing credentials as command line options
@@ -313,7 +318,37 @@ const carousel = new contrib.carousel([screen => {
 });
 carousel.start();
 
-dashboard().catch(console.error);
+// TODO: log more about client access workflow and info
+dashboard()
+  .catch(error => {
+    if (error.response && error.response.statusCode === 403) {
+      // fallback to manual authentication
+      authenticate()
+        .then(dashboard)
+        .catch(console.error);
+    } else {
+      console.error(error);
+    }
+    // TODO: better error management
+  });
+
+function authenticate() {
+  // retrieve the list of available API endpoints
+  return get(get_apis())
+    .then(response => {
+      const paths = JSON.parse(response.body.toString('utf8')).paths;
+      const oapi  = paths.some(path => path === '/oapi' || path === '/oapi/v1');
+      // check if it's an OpenShift cluster
+      if (oapi) {
+        // then try retrieving an OAuth access token from the OpenShift OAuth endpoint
+        return get(oauth_authorize())
+          .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
+          .then(token => master_api.headers['Authorization'] = `Bearer ${token}`);
+      } else {
+        throw new Error(`Unable to authenticate to ${master_api.protocol}://${master_api.hostname}:${master_api.port}`);
+      }
+    })
+}
 
 function dashboard() {
   return get(get_pods(session.namespace))
