@@ -35,6 +35,7 @@ function getKubeConfig(master) {
   const kube = yaml.safeLoad(fs.readFileSync(path.join(os.homedir(), '.kube/config'), 'utf8'));
   let cluster, context, current, user;
   if (!master) {
+    // TODO: error exit in case no current context is set
     current = kube['current-context'];
     context = kube.contexts.find(item => item.name === current).context;
     cluster = kube.clusters.find(item => item.cluster.server === context.cluster).cluster;
@@ -50,6 +51,7 @@ function getKubeConfig(master) {
 function getMasterApi(kube_config) {
   const {cluster, user}              = kube_config;
   const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(cluster.server);
+  // TODO: add a helper to retrieve the URL
   const master_api                   = {
     protocol, hostname, port,
     headers: {
