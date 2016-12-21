@@ -385,7 +385,10 @@ function getBody(options) {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     client.get(options, response => {
       if (response.statusCode >= 400) {
-        response.destroy(new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`));
+        const error    = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
+        // standard promises don't handle multi-parameters reject callbacks
+        error.response = response;
+        response.destroy(error);
         return;
       }
       const body = [];
@@ -406,7 +409,10 @@ function getStream(options, generator, async = true) {
     const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
     request      = client.get(options, response => {
       if (response.statusCode >= 400) {
-        response.destroy(new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`));
+        const error    = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
+        // standard promises don't handle multi-parameters reject callbacks
+        error.response = response;
+        response.destroy(error);
         return;
       }
       const gen = generator();
