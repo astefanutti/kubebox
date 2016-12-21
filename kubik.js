@@ -7,10 +7,13 @@ const blessed  = require('blessed'),
       moment   = require('moment'),
       duration = require('moment-duration-format'),
       task     = require('./libs/task'),
+      fs       = require('fs'),
+      os       = require('os'),
+      path     = require('path'),
+      yaml     = require('js-yaml'),
       screen   = blessed.screen();
 
 const session = {
-  access_token : null,
   cancellations: new task.Cancellations(),
   namespace    : 'default',
   namespaces   : {},
@@ -18,47 +21,91 @@ const session = {
   pods         : {}
 };
 
-// TODO: retrieve the k8s master URL from the k8s config current context
-const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(process.argv[2] || process.env.KUBERNETES_MASTER);
-const base_api                     = {
-  protocol, hostname, port,
-  headers: {
-    'Accept': 'application/json, text/plain, */*'
+const kube_config = getKubeConfig(process.argv[2] || process.env.KUBERNETES_MASTER);
+session.namespace = kube_config.context.namespace || 'default';
+const master_api  = getMasterApi(kube_config);
+
+// TODO: support client access information provided as CLI options
+// TODO: better context disambiguation workflow
+// see:
+// - http://kubernetes.io/docs/user-guide/accessing-the-cluster/
+// - http://kubernetes.io/docs/user-guide/kubeconfig-file/
+function getKubeConfig(master) {
+  // TODO: check if the file exists and can be read first
+  const kube = yaml.safeLoad(fs.readFileSync(path.join(os.homedir(), '.kube/config'), 'utf8'));
+  let cluster, context, current, user;
+  if (!master) {
+    current = kube['current-context'];
+    context = kube.contexts.find(item => item.name === current).context;
+    cluster = kube.clusters.find(item => item.cluster.server === context.cluster).cluster;
+  } else {
+    cluster = kube.clusters.find(item => item.cluster.server === master);
+    context = kube.contexts.find(item => item.context.cluster === cluster.name).context;
+    cluster = cluster.cluster;
   }
-};
+  user = kube.users.find(user => user.name === context.user).user;
+  return {cluster, context, user};
+}
+
+function getMasterApi(kube_config) {
+  const {cluster, user}              = kube_config;
+  const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(cluster.server);
+  const master_api                   = {
+    protocol, hostname, port,
+    headers: {
+      'Accept': 'application/json, text/plain, */*'
+    }
+  };
+  if (cluster['insecure-skip-tls-verify']) {
+    master_api.rejectUnauthorized = true;
+  }
+  // TODO: support 'client-key-data', 'client-certificate-data' and 'certificate-authority-data'
+  if (user['client-certificate']) {
+    master_api.cert = fs.readFileSync(user['client-certificate']);
+  }
+  if (user['client-key']) {
+    master_api.key = fs.readFileSync(user['client-key']);
+  }
+  if (user.token) {
+    master_api.headers['Authorization'] = `Bearer ${user.token}`;
+  }
+  if (cluster['certificate-authority']) {
+    master_api.ca = fs.readFileSync(cluster['certificate-authority']);
+  }
+  return master_api;
+}
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
-// TODO: try reading the token from ~/.kube/config
 const authorize = Object.assign({
   path  : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
   method: 'GET',
   // TODO: support passing credentials as command line options
   // TODO: prompt for credentials
   auth  : 'admin:admin'
-}, base_api);
+}, master_api);
 
-// TODO: detect k8s / OS and work on namespaces / projects
-const get_namespaces = token => Object.assign({
+// TODO: get projects instead of namespaces for OpenShift
+const get_namespaces = () => Object.assign({
   path  : '/api/v1/namespaces',
   method: 'GET'
-}, base_api);
+}, master_api);
 
-const get_pods = (namespace, token) => Object.assign({
+const get_pods = (namespace) => Object.assign({
   path  : `/api/v1/namespaces/${namespace}/pods`,
   method: 'GET'
-}, base_api);
+}, master_api);
 
-const watch_pods = (namespace, token, resourceVersion) => Object.assign({
-  path  : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}&access_token=${token}`,
+const watch_pods = (namespace, resourceVersion) => Object.assign({
+  path  : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}`,
   method: 'GET'
-}, base_api);
+}, master_api);
 
-const get_logs = (namespace, pod, token, sinceTime) => Object.assign({
+const get_logs = (namespace, pod, sinceTime) => Object.assign({
   // we may want to adapt the amount of lines based on the widget height
   path  : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=25&timestamps=true` + (sinceTime ? `&sinceTime=${sinceTime}` : ''),
   method: 'GET'
-}, base_api);
+}, master_api);
 
 const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
 
@@ -115,14 +162,14 @@ pods_table.on('select', (item, i) => {
       // log 'follow' requests close after an hour, so let's retry the request...
       // sub-second info from the 'sinceTime' parameter are not taken into account
       sinceTime                     = timestamp.substring(0, timestamp.indexOf('.'));
-      const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token, timestamp), logger);
+      const {promise, cancellation} = get(get_logs(session.namespace, pod, timestamp), logger);
       session.cancellations.add('dashboard.logs', cancellation);
       promise.catch(console.error);
     }
   };
 
   // FIXME: deal with multi-containers pod
-  const {promise, cancellation} = get(get_logs(session.namespace, pod, session.access_token), logger);
+  const {promise, cancellation} = get(get_logs(session.namespace, pod), logger);
   session.cancellations.add('dashboard.logs', cancellation);
   promise
     .then(() => pod_logs.setLabel(`Logs {grey-fg}[${pod}]{/grey-fg}`))
@@ -240,7 +287,7 @@ screen.key(['n'], () => {
   namespaces_list.focus();
   screen.render();
   // TODO: watch for namespace changes when the selection list is open
-  get(get_namespaces(session.access_token))
+  get(get_namespaces())
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(namespaces => session.namespaces = namespaces)
     .then(namespaces => namespaces_list.setItems(namespaces.items.reduce((data, namespace) => {
@@ -266,15 +313,10 @@ const carousel = new contrib.carousel([screen => {
 });
 carousel.start();
 
-get(authorize)
-  .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
-  .then(token => session.access_token = token)
-  .then(() => base_api.headers['Authorization'] = `Bearer ${session.access_token}`)
-  .then(dashboard)
-  .catch(console.error);
+dashboard().catch(console.error);
 
 function dashboard() {
-  return get(get_pods(session.namespace, session.access_token))
+  return get(get_pods(session.namespace))
     .then(response => {
       session.pods       = JSON.parse(response.body.toString('utf8'));
       session.pods.items = session.pods.items || [];
@@ -287,7 +329,7 @@ function dashboard() {
       session.cancellations.add('dashboard.refreshPodAges', () => clearInterval(id));
     })
     .then(() => {
-      const {promise, cancellation} = get(watch_pods(session.namespace, session.access_token, session.pods.metadata.resourceVersion), updatePodTable);
+      const {promise, cancellation} = get(watch_pods(session.namespace, session.pods.metadata.resourceVersion), updatePodTable);
       session.cancellations.add('dashboard', cancellation);
       return promise;
     });
