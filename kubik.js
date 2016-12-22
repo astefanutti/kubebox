@@ -15,11 +15,15 @@ const blessed  = require('blessed'),
       screen   = blessed.screen();
 
 const session = {
+  apis         : [],
   cancellations: new task.Cancellations(),
   namespace    : 'default',
   namespaces   : {},
   pod          : null,
-  pods         : {}
+  pods         : {},
+  get openshift() {
+    return this.apis.some(path => path === '/oapi' || path === '/oapi/v1');
+  }
 };
 
 const kube_config = getKubeConfig(process.argv[2] || process.env.KUBERNETES_MASTER);
@@ -324,7 +328,10 @@ const carousel = new contrib.carousel([screen => {
 carousel.start();
 
 // TODO: log more about client access workflow and info
-dashboard()
+get(get_apis())
+  .then(response => session.apis = JSON.parse(response.body.toString('utf8')).paths)
+  .catch(error => debug.log(`Unable to retrieve available APIs: ${error.message}`))
+  .then(dashboard)
   .catch(error => {
     if (error.response && error.response.statusCode === 403) {
       // fallback to manual authentication
@@ -338,21 +345,14 @@ dashboard()
   });
 
 function authenticate() {
-  // retrieve the list of available API endpoints
-  return get(get_apis())
-    .then(response => {
-      const paths = JSON.parse(response.body.toString('utf8')).paths;
-      const oapi  = paths.some(path => path === '/oapi' || path === '/oapi/v1');
-      // check if it's an OpenShift cluster
-      if (oapi) {
-        // then try retrieving an OAuth access token from the OpenShift OAuth endpoint
-        return get(oauth_authorize())
-          .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
-          .then(token => master_api.headers['Authorization'] = `Bearer ${token}`);
-      } else {
-        throw new Error(`Unable to authenticate to ${master_api.url}`);
-      }
-    })
+  if (session.openshift) {
+    // try retrieving an OAuth access token from the OpenShift OAuth server
+    return get(oauth_authorize())
+      .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
+      .then(token => master_api.headers['Authorization'] = `Bearer ${token}`);
+  } else {
+    throw new Error(`Unable to authenticate to ${master_api.url}`);
+  }
 }
 
 function dashboard() {
