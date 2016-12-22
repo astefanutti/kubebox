@@ -150,13 +150,17 @@ const pods_table = grid.set(0, 0, 6, 6, blessed.listtable, {
 });
 
 pods_table.on('select', (item, i) => {
+  // empty table!
+  if (i === 0) return;
   // FIXME: logs resources are not available for pods in non running state
   const pod = session.pods.items[i - 1].metadata.name;
   if (pod === session.pod)
     return;
   session.cancellations.run('dashboard.logs');
   session.pod = pod;
+  // just to update the table with the new selection
   setTableData(session.pods);
+  // and reset the logs widget label until the log request succeeds
   pod_logs.setLabel('Logs');
   pod_logs.logLines = [];
   pod_logs.setItems([]);
@@ -305,6 +309,7 @@ screen.key(['n'], () => {
   namespaces_list.focus();
   screen.render();
   // TODO: watch for namespace changes when the selection list is open
+  // and avoid 'n' key to trigger another request
   get(session.openshift ? get_projects() : get_namespaces())
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(namespaces => session.namespaces = namespaces)
