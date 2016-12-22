@@ -1,8 +1,6 @@
 'use strict';
 // TODO: display uncaught exception in a popup
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
 const blessed  = require('blessed'),
       contrib  = require('blessed-contrib'),
       moment   = require('moment'),
