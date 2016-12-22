@@ -99,9 +99,13 @@ const oauth_authorize = () => Object.assign({
   auth  : 'admin:admin'
 }, master_api);
 
-// TODO: get projects instead of namespaces for OpenShift
 const get_namespaces = () => Object.assign({
   path  : '/api/v1/namespaces',
+  method: 'GET'
+}, master_api);
+
+const get_projects = () => Object.assign({
+  path  : '/oapi/v1/projects',
   method: 'GET'
 }, master_api);
 
@@ -301,7 +305,7 @@ screen.key(['n'], () => {
   namespaces_list.focus();
   screen.render();
   // TODO: watch for namespace changes when the selection list is open
-  get(get_namespaces())
+  get(session.openshift ? get_projects() : get_namespaces())
     .then(response => JSON.parse(response.body.toString('utf8')))
     .then(namespaces => session.namespaces = namespaces)
     .then(namespaces => namespaces_list.setItems(namespaces.items.reduce((data, namespace) => {
