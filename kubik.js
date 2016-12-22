@@ -39,7 +39,7 @@ function getKubeConfig(master) {
     // TODO: error exit in case no current context is set
     current = kube['current-context'];
     context = kube.contexts.find(item => item.name === current).context;
-    cluster = kube.clusters.find(item => item.cluster.server === context.cluster).cluster;
+    cluster = kube.clusters.find(item => item.name === context.cluster).cluster;
   } else {
     cluster = kube.clusters.find(item => item.cluster.server === master);
     context = kube.contexts.find(item => item.context.cluster === cluster.name).context;
