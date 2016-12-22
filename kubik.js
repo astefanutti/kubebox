@@ -172,7 +172,7 @@ pods_table.on('select', (item, i) => {
       sinceTime                     = timestamp.substring(0, timestamp.indexOf('.'));
       const {promise, cancellation} = get(get_logs(session.namespace, pod, timestamp), logger);
       session.cancellations.add('dashboard.logs', cancellation);
-      promise.catch(console.error);
+      promise.catch(error => console.error(error.stack));
     }
   };
 
@@ -182,7 +182,7 @@ pods_table.on('select', (item, i) => {
   promise
     .then(() => pod_logs.setLabel(`Logs {grey-fg}[${pod}]{/grey-fg}`))
     .then(() => screen.render())
-    .catch(console.error);
+    .catch(error => console.error(error.stack));
 });
 // work-around for https://github.com/chjj/blessed/issues/175
 pods_table.on('remove', () => pods_table.removeLabel());
@@ -286,7 +286,7 @@ namespaces_list.on('select', (item, i) => {
   session.pod       = null;
   debug.log(`Switching to namespace ${session.namespace}`);
   screen.render();
-  dashboard().catch(console.error);
+  dashboard().catch(error => console.error(error.stack));
 });
 
 screen.key(['n'], () => {
@@ -304,7 +304,7 @@ screen.key(['n'], () => {
       return data;
     }, [])))
     .then(() => screen.render())
-    .catch(console.error);
+    .catch(error => console.error(error.stack));
 });
 
 screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
@@ -328,9 +328,9 @@ dashboard()
       // fallback to manual authentication
       authenticate()
         .then(dashboard)
-        .catch(console.error);
+        .catch(error => console.error(error.stack));
     } else {
-      console.error(error);
+      console.error(error.stack);
     }
     // TODO: better error management
   });
@@ -403,7 +403,7 @@ function* updatePodTable() {
   // watch requests are closed after an hour (or 'timeoutSeconds') by Kubernetes,
   // so let's retry watching for pods...
   session.cancellations.run('dashboard.refreshPodAges');
-  dashboard().catch(console.error);
+  dashboard().catch(error => console.error(error.stack));
 }
 
 function refreshPodAges() {
