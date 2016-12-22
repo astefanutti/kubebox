@@ -68,7 +68,7 @@ function getMasterApi(kube_config) {
   if (cluster['insecure-skip-tls-verify']) {
     master_api.rejectUnauthorized = true;
   }
-  // TODO: support 'client-key-data', 'client-certificate-data' and 'certificate-authority-data'
+  // TODO: support 'client-key-data' and 'client-certificate-data'
   if (user['client-certificate']) {
     master_api.cert = fs.readFileSync(user['client-certificate']);
   }
@@ -80,6 +80,9 @@ function getMasterApi(kube_config) {
   }
   if (cluster['certificate-authority']) {
     master_api.ca = fs.readFileSync(cluster['certificate-authority']);
+  }
+  if (cluster['certificate-authority-data']) {
+    master_api.ca = Buffer.from(cluster['certificate-authority-data'], 'base64');
   }
   return master_api;
 }
