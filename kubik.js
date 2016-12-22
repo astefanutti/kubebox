@@ -63,9 +63,6 @@ function getMasterApi(kube_config) {
       return this.protocol + '//' + this.hostname + ':' + this.port;
     }
   };
-  if (cluster['insecure-skip-tls-verify']) {
-    master_api.rejectUnauthorized = true;
-  }
   // TODO: support 'client-key-data' and 'client-certificate-data'
   if (user['client-certificate']) {
     master_api.cert = fs.readFileSync(user['client-certificate']);
@@ -75,6 +72,9 @@ function getMasterApi(kube_config) {
   }
   if (user.token) {
     master_api.headers['Authorization'] = `Bearer ${user.token}`;
+  }
+  if (cluster['insecure-skip-tls-verify']) {
+    master_api.rejectUnauthorized = false;
   }
   if (cluster['certificate-authority']) {
     master_api.ca = fs.readFileSync(cluster['certificate-authority']);
