@@ -52,11 +52,13 @@ function getKubeConfig(master) {
 function getMasterApi(kube_config) {
   const {cluster, user}              = kube_config;
   const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(cluster.server);
-  // TODO: add a helper to retrieve the URL
   const master_api                   = {
     protocol, hostname, port,
     headers: {
       'Accept': 'application/json, text/plain, */*'
+    },
+    get url() {
+      return this.protocol + '//' + this.hostname + ':' + this.port;
     }
   };
   if (cluster['insecure-skip-tls-verify']) {
@@ -348,7 +350,7 @@ function authenticate() {
           .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
           .then(token => master_api.headers['Authorization'] = `Bearer ${token}`);
       } else {
-        throw new Error(`Unable to authenticate to ${master_api.protocol}://${master_api.hostname}:${master_api.port}`);
+        throw new Error(`Unable to authenticate to ${master_api.url}`);
       }
     })
 }
