@@ -25,6 +25,8 @@ const session = {
 };
 
 const kube_config = getKubeConfig(process.argv[2] || process.env.KUBERNETES_MASTER);
+// TODO: do not set a default namespace as it can lead to permissions issues
+// CLI option > Kube config context > UI workflow
 session.namespace = kube_config.context.namespace || 'default';
 const master_api  = getMasterApi(kube_config);
 
