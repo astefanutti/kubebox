@@ -1,0 +1,20 @@
+= Kubik
+Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
+// Meta
+:description: CLI console for Kubernetes clusters
+// Settings
+:idprefix:
+:idseparator: -
+// Aliases
+ifdef::env-github[]
+:note-caption: :information_source:
+endif::[]
+ifndef::env-github[]
+:icons: font
+endif::[]
+// URIs
+:uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
+
+{description}
+
+image::http://astefanutti.github.io/kubik/terminal-forever.jpg[link={uri-terminal-forever}]
