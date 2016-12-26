@@ -26,7 +26,7 @@ const session = {
 
 const kube_config = getKubeConfig(process.argv[2] || process.env.KUBERNETES_MASTER);
 // TODO: do not set a default namespace as it can lead to permissions issues
-// CLI option > Kube config context > UI workflow
+// CLI option > Kube config context > Display namespaces list
 session.namespace = kube_config.context.namespace || 'default';
 const master_api  = getMasterApi(kube_config);
 
@@ -315,6 +315,7 @@ screen.key(['n'], () => {
   // and avoid 'n' key to trigger another request
   get(session.openshift ? get_projects() : get_namespaces())
     .then(response => JSON.parse(response.body.toString('utf8')))
+    // TODO: display a message in case the user has access to no namespaces
     .then(namespaces => session.namespaces = namespaces)
     .then(namespaces => namespaces_list.setItems(namespaces.items.reduce((data, namespace) => {
       data.push(namespace.metadata.name === session.namespace ?
@@ -345,6 +346,7 @@ get(get_apis())
   .catch(error => debug.log(`Unable to retrieve available APIs: ${error.message}`))
   .then(dashboard)
   .catch(error => {
+    // FIXME: only fallback to manual authentication for anonymous user
     if (error.response && error.response.statusCode === 403) {
       // fallback to manual authentication
       authenticate()
@@ -362,6 +364,7 @@ function authenticate() {
     return get(oauth_authorize())
       .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
       .then(token => master_api.headers['Authorization'] = `Bearer ${token}`);
+    // TODO: catch 401
   } else {
     throw new Error(`Unable to authenticate to ${master_api.url}`);
   }
@@ -427,6 +430,7 @@ function refreshPodAges() {
   screen.render();
 }
 
+// TODO: move to a separate module
 function get(options, generator, async = true) {
   return generator ? getStream(options, generator, async) : getBody(options);
 }
