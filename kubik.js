@@ -522,9 +522,14 @@ function getStream(options, generator, async = true) {
   });
   return {
     promise     : promise,
-    // destroy the http.ClientRequest on cancellation
-    // FIXME: handle 'Error: socket hang up' on close
-    // That seems to happens for container that has not logged any messages yet
-    cancellation: request ? () => request.abort() : () => void 0
+    cancellation: () => {
+      try {
+        // destroy the http.ClientRequest on cancellation
+        if (request) request.abort();
+      } catch (error) {
+        // swallow error to handle 'Error: socket hang up' on close
+        // it happens for containers that have not emitted any logs yet
+      }
+    }
   }
 }
