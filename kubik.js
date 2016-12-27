@@ -65,12 +65,17 @@ function getMasterApi(kube_config) {
       return this.protocol + '//' + this.hostname + ':' + this.port;
     }
   };
-  // TODO: support 'client-key-data' and 'client-certificate-data'
   if (user['client-certificate']) {
     master_api.cert = fs.readFileSync(user['client-certificate']);
   }
+  if (user['client-certificate-data']) {
+    master_api.cert = Buffer.from(user['client-certificate-data'], 'base64');
+  }
   if (user['client-key']) {
     master_api.key = fs.readFileSync(user['client-key']);
+  }
+  if (user['client-key-data']) {
+    master_api.key = Buffer.from(user['client-key-data'], 'base64');
   }
   if (user.token) {
     master_api.headers['Authorization'] = `Bearer ${user.token}`;
