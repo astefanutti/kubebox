@@ -183,7 +183,6 @@ pods_table.on('select', (item, i) => {
           pod_logs.log(msg);
       }
     } catch (e) {
-      // TODO: find a way to delegate the retry logic to a separate generator with yield*
       // log 'follow' requests close after an hour, so let's retry the request...
       // sub-second info from the 'sinceTime' parameter are not taken into account
       sinceTime                     = timestamp.substring(0, timestamp.indexOf('.'));
@@ -416,7 +415,6 @@ function* updatePodTable() {
     setTableData(session.pods);
     screen.render();
   }
-  // TODO: find a way to delegate the retry logic to a separate generator with yield*
   // watch requests are closed after an hour (or 'timeoutSeconds') by Kubernetes,
   // so let's retry watching for pods...
   session.cancellations.run('dashboard.refreshPodAges');
