@@ -1,5 +1,8 @@
 'use strict';
 
+const http  = require('http'),
+      https = require('https');
+
 module.exports.get = function (options, generator, async = true) {
   return generator ? getStream(options, generator, async) : getBody(options);
 };
@@ -7,7 +10,7 @@ module.exports.get = function (options, generator, async = true) {
 // we may want to support cancellation of the returned pending promise
 function getBody(options) {
   return new Promise((resolve, reject) => {
-    const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
+    const client = (options.protocol || 'http').startsWith('https') ? https : http;
     client.get(options, response => {
       if (response.statusCode >= 400) {
         const error    = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
@@ -31,7 +34,7 @@ function getBody(options) {
 function getStream(options, generator, async = true) {
   let request, clientAbort, serverAbort;
   const promise = new Promise((resolve, reject) => {
-    const client = (options.protocol || 'http').startsWith('https') ? require('https') : require('http');
+    const client = (options.protocol || 'http').startsWith('https') ? https : http;
     request      = client.get(options, response => {
       if (response.statusCode >= 400) {
         const error    = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
