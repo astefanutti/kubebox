@@ -175,8 +175,7 @@ pods_table.on('select', (item, i) => {
   pod_logs.setItems([]);
   screen.render();
 
-  let sinceTime;
-  const logger = function*() {
+  const logger = function*(sinceTime) {
     let log, timestamp;
     try {
       while (log = yield) {
@@ -189,10 +188,11 @@ pods_table.on('select', (item, i) => {
           pod_logs.log(msg);
       }
     } catch (e) {
-      // log 'follow' requests close after an hour, so let's retry the request...
-      // sub-second info from the 'sinceTime' parameter are not taken into account
-      sinceTime                     = timestamp.substring(0, timestamp.indexOf('.'));
-      const {promise, cancellation} = get(get_logs(session.namespace, pod, timestamp), logger);
+      // log 'follow' requests close after an hour, so let's retry the request from the latest timestamp
+      const {promise, cancellation} = get(get_logs(session.namespace, pod, timestamp), function*() {
+        // sub-second info from the 'sinceTime' parameter are not taken into account
+        yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
+      });
       session.cancellations.add('dashboard.logs', cancellation);
       promise.catch(error => console.error(error.stack));
     }
