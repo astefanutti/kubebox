@@ -30,7 +30,6 @@ function getBody(options) {
   })
 }
 
-// TODO: deal with WebSocket protocol upgrade event
 function getStream(options, generator, async = true) {
   let request, clientAbort, serverAbort;
   const promise = new Promise((resolve, reject) => {
@@ -90,12 +89,59 @@ function getStream(options, generator, async = true) {
         resolve(response);
       }
     }).on('error', reject)
-      .on('abort', () => clientAbort = true);
+      .on('abort', () => clientAbort = true)
+      .on('upgrade', (response, socket, head) => {
+        // TODO: we may want to offer an API to pipe the socket
+        if (response.statusCode !== 101) {
+          const error    = new Error(`Failed to upgrade resource ${options.path}, status code: ${response.statusCode}`);
+          // standard promises don't handle multi-parameters reject callbacks
+          error.response = response;
+          response.destroy(error);
+          return;
+        }
+
+        const gen = generator();
+        gen.next();
+
+        socket
+          .on('data', chunk => {
+            // TODO: read single unmasked frame opcodes to skip the correct message size
+            // See: https://tools.ietf.org/html/rfc6455#section-5.7
+            const res = gen.next(chunk.slice(4));
+            if (res.done) {
+              socket.end();
+              response.body = res.value;
+              // ignored for async as it's already been resolved
+              resolve(response);
+            }
+          })
+          .on('end', () => {
+            if (!clientAbort) {
+              try {
+                const res = gen.throw(new Error('Request aborted'));
+                // the generator may have already returned from the 'data' event
+                if (!async && !res.done) {
+                  response.body = res.value;
+                  resolve(response);
+                }
+              } catch (e) {
+                if (!async) {
+                  reject(e);
+                }
+              }
+              // else swallow for generators that ignore aborted requests
+            }
+          });
+        if (async) {
+          resolve(response);
+        }
+      });
   });
   return {
     promise     : promise,
     cancellation: () => {
       try {
+        // TODO: should the socket be ended instead of aborted?
         // destroy the http.ClientRequest on cancellation
         if (request) request.abort();
       } catch (error) {
