@@ -3,6 +3,7 @@
 
 const blessed  = require('blessed'),
       contrib  = require('blessed-contrib'),
+      crypto   = require('crypto'),
       moment   = require('moment'),
       duration = require('moment-duration-format'),
       task     = require('./libs/task'),
@@ -123,16 +124,42 @@ const get_pods = (namespace) => Object.assign({
   method: 'GET'
 }, master_api);
 
+const get_pod = (namespace, name) => Object.assign({
+  path  : `/api/v1/namespaces/${namespace}/pods/${name}`,
+  method: 'GET'
+}, master_api);
+
 const watch_pods = (namespace, resourceVersion) => Object.assign({
   path  : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}`,
   method: 'GET'
 }, master_api);
 
-const get_logs = (namespace, pod, sinceTime) => Object.assign({
+const get_log = (namespace, name, sinceTime) => merge({
   // we may want to adapt the amount of lines based on the widget height
-  path  : `/api/v1/namespaces/${namespace}/pods/${pod}/log?follow=true&tailLines=25&timestamps=true` + (sinceTime ? `&sinceTime=${sinceTime}` : ''),
-  method: 'GET'
+  path   : `/api/v1/namespaces/${namespace}/pods/${name}/log?follow=true&tailLines=25&timestamps=true` + (sinceTime ? `&sinceTime=${sinceTime}` : ''),
+  method : 'GET',
+  headers: {
+    // https://tools.ietf.org/html/rfc6455
+    Connection             : 'Upgrade',
+    Upgrade                : 'WebSocket',
+    // TODO: verify 'Sec-WebSocket-Accept' during WebSocket handshake
+    'Sec-WebSocket-Key'    : crypto.createHash('SHA1').digest('base64'),
+    'Sec-WebSocket-Version': 13
+  }
 }, master_api);
+
+// TODO: move into a separate module
+function merge(target, source) {
+  return Object.keys(source).reduce((target, key) => {
+    const prop = source[key];
+    if (typeof target[key] === 'undefined') {
+      target[key] = source[key];
+    } else if (typeof target[key] === 'object') {
+      merge(target[key], prop);
+    }
+    return target;
+  }, target);
+}
 
 const grid = new contrib.grid({rows: 12, cols: 12, screen: screen});
 
@@ -162,17 +189,17 @@ pods_table.on('select', (item, i) => {
   // empty table!
   if (i === 0) return;
   // FIXME: logs resources are not available for pods in non running state
-  const pod = session.pods.items[i - 1].metadata.name;
-  if (pod === session.pod)
+  const name = session.pods.items[i - 1].metadata.name;
+  if (name === session.pod)
     return;
   session.cancellations.run('dashboard.logs');
-  session.pod = pod;
+  session.pod = name;
   // just to update the table with the new selection
   setTableData(session.pods);
   // and reset the logs widget label until the log request succeeds
-  pod_logs.setLabel('Logs');
-  pod_logs.logLines = [];
-  pod_logs.setItems([]);
+  pod_log.setLabel('Logs');
+  pod_log.logLines = [];
+  pod_log.setItems([]);
   screen.render();
 
   const logger = function*(sinceTime) {
@@ -184,25 +211,45 @@ pods_table.on('select', (item, i) => {
         timestamp = log.substring(0, i);
         const msg = log.substring(i + 1);
         // avoid scanning the whole buffer if the timestamp differs from the since time
-        if (!timestamp.startsWith(sinceTime) || !pod_logs.logLines.includes(msg))
-          pod_logs.log(msg);
+        if (!timestamp.startsWith(sinceTime) || !pod_log.logLines.includes(msg))
+          pod_log.log(msg);
       }
     } catch (e) {
-      // log 'follow' requests close after an hour, so let's retry the request from the latest timestamp
-      const {promise, cancellation} = get(get_logs(session.namespace, pod, timestamp), function*() {
-        // sub-second info from the 'sinceTime' parameter are not taken into account
-        yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
-      });
-      session.cancellations.add('dashboard.logs', cancellation);
-      promise.catch(error => console.error(error.stack));
+      // log 'follow' requests close after a while per configuration, so let's retry the request
+      // from the latest timestamp
+      get(get_pod(session.namespace, name))
+        .then(response => JSON.parse(response.body.toString('utf8')))
+        .then(pod => {
+          // check if the pod is not terminating
+          if (pod.metadata.deletionTimestamp) {
+            pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
+          } else {
+            // re-follow log from the latest timestamp received
+            const {promise, cancellation} = get(get_log(session.namespace, name, timestamp), function*() {
+              // sub-second info from the 'sinceTime' parameter are not taken into account
+              // so just strip the info and add a 'startsWith' check to avoid duplicates
+              yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
+            });
+            session.cancellations.add('dashboard.logs', cancellation);
+            return promise;
+          }
+        })
+        .catch(error => {
+          // the pod might have already been deleted?
+          if (error.response && error.response.statusCode === 404) {
+            pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}DELETED{/red-fg}`);
+          } else {
+            console.error(error.stack);
+          }
+        });
     }
   };
 
   // FIXME: deal with multi-containers pod
-  const {promise, cancellation} = get(get_logs(session.namespace, pod), logger);
+  const {promise, cancellation} = get(get_log(session.namespace, name), logger);
   session.cancellations.add('dashboard.logs', cancellation);
   promise
-    .then(() => pod_logs.setLabel(`Logs {grey-fg}[${pod}]{/grey-fg}`))
+    .then(() => pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg}`))
     .then(() => screen.render())
     .catch(error => console.error(error.stack));
 });
@@ -242,7 +289,7 @@ function formatDuration(duration) {
 }
 
 // TODO: enable user scrolling
-const pod_logs = grid.set(6, 0, 6, 12, contrib.log, {
+const pod_log = grid.set(6, 0, 6, 12, contrib.log, {
   border      : 'line',
   align       : 'left',
   label       : 'Logs',
@@ -300,9 +347,9 @@ namespaces_list.on('select', (item, i) => {
   session.cancellations.run('dashboard');
   // reset dashboard widgets
   pods_table.clearItems();
-  pod_logs.setLabel('Logs');
-  pod_logs.logLines = [];
-  pod_logs.setItems([]);
+  pod_log.setLabel('Logs');
+  pod_log.logLines = [];
+  pod_log.setItems([]);
   // switch dashboard to new namespace
   session.namespace = namespace;
   session.pod       = null;
@@ -336,7 +383,7 @@ screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 const carousel = new contrib.carousel([screen => {
   // TODO: restore selection if any
   screen.append(pods_table);
-  screen.append(pod_logs);
+  screen.append(pod_log);
   pods_table.focus();
 }, screen => screen.append(debug)], {
   screen     : screen,
