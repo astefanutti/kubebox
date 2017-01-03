@@ -117,21 +117,17 @@ function getStream(options, generator, async = true) {
           })
           .on('end', () => {
             if (!clientAbort) {
-              try {
-                const res = gen.throw(new Error('Request aborted'));
-                // the generator may have already returned from the 'data' event
-                if (!async && !res.done) {
-                  response.body = res.value;
-                  resolve(response);
-                }
-              } catch (e) {
-                if (!async) {
-                  reject(e);
-                }
+              const res = gen.next();
+              // the generator may have already returned from the 'data' event
+              if (!async && !res.done) {
+                response.body = res.value;
+                resolve(response);
               }
-              // else swallow for generators that ignore aborted requests
             }
+            // ignored if the generator is done already
+            gen.return();
           });
+        // TODO: handle the socket 'error' event
         if (async) {
           resolve(response);
         }
