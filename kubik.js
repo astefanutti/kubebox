@@ -129,9 +129,17 @@ const get_pod = (namespace, name) => Object.assign({
   method: 'GET'
 }, master_api);
 
-const watch_pods = (namespace, resourceVersion) => Object.assign({
-  path  : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}`,
-  method: 'GET'
+const watch_pods = (namespace, resourceVersion) => merge({
+  path   : `/api/v1/namespaces/${namespace}/pods?watch=true&resourceVersion=${resourceVersion}`,
+  method : 'GET',
+  headers: {
+    // https://tools.ietf.org/html/rfc6455
+    Origin                 : master_api.url,
+    Connection             : 'Upgrade',
+    Upgrade                : 'websocket',
+    'Sec-WebSocket-Key'    : crypto.createHash('SHA1').digest('base64'),
+    'Sec-WebSocket-Version': 13
+  }
 }, master_api);
 
 const get_log = (namespace, name, sinceTime) => merge({
@@ -446,32 +454,38 @@ function dashboard() {
 
 function* updatePodTable() {
   let change, buffer = '';
-  while (change = yield) {
-    buffer += change.toString('utf8');
-    try {
-      change = JSON.parse(buffer);
-      buffer = '';
-    } catch (error) {
-      continue
+  try {
+    while (change = yield) {
+      buffer += change.toString('utf8');
+      try {
+        change = JSON.parse(buffer);
+        buffer = '';
+      } catch (error) {
+        continue
+      }
+      const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
+      switch (change.type) {
+        case 'ADDED':
+          session.pods.items.push(change.object);
+          break;
+        case 'MODIFIED':
+          session.pods.items[index(change.object)] = change.object;
+          break;
+        case 'DELETED':
+          // TODO: check if that's the selected pod and remove selection / cancel logs
+          session.pods.items.splice(index(change.object), 1);
+          break;
+      }
+      setTableData(session.pods);
+      screen.render();
     }
-    const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
-    switch (change.type) {
-      case 'ADDED':
-        session.pods.items.push(change.object);
-        break;
-      case 'MODIFIED':
-        session.pods.items[index(change.object)] = change.object;
-        break;
-      case 'DELETED':
-        // TODO: check if that's the selected pod and remove selection / cancel logs
-        session.pods.items.splice(index(change.object), 1);
-        break;
-    }
-    setTableData(session.pods);
-    screen.render();
+  } catch (e) {
+    // HTTP chunked transfer-encoding / streaming watch requests abort on timeout when the 'timeoutSeconds'
+    // request parameter is greater than the '--min-request-timeout' API sever option,
+    // otherwise the connections just end normally (http://kubernetes.io/docs/admin/kube-apiserver/).
+    // WebSocket upgraded watch requests (idle?) end when timed out on Kubernetes.
   }
-  // watch requests are closed after an hour (or 'timeoutSeconds') by Kubernetes,
-  // so let's retry watching for pods...
+  // retry the pods list watch request
   session.cancellations.run('dashboard.refreshPodAges');
   dashboard().catch(error => console.error(error.stack));
 }
