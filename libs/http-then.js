@@ -107,9 +107,11 @@ function getStream(options, generator, async = true) {
         gen.next();
 
         socket
-          .on('data', chunk => {
-            // FIXME: do not forward the raw payload when socket end (pod deletion)
-            const res = gen.next(decodeFrame(chunk));
+          .on('data', frame => {
+            const {opcode, payload} = decodeFrame(frame);
+            // handle connection close in the 'end' event handler
+            if (opcode === 0x8) return;
+            const res = gen.next(payload);
             if (res.done) {
               socket.end();
               response.body = res.value;
@@ -157,15 +159,19 @@ function decodeFrame(frame) {
   const RSV1   = frame[0] & 0x40;
   const RSV2   = frame[0] & 0x20;
   const RSV3   = frame[0] & 0x10;
-  const Opcode = frame[0] & 0x0F;
+  const opcode = frame[0] & 0x0F;
   const mask   = frame[1] & 0x80;
   const length = frame[1] & 0x7F;
+  // just return the opcode on connection close
+  if (opcode === 0x8) {
+    return {opcode};
+  }
   // It seems Kubernetes sends continuation frames without any frame bits
   // and does not respect FIN semantic. We could rely on the total length
   // of the message when known and larger than the actual frame length.
   // Meanwhile let's only analyse text and binary frames...
-  if (!(Opcode === 0x1 || Opcode === 0x2)) {
-    return frame;
+  if (!(opcode === 0x1 || opcode === 0x2)) {
+    return {opcode: undefined, payload: frame};
   }
   let nextByte = 2;
   if (length === 126) {
@@ -186,5 +192,5 @@ function decodeFrame(frame) {
       payload[i] = payload[i] ^ maskingKey[i % 4];
     }
   }
-  return payload;
+  return {opcode, payload};
 }
