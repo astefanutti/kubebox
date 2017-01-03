@@ -107,9 +107,7 @@ function getStream(options, generator, async = true) {
 
         socket
           .on('data', chunk => {
-            // TODO: read single unmasked frame opcodes to skip the correct message size
-            // See: https://tools.ietf.org/html/rfc6455#section-5.7
-            const res = gen.next(chunk.slice(4));
+            const res = gen.next(decodeFrame(chunk));
             if (res.done) {
               socket.end();
               response.body = res.value;
@@ -152,4 +150,43 @@ function getStream(options, generator, async = true) {
       }
     }
   }
+}
+
+// https://tools.ietf.org/html/rfc6455#section-5.2
+// https://tools.ietf.org/html/rfc6455#section-5.7
+function decodeFrame(frame) {
+  const FIN    = frame[0] & 0x80;
+  const RSV1   = frame[0] & 0x40;
+  const RSV2   = frame[0] & 0x20;
+  const RSV3   = frame[0] & 0x10;
+  const Opcode = frame[0] & 0x0F;
+  const mask   = frame[1] & 0x80;
+  const length = frame[1] & 0x7F;
+  // It seems Kubernetes sends continuation frames without any frame bits
+  // and does not respect FIN semantic. We could rely on the total length
+  // of the message when known and larger than the actual frame length.
+  // Meanwhile let's only analyse text and binary frames...
+  if (!(Opcode === 0x1 || Opcode === 0x2)) {
+    return frame;
+  }
+  let nextByte = 2;
+  if (length === 126) {
+    // length = next 2 bytes
+    nextByte += 2;
+  } else if (length === 127) {
+    // length = next 8 bytes
+    nextByte += 8;
+  }
+  let maskingKey;
+  if (mask) {
+    maskingKey = frame.slice(nextByte, nextByte + 4);
+    nextByte += 4;
+  }
+  const payload = frame.slice(nextByte);
+  if (maskingKey) {
+    for (let i = 0; i < payload.length; i++) {
+      payload[i] = payload[i] ^ maskingKey[i % 4];
+    }
+  }
+  return payload;
 }
