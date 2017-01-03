@@ -143,7 +143,7 @@ const watch_pods = (namespace, resourceVersion) => merge({
   }
 }, master_api);
 
-const get_log = (namespace, name, sinceTime) => merge({
+const follow_log = (namespace, name, sinceTime) => merge({
   // we may want to adapt the amount of lines based on the widget height
   path   : `/api/v1/namespaces/${namespace}/pods/${name}/log?follow=true&tailLines=25&timestamps=true` + (sinceTime ? `&sinceTime=${sinceTime}` : ''),
   method : 'GET',
@@ -235,7 +235,7 @@ pods_table.on('select', (item, i) => {
           pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
         } else {
           // re-follow log from the latest timestamp received
-          const {promise, cancellation} = get(get_log(session.namespace, name, timestamp), function*() {
+          const {promise, cancellation} = get(follow_log(session.namespace, name, timestamp), function*() {
             // sub-second info from the 'sinceTime' parameter are not taken into account
             // so just strip the info and add a 'startsWith' check to avoid duplicates
             yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
@@ -255,7 +255,7 @@ pods_table.on('select', (item, i) => {
   };
 
   // FIXME: deal with multi-containers pod
-  const {promise, cancellation} = get(get_log(session.namespace, name), logger);
+  const {promise, cancellation} = get(follow_log(session.namespace, name), logger);
   session.cancellations.add('dashboard.logs', cancellation);
   promise
     .then(() => debug.log(`Following log for pod ${session.pod} ...`))
