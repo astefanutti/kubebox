@@ -1,5 +1,6 @@
 'use strict';
 // TODO: display uncaught exception in a popup
+// TODO: handle current namespace deletion nicely
 
 const blessed  = require('blessed'),
       contrib  = require('blessed-contrib'),
@@ -150,7 +151,6 @@ const get_log = (namespace, name, sinceTime) => merge({
     // https://tools.ietf.org/html/rfc6455
     Connection             : 'Upgrade',
     Upgrade                : 'WebSocket',
-    // TODO: verify 'Sec-WebSocket-Accept' during WebSocket handshake
     'Sec-WebSocket-Key'    : crypto.createHash('SHA1').digest('base64'),
     'Sec-WebSocket-Version': 13
   }
@@ -461,6 +461,7 @@ function* updatePodTable() {
         change = JSON.parse(buffer);
         buffer = '';
       } catch (error) {
+        // TODO: find a way to be more robust as a single decoding error might compromise the whole stream
         continue
       }
       const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);

@@ -93,6 +93,7 @@ function getStream(options, generator, async = true) {
         }
       })
       .on('upgrade', (response, socket, head) => {
+        // TODO: verify 'Sec-WebSocket-Accept' during WebSocket handshake
         // TODO: we may want to offer an API to pipe the socket
         if (response.statusCode !== 101) {
           const error    = new Error(`Failed to upgrade resource ${options.path}, status code: ${response.statusCode}`);
@@ -107,6 +108,7 @@ function getStream(options, generator, async = true) {
 
         socket
           .on('data', chunk => {
+            // FIXME: do not forward the raw payload when socket end (pod deletion)
             const res = gen.next(decodeFrame(chunk));
             if (res.done) {
               socket.end();
