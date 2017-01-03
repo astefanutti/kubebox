@@ -215,40 +215,42 @@ pods_table.on('select', (item, i) => {
           pod_log.log(msg);
       }
     } catch (e) {
-      // log 'follow' requests close after a while per configuration, so let's retry the request
-      // from the latest timestamp
-      get(get_pod(session.namespace, name))
-        .then(response => JSON.parse(response.body.toString('utf8')))
-        .then(pod => {
-          // check if the pod is not terminating
-          if (pod.metadata.deletionTimestamp) {
-            pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
-          } else {
-            // re-follow log from the latest timestamp received
-            const {promise, cancellation} = get(get_log(session.namespace, name, timestamp), function*() {
-              // sub-second info from the 'sinceTime' parameter are not taken into account
-              // so just strip the info and add a 'startsWith' check to avoid duplicates
-              yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
-            });
-            session.cancellations.add('dashboard.logs', cancellation);
-            return promise;
-          }
-        })
-        .catch(error => {
-          // the pod might have already been deleted?
-          if (error.response && error.response.statusCode === 404) {
-            pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}DELETED{/red-fg}`);
-          } else {
-            console.error(error.stack);
-          }
-        });
+      // HTTP chunked transfer-encoding / streaming requests abort on timeout instead of being ended.
+      // WebSocket upgraded requests end when timed out on OpenShift.
     }
+    // retry the pod log follow request from the latest timestamp if any
+    get(get_pod(session.namespace, name))
+      .then(response => JSON.parse(response.body.toString('utf8')))
+      .then(pod => {
+        // check if the pod is not terminating
+        if (pod.metadata.deletionTimestamp) {
+          pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
+        } else {
+          // re-follow log from the latest timestamp received
+          const {promise, cancellation} = get(get_log(session.namespace, name, timestamp), function*() {
+            // sub-second info from the 'sinceTime' parameter are not taken into account
+            // so just strip the info and add a 'startsWith' check to avoid duplicates
+            yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
+          });
+          session.cancellations.add('dashboard.logs', cancellation);
+          return promise.then(() => debug.log(`Following log for pod ${session.pod} ...`));
+        }
+      })
+      .catch(error => {
+        // the pod might have already been deleted?
+        if (error.response && error.response.statusCode === 404) {
+          pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}DELETED{/red-fg}`);
+        } else {
+          console.error(error.stack);
+        }
+      });
   };
 
   // FIXME: deal with multi-containers pod
   const {promise, cancellation} = get(get_log(session.namespace, name), logger);
   session.cancellations.add('dashboard.logs', cancellation);
   promise
+    .then(() => debug.log(`Following log for pod ${session.pod} ...`))
     .then(() => pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg}`))
     .then(() => screen.render())
     .catch(error => console.error(error.stack));
