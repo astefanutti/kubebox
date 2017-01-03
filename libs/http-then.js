@@ -111,6 +111,8 @@ function getStream(options, generator, async = true) {
             const {opcode, payload} = decodeFrame(frame);
             // handle connection close in the 'end' event handler
             if (opcode === 0x8) return;
+            // avoid forwarding empty text and binary message payloads on connect
+            if ((opcode === 0x1 || opcode === 0x2) && payload.length === 0) return;
             const res = gen.next(payload);
             if (res.done) {
               socket.end();
