@@ -394,8 +394,12 @@ const carousel = new contrib.carousel([screen => {
   // TODO: restore selection if any
   screen.append(pods_table);
   screen.append(pod_log);
+  pod_log.setScrollPerc(100);
   pods_table.focus();
-}, screen => screen.append(debug)], {
+}, screen => {
+  screen.append(debug);
+  debug.setScrollPerc(100);
+}], {
   screen     : screen,
   interval   : 0,
   controlKeys: true
