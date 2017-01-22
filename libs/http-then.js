@@ -35,7 +35,10 @@ function getStream(options, generator, async = true) {
   const promise = new Promise((resolve, reject) => {
     const client = (options.protocol || 'http').startsWith('https') ? https : http;
     request      = client.get(options)
-      .on('error', reject)
+      .on('error', error => {
+        // FIXME: check the state of the connection and the promise
+        if (!clientAbort) reject(error);
+      })
       .on('abort', () => clientAbort = true)
       .on('response', response => {
         if (response.statusCode >= 400) {
