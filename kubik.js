@@ -230,6 +230,9 @@ pods_table.on('select', (item, i) => {
     get(get_pod(session.namespace, name))
       .then(response => JSON.parse(response.body.toString('utf8')))
       .then(pod => {
+        // TODO: checks should be done at the level of the container (like CrashLoopBackOff)
+        // check if the pod is not terminated (otherwise the connection closes)
+        if (pod.status.phase !== 'Running') return;
         // check if the pod is not terminating
         if (pod.metadata.deletionTimestamp) {
           pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
