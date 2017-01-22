@@ -235,11 +235,13 @@ pods_table.on('select', (item, i) => {
           pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
         } else {
           // re-follow log from the latest timestamp received
-          const {promise, cancellation} = get(follow_log(session.namespace, name, timestamp), function*() {
-            // sub-second info from the 'sinceTime' parameter are not taken into account
-            // so just strip the info and add a 'startsWith' check to avoid duplicates
-            yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
-          });
+          const {promise, cancellation} = get(follow_log(session.namespace, name, timestamp), timestamp
+            ? function*() {
+              // sub-second info from the 'sinceTime' parameter are not taken into account
+              // so just strip the info and add a 'startsWith' check to avoid duplicates
+              yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
+            }
+            : logger);
           session.cancellations.add('dashboard.logs', cancellation);
           return promise.then(() => debug.log(`Following log for pod ${session.pod} ...`));
         }
