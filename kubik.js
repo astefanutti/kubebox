@@ -237,6 +237,7 @@ pods_table.on('select', (item, i) => {
         if (pod.metadata.deletionTimestamp) {
           pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
         } else {
+          // TODO: max number of retries window
           // re-follow log from the latest timestamp received
           const {promise, cancellation} = get(follow_log(session.namespace, name, timestamp), timestamp
             ? function*() {
@@ -315,6 +316,7 @@ const pod_log = grid.set(6, 0, 6, 12, contrib.log, {
   bufferLength: 50
 });
 
+// TODO: enable user scrolling and add timestamps
 const debug = grid.set(0, 0, 12, 12, contrib.log, {
   label       : 'Logs',
   style       : {

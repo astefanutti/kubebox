@@ -30,6 +30,7 @@ function getBody(options) {
   })
 }
 
+// TODO: add wrapper method getStreamAsync instead of a boolean flag
 function getStream(options, generator, async = true) {
   let request, clientAbort, serverAbort;
   const promise = new Promise((resolve, reject) => {
@@ -171,10 +172,10 @@ function decodeFrame(frame) {
   if (opcode === 0x8) {
     return {opcode};
   }
-  // It seems Kubernetes sends continuation frames without any frame bits
-  // and does not respect FIN semantic. We could rely on the total length
+
+  // FIXME: create a decorator generator that keeps the decoding state
+  // to deal with continued payload data. Rely on the total length
   // of the message when known and larger than the actual frame length.
-  // Meanwhile let's only analyse text and binary frames...
   if (!(opcode === 0x1 || opcode === 0x2)) {
     return {opcode: undefined, payload: frame};
   }
