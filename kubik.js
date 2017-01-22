@@ -5,6 +5,7 @@
 const blessed  = require('blessed'),
       contrib  = require('blessed-contrib'),
       crypto   = require('crypto'),
+      delay    = require('./libs/util').delay,
       moment   = require('moment'),
       duration = require('moment-duration-format'),
       task     = require('./libs/task'),
@@ -226,8 +227,8 @@ pods_table.on('select', (item, i) => {
       // HTTP chunked transfer-encoding / streaming requests abort on timeout instead of being ended.
       // WebSocket upgraded requests end when timed out on OpenShift.
     }
-    // retry the pod log follow request from the latest timestamp if any
-    get(get_pod(session.namespace, name))
+    // wait 1s and retry the pod log follow request from the latest timestamp if any
+    delay(get(get_pod(session.namespace, name)), 1000)
       .then(response => JSON.parse(response.body.toString('utf8')))
       .then(pod => {
         // TODO: checks should be done at the level of the container (like CrashLoopBackOff)
