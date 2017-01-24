@@ -215,6 +215,8 @@ pods_table.on('select', (item, i) => {
     let log, timestamp;
     try {
       while (log = yield) {
+        // skip empty data frame payload on connect!
+        if (log.length === 0) continue;
         log       = log.toString('utf8');
         const i   = log.indexOf(' ');
         timestamp = log.substring(0, i);
@@ -465,18 +467,11 @@ function dashboard() {
 }
 
 function* updatePodTable() {
-  let change, buffer = '';
+  const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
+  let change;
   try {
     while (change = yield) {
-      buffer += change.toString('utf8');
-      try {
-        change = JSON.parse(buffer);
-        buffer = '';
-      } catch (error) {
-        // TODO: find a way to be more robust as a single decoding error might compromise the whole stream
-        continue
-      }
-      const index = object => session.pods.items.findIndex(pod => pod.metadata.uid === object.metadata.uid);
+      change = JSON.parse(change);
       switch (change.type) {
         case 'ADDED':
           session.pods.items.push(change.object);

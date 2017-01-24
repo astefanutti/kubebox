@@ -55,6 +55,7 @@ function getStream(options, generator, async = true) {
         response
           .on('aborted', () => serverAbort = !clientAbort)
           .on('data', chunk => {
+            // TODO: is there a way to avoid the client to deal with fragmentation?
             const res = gen.next(chunk);
             if (res.done) {
               // we may work on the http.ClientRequest if needed
@@ -107,17 +108,12 @@ function getStream(options, generator, async = true) {
           return;
         }
 
-        const gen = generator();
+        const gen = decode(generator());
         gen.next();
 
         socket
           .on('data', frame => {
-            const {opcode, payload} = decodeFrame(frame);
-            // handle connection close in the 'end' event handler
-            if (opcode === 0x8) return;
-            // avoid forwarding empty text and binary message payloads on connect
-            if ((opcode === 0x1 || opcode === 0x2) && payload.length === 0) return;
-            const res = gen.next(payload);
+            const res = gen.next(frame);
             if (res.done) {
               socket.end();
               response.body = res.value;
@@ -135,6 +131,7 @@ function getStream(options, generator, async = true) {
               }
             }
             // ignored if the generator is done already
+            // FIXME: avoid leaking the client generator
             gen.return();
           });
         // TODO: handle the socket 'error' event
@@ -158,6 +155,34 @@ function getStream(options, generator, async = true) {
   }
 }
 
+// TODO: handle fragmentation and continuation frame
+function* decode(gen) {
+  gen.next();
+  let data, frame, payload;
+  while (data = yield) {
+    if (!frame) {
+      frame = decodeFrame(data);
+      // handle connection close in the 'end' event handler
+      if (frame.opcode === 0x8)
+        break;
+      payload = frame.payload;
+    } else {
+      // TODO: allocate the buffer with the frame length once for continued payload
+      payload = Buffer.concat([payload, data]);
+    }
+
+    if (frame.length === payload.length) {
+      // all the payload data has been transmitted
+      const res = gen.next(payload);
+      if (res.done) {
+        return res.value;
+      }
+      frame = undefined;
+    }
+  }
+  return gen.next().value;
+}
+
 // https://tools.ietf.org/html/rfc6455#section-5.2
 // https://tools.ietf.org/html/rfc6455#section-5.7
 function decodeFrame(frame) {
@@ -167,36 +192,33 @@ function decodeFrame(frame) {
   const RSV3   = frame[0] & 0x10;
   const opcode = frame[0] & 0x0F;
   const mask   = frame[1] & 0x80;
-  const length = frame[1] & 0x7F;
+  let length   = frame[1] & 0x7F;
+
   // just return the opcode on connection close
   if (opcode === 0x8) {
     return {opcode};
   }
 
-  // FIXME: create a decorator generator that keeps the decoding state
-  // to deal with continued payload data. Rely on the total length
-  // of the message when known and larger than the actual frame length.
-  if (!(opcode === 0x1 || opcode === 0x2)) {
-    return {opcode: undefined, payload: frame};
-  }
   let nextByte = 2;
   if (length === 126) {
-    // length = next 2 bytes
+    length = frame.readUInt16BE(nextByte);
     nextByte += 2;
   } else if (length === 127) {
-    // length = next 8 bytes
+    length = frame.readUInt64BE(nextByte);
     nextByte += 8;
   }
+
   let maskingKey;
   if (mask) {
     maskingKey = frame.slice(nextByte, nextByte + 4);
     nextByte += 4;
   }
+
   const payload = frame.slice(nextByte);
   if (maskingKey) {
     for (let i = 0; i < payload.length; i++) {
       payload[i] = payload[i] ^ maskingKey[i % 4];
     }
   }
-  return {opcode, payload};
+  return {FIN, opcode, length, payload};
 }
