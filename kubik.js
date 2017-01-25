@@ -230,7 +230,8 @@ pods_table.on('select', (item, i) => {
       // WebSocket upgraded requests end when timed out on OpenShift.
     }
     // wait 1s and retry the pod log follow request from the latest timestamp if any
-    delay(get(get_pod(session.namespace, name)), 1000)
+    delay(1000)
+      .then(() => get(get_pod(session.namespace, name)))
       .then(response => JSON.parse(response.body.toString('utf8')))
       .then(pod => {
         // TODO: checks should be done at the level of the container (like CrashLoopBackOff)
