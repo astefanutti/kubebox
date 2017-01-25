@@ -158,26 +158,35 @@ function getStream(options, generator, async = true) {
 // TODO: handle fragmentation and continuation frame
 function* decode(gen) {
   gen.next();
-  let data, frame, payload;
+  let data, frame, payload, offset;
   while (data = yield) {
     if (!frame) {
       frame = decodeFrame(data);
       // handle connection close in the 'end' event handler
-      if (frame.opcode === 0x8)
+      if (frame.opcode === 0x8) {
         break;
-      payload = frame.payload;
+      }
+      if (frame.payload.length === frame.length) {
+        payload = frame.payload;
+        offset  = payload.length;
+      } else {
+        payload = Buffer.alloc(frame.length);
+        offset  = frame.payload.copy(payload);
+      }
     } else {
-      // TODO: allocate the buffer with the frame length once for continued payload
-      payload = Buffer.concat([payload, data]);
+      offset += data.copy(payload, offset);
     }
 
-    if (frame.length === payload.length) {
+    if (offset === frame.length) {
       // all the payload data has been transmitted
-      const res = gen.next(payload);
-      if (res.done) {
-        return res.value;
+      try {
+        const res = gen.next(payload);
+        if (res.done) {
+          return res.value;
+        }
+      } finally {
+        frame = undefined;
       }
-      frame = undefined;
     }
   }
   return gen.next().value;
