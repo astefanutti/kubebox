@@ -255,11 +255,8 @@ pods_table.on('select', (item, i) => {
       })
       .catch(error => {
         // the pod might have already been deleted?
-        if (error.response && error.response.statusCode === 404) {
-          pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg} {red-fg}DELETED{/red-fg}`);
-        } else {
+        if (!error.response || error.response.statusCode !== 404)
           console.error(error.stack);
-        }
       });
   };
 
@@ -480,8 +477,12 @@ function* updatePodTable() {
           session.pods.items[index(change.object)] = change.object;
           break;
         case 'DELETED':
-          // TODO: check if that's the selected pod and remove selection / cancel logs
           session.pods.items.splice(index(change.object), 1);
+          if (change.object.metadata.name === session.pod) {
+            // check if that's the selected pod and clean the selection
+            pod_log.setLabel(`Logs {grey-fg}[${session.pod}]{/grey-fg} {red-fg}DELETED{/red-fg}`);
+            session.pod = null;
+          }
           break;
       }
       setTableData(session.pods);
