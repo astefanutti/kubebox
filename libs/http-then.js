@@ -32,12 +32,15 @@ function getBody(options) {
 
 // TODO: add wrapper method getStreamAsync instead of a boolean flag
 function getStream(options, generator, async = true) {
-  let request, clientAbort, serverAbort;
-  const promise = new Promise((resolve, reject) => {
-    const client = (options.protocol || 'http').startsWith('https') ? https : http;
-    request      = client.get(options)
+  let cancellation = Function.prototype;
+  const promise    = new Promise((resolve, reject) => {
+    let clientAbort, serverAbort;
+    const client  = (options.protocol || 'http').startsWith('https') ? https : http;
+    const request = client.get(options)
       .on('error', error => {
         // FIXME: check the state of the connection and the promise
+        // 'Error: socket hang up' may be thrown on close
+        // for containers that have not emitted any logs yet
         if (!clientAbort) reject(error);
       })
       .on('abort', () => clientAbort = true)
@@ -139,20 +142,10 @@ function getStream(options, generator, async = true) {
           resolve(response);
         }
       });
+    // TODO: should the socket be ended instead of aborted?
+    cancellation = () => request.abort();
   });
-  return {
-    promise     : promise,
-    cancellation: () => {
-      try {
-        // TODO: should the socket be ended instead of aborted?
-        // destroy the http.ClientRequest on cancellation
-        if (request) request.abort();
-      } catch (error) {
-        // swallow error to handle 'Error: socket hang up' on close
-        // it happens for containers that have not emitted any logs yet
-      }
-    }
-  }
+  return {promise, cancellation};
 }
 
 // TODO: handle fragmentation and continuation frame
