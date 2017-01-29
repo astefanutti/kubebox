@@ -43,7 +43,6 @@ function getStream(options, generator, async = true) {
         // for containers that have not emitted any logs yet
         if (!clientAbort) reject(error);
       })
-      .on('abort', () => clientAbort = true)
       .on('response', response => {
         if (response.statusCode >= 400) {
           const error    = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
@@ -110,6 +109,10 @@ function getStream(options, generator, async = true) {
           response.destroy(error);
           return;
         }
+        cancellation = () => {
+          clientAbort = true;
+          socket.end();
+        };
 
         const gen = decode(generator());
         gen.next();
@@ -137,15 +140,16 @@ function getStream(options, generator, async = true) {
             // FIXME: avoid leaking the client generator
             gen.return();
           });
-        // TODO: handle the socket 'error' event
         if (async) {
           resolve(response);
         }
       });
-    // TODO: should the socket be ended instead of aborted?
-    cancellation = () => request.abort();
+    cancellation  = () => {
+      clientAbort = true;
+      request.abort();
+    };
   });
-  return {promise, cancellation};
+  return {promise, cancellation: () => cancellation()};
 }
 
 // TODO: handle fragmentation and continuation frame
@@ -157,7 +161,7 @@ function* decode(gen) {
       frame = decodeFrame(data);
       // handle connection close in the 'end' event handler
       if (frame.opcode === 0x8) {
-        break;
+        continue;
       }
       if (frame.payload.length === frame.length) {
         payload = frame.payload;
