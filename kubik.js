@@ -491,7 +491,7 @@ function* updatePodTable() {
     }
   } catch (e) {
     // HTTP chunked transfer-encoding / streaming watch requests abort on timeout when the 'timeoutSeconds'
-    // request parameter is greater than the '--min-request-timeout' API sever option,
+    // request parameter is greater than the '--min-request-timeout' server API option,
     // otherwise the connections just end normally (http://kubernetes.io/docs/admin/kube-apiserver/).
     // WebSocket upgraded watch requests (idle?) end when timed out on Kubernetes.
   }
