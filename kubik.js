@@ -450,10 +450,16 @@ function authenticate() {
     // try retrieving an OAuth access token from the OpenShift OAuth server
     return get(oauth_authorize())
       .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
-      .then(token => master_api.headers['Authorization'] = `Bearer ${token}`);
-    // TODO: catch 401
+      .then(token => master_api.headers['Authorization'] = `Bearer ${token}`)
+      .catch(error => {
+        if (error.response && error.response.statusCode === 401) {
+          throw Error(`Unable to authenticate: ${error.message}`);
+        } else {
+          throw error;
+        }
+      });
   } else {
-    throw new Error(`Unable to authenticate to ${master_api.url}`);
+    throw Error(`No authentication available for: ${master_api.url}`);
   }
 }
 
