@@ -13,6 +13,7 @@ const blessed  = require('blessed'),
       get      = require('./libs/http-then').get,
       os       = require('os'),
       path     = require('path'),
+      URI      = require('urijs'),
       yaml     = require('js-yaml'),
       screen   = blessed.screen();
 
@@ -49,20 +50,32 @@ function getKubeConfig(master) {
     context = kube.contexts.find(item => item.name === current).context;
     cluster = kube.clusters.find(item => item.name === context.cluster).cluster;
   } else {
-    cluster = kube.clusters.find(item => item.cluster.server === master);
-    context = kube.contexts.find(item => item.context.cluster === cluster.name).context;
-    cluster = cluster.cluster;
+    const uri    = URI(master);
+    let clusters = kube.clusters.filter(item => URI(item.cluster.server).hostname() === uri.hostname());
+    if (clusters.length > 1) {
+      clusters = clusters.filter(item => {
+        const server = URI(item.cluster.server);
+        return server.protocol() === uri.protocol() && server.port() === uri.port();
+      });
+    }
+    if (clusters.length === 1) {
+      context = (kube.contexts.find(item => item.context.cluster === clusters[0].name) || {}).context || {};
+      cluster = clusters[0].cluster;
+    } else {
+      cluster = {server: master};
+      context = {};
+    }
   }
-  user = kube.users.find(user => user.name === context.user).user;
+  user = (kube.users.find(user => user.name === context.user) || {}).user || {};
   return {cluster, context, user};
 }
 
 function getMasterApi(kube_config) {
   const {cluster, user}              = kube_config;
-  const [, protocol, hostname, port] = /^(\w+:)\/\/([^:]+):(\d*)$/.exec(cluster.server);
+  const {protocol, hostname, port}   = URI.parse(cluster.server);
   const master_api                   = {
-    protocol, hostname, port,
-    headers: {
+    protocol: protocol + ':', hostname, port,
+    headers : {
       'Accept': 'application/json, text/plain, */*'
     },
     get url() {
