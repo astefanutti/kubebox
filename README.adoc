@@ -25,16 +25,18 @@ image::http://astefanutti.github.io/kubik/kubik.gif[]
 
 === NPM
 
-Install Kubik (add the `-g` flag for global install):
+Install Kubik globally and run it:
 
 ```
-$ npm install kukik
-```
-
-Then run Kubik, e.g.:
-
-```
+$ npm install -g kubik
 $ kubik
+```
+
+Or locally:
+
+```
+$ npm install kubik
+$ `npm bin`/kubik
 ```
 
 === Docker
