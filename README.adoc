@@ -8,13 +8,52 @@ Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
 // Aliases
 ifdef::env-github[]
 :note-caption: :information_source:
+:icon-edit: :pencil2:
 endif::[]
 ifndef::env-github[]
 :icons: font
+:icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 
 {description}
+
+== Run
+
+
+=== NPM
+
+Install Kubik (add the `-g` flag for global install):
+
+```
+$ npm install kukik
+```
+
+Then run Kubik, e.g.:
+
+```
+$ kubik
+```
+
+=== Docker
+
+You can run Kubik using Docker, e.g.:
+
+```
+$ docker run -it --rm astefanutti/kubik
+```
+
+You may want to mount your home directory so that Kubik can rely on the `~./kube/config` file, e.g.:
+
+```
+$ docker run -it --rm -v ~:/root astefanutti/kubik
+```
+
+== Usage
+
+{icon-edit}
+
+== CLI
 
 image::http://astefanutti.github.io/kubik/terminal-forever.jpg[link={uri-terminal-forever}]
