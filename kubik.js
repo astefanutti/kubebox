@@ -434,6 +434,7 @@ get(get_apis())
   .then(dashboard)
   .catch(error => {
     // FIXME: only fallback to manual authentication for anonymous user
+    // TODO: catch 401 for incorrect authentication
     if (error.response && error.response.statusCode === 403) {
       // fallback to manual authentication
       authenticate()
