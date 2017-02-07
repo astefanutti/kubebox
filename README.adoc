@@ -19,8 +19,9 @@ endif::[]
 
 {description}
 
-== Run
+image::http://astefanutti.github.io/kubik/kubik.gif[]
 
+== Run
 
 === NPM
 
