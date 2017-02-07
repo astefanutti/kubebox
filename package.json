@@ -2,7 +2,7 @@
   "name": "kubik",
   "description": "CLI console for Kubernetes clusters",
   "author": "Antonin Stefanutti",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "homepage": "https://github.com/astefanutti/kubik",
   "main": "kubik.js",
@@ -17,8 +17,7 @@
     "type": "git",
     "url": "https://github.com/astefanutti/kubik.git"
   },
-  "devDependencies": {
-  },
+  "devDependencies": {},
   "dependencies": {
     "blessed-contrib": "~3.5.5",
     "blessed": "~0.1.81",
