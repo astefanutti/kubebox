@@ -1,16 +1,22 @@
 {
   "name": "kubik",
+  "description": "CLI console for Kubernetes clusters",
+  "author": "Antonin Stefanutti",
   "version": "0.0.1",
-  "description": "Kubernetes CLI Dashboard",
+  "license": "MIT",
+  "homepage": "https://github.com/astefanutti/kubik",
   "main": "kubik.js",
-  "scripts": {
+  "bin": {
+    "kubik": "./bin/kubik"
   },
+  "scripts": {
+    "start": "./bin/kubik"
+  },
+  "preferGlobal": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/astefanutti/kubik.git"
   },
-  "author": "Antonin Stefanutti",
-  "license": "MIT",
   "devDependencies": {
   },
   "dependencies": {
