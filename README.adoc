@@ -5,6 +5,7 @@ Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
 // Settings
 :idprefix:
 :idseparator: -
+:experimental:
 // Aliases
 ifdef::env-github[]
 :note-caption: :information_source:
@@ -56,6 +57,17 @@ $ docker run -it --rm -v ~:/root astefanutti/kubik
 == Usage
 
 {icon-edit}
+
+== Commands
+
+[cols="1v,2v"]
+|===
+|Keybinding |Description
+
+|kbd:[n]
+|Change current namespace
+
+|===
 
 == CLI
 
