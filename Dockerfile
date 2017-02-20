@@ -5,7 +5,7 @@ ENV TERM xterm-color
 WORKDIR /kubik
 
 COPY package.json ./
-COPY libs libs/
+COPY lib lib/
 COPY kubik.js ./
 
 RUN npm install
