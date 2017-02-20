@@ -28,29 +28,29 @@ image::http://astefanutti.github.io/kubik/kubik.gif[]
 
 Install Kubik globally and run it:
 
-```
+```sh
 $ npm install -g kubik
 $ kubik
 ```
 
 Or locally:
 
-```
+```sh
 $ npm install kubik
-$ `npm bin`/kubik
+$ $(npm bin)/kubik
 ```
 
 === Docker
 
 You can run Kubik using Docker, e.g.:
 
-```
+```sh
 $ docker run -it --rm astefanutti/kubik
 ```
 
 You may want to mount your home directory so that Kubik can rely on the `~./kube/config` file, e.g.:
 
-```
+```sh
 $ docker run -it --rm -v ~:/root astefanutti/kubik
 ```
 
