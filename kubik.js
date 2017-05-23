@@ -532,6 +532,7 @@ function getCrendentials() {
   return new Promise(function(fulfill, reject) {
     screen.saveFocus();
     const { form, username, password } = promptCrendentials();
+    screen.append(form);
     form.focusNext();
     screen.render();
     form.on('submit', data => {
@@ -545,7 +546,6 @@ function getCrendentials() {
 
 function promptCrendentials() {
   const form = blessed.form({
-    parent : screen,
     mouse  : true,
     keys   : true,
     vi     : true,
@@ -574,16 +574,15 @@ function promptCrendentials() {
   });
 
   const username = blessed.textbox({
-    parent  : form,
-    mouse   : true,
-    keys    : true,
-    height  : 1,
-    width   : 10,
-    left    : 11,
-    top     : 1
+    parent       : form,
+    inputOnFocus : true,
+    mouse        : true,
+    keys         : true,
+    height       : 1,
+    width        : 10,
+    left         : 11,
+    top          : 1
   });
-  username.on('focus', () => username.readInput());
-  username.on('tab', () => password.focus());
 
   blessed.text({
     parent  : form,
@@ -596,37 +595,36 @@ function promptCrendentials() {
   });
 
   const password = blessed.textbox({
+    parent       : form,
+    inputOnFocus : true,
+    mouse        : true,
+    keys         : true,
+    height       : 1,
+    width        : 20,
+    left         : 11,
+    censor       : true,
+    top          : 2
+  });
+
+  const login = blessed.button({
     parent  : form,
     mouse   : true,
     keys    : true,
-    height  : 1,
-    width   : 20,
-    left    : 11,
-    censor  : true,
-    top     : 2
-  });
-  password.on('focus', () => password.readInput());
-
-  blessed
-    .button({
-      parent  : form,
-      mouse   : true,
-      keys    : true,
-      shrink  : true,
-      padding : {
-        left  : 1,
-        right : 1
-      },
-      left    : 29,
-      top     : 3,
-      content : 'Log In',
-      style   : {
-        focus : {
-          bg  : 'grey'
-        }
+    shrink  : true,
+    padding : {
+      left  : 1,
+      right : 1
+    },
+    left    : 29,
+    top     : 3,
+    content : 'Log In',
+    style   : {
+      focus : {
+        bg  : 'grey'
       }
-    })
-    .on('press', () => form.submit());
+    }
+  });
+  login.on('press', () => form.submit());
 
   return {
     form,
