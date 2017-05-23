@@ -15,8 +15,7 @@ const blessed  = require('blessed'),
       path     = require('path'),
       URI      = require('urijs'),
       yaml     = require('js-yaml'),
-      screen   = blessed.screen(),
-      eventEmitter = require('events');
+      screen   = blessed.screen();
 
 const session = {
   apis         : [],
@@ -117,11 +116,13 @@ const get_apis = () => Object.assign({
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
-const oauth_authorize = (credentials) => Object.assign({
-  path  : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
-  method: 'GET',
-  // TODO: support passing credentials as command line options
-  auth  : credentials.username + ":" + credentials.password
+const oauth_authorize = ({username, password}) => merge({
+  path   : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
+  method : 'GET',
+  auth   : `${username}:${password}`,
+  headers: {
+    'X-Csrf-Token' : '1'
+  }
 }, master_api);
 
 const get_namespaces = () => Object.assign({
@@ -434,7 +435,6 @@ get(get_apis())
   .then(dashboard)
   .catch(error => {
     // FIXME: only fallback to manual authentication for anonymous user
-    // TODO: catch 401 for incorrect authentication
     if ((error.response && (error.response.statusCode === 403 || error.response.statusCode === 401))) {
       // fallback to manual authentication
       authenticate()
@@ -446,23 +446,22 @@ get(get_apis())
     // TODO: better error management
   });
 
-function authenticate(credentials = {username:"admin",password:"admin"}) {
+function authenticate(credentials = { username: 'admin', password: 'admin' }) {
   if (session.openshift) {
     // try retrieving an OAuth access token from the OpenShift OAuth server
     return get(oauth_authorize(credentials))
-     .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
-     .then(token => master_api.headers['Authorization'] = `Bearer ${token}`)
-     .catch(error => {
-       if (error.response && error.response.statusCode === 401) {
-           debug.log('Prompting for credentials ${error}')
-           return getCrendentials()
-                   .then(authenticate);
-       } else {
-         throw error;
-       }
-     });
+      .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
+      .then(token => master_api.headers['Authorization'] = `Bearer ${token}`)
+      .catch(error => {
+        if (error.response && error.response.statusCode === 401) {
+          debug.log(`Authentication required for ${master_api.url} (openshift)`);
+          return getCrendentials().then(authenticate);
+        } else {
+          throw error;
+        }
+      });
   } else {
-      throw Error(`No authentication available for: ${master_api.url}`);
+    throw Error(`No authentication available for: ${master_api.url}`);
   }
 }
 
@@ -530,125 +529,106 @@ function refreshPodAges() {
 }
 
 function getCrendentials() {
-  return new Promise(function (fulfill, reject){
-    var form = blessed.form({
-    parent: screen,
-    mouse: true,
-    keys: true,
-    vi: true,
-    left: 'center',
-    top: 'center',
-    width: 40,
-    height: 6,
-    shrink: 'never',
-    border: {
-      type: 'line'
-    },
-  });
-
-  form.on('element keypress', function(el, ch, key) {
-      if (key.name === 'enter') {
-          form.submit();
-      }
-  })
-
-
-  var usernameText = blessed.text({
-    parent: form,
-    left: 1,
-    top: 1,
-    align: 'left',
-    name: 'usernameText',
-    content: 'username:'
-  }); 
-
-  var username = blessed.textbox({
-    parent: form,
-    mouse: true,
-    keys: true,
-    height: 1,
-    width: 10,
-    left: 11,
-    top: 1,
-    name: 'username',
-  });
-
-  username.on('focus', function() {
-    username.readInput();
-  });
-
-  username.on('tab', function() {
-    password.focus();
-  });
-
-  var passwordText = blessed.text({
-    parent: form,
-    mouse: true,
-    keys: true,
-    left: 1,
-    top: 2,
-    align: 'left',
-    name: 'password',
-    content: 'password:'
-  }); 
-
-  var password = blessed.textbox({
-    parent: form,
-    mouse: true,
-    keys: true,
-    height: 1,
-    width: 20,
-    left: 11,
-    censor: true,
-    top: 2,
-    name: 'password'
-  });
-
-  password.on('focus', function() {
-    password.readInput();
-  });
-
-  var submit = blessed.button({
-    parent: form,
-    mouse: true,
-    keys: true,
-    shrink: true,
-    padding: {
-      left: 1,
-      right: 1
-    },
-    left: 29,
-    top: 3,
-    shrink: true,
-    name: 'login',
-    content: 'Log In',
-    style: {
-      focus: {
-        bg: 'grey'
-      }
-    }
-  });
-
-  submit.on('press', function() {
-    form.submit();
-  });
-
-  form.on('submit', function(data) {
-    screen.remove(form);
+  return new Promise(function(fulfill, reject) {
+    const { form, username, password } = promptCrendentials();
+    form.focusNext();
     screen.render();
-    const credentials = {
-      username: username.content,
-      password: password.value
+    form.on('submit', data => {
+      screen.remove(form);
+      screen.render();
+      fulfill({ username: username(), password: password() });
+    });
+  });
+}
+
+function promptCrendentials() {
+  const form = blessed.form({
+    parent : screen,
+    mouse  : true,
+    keys   : true,
+    vi     : true,
+    left   : 'center',
+    top    : 'center',
+    width  : 40,
+    height : 6,
+    shrink : 'never',
+    border : {
+      type : 'line'
     }
-    fulfill(credentials);
   });
 
-  screen.key('q', function() {
-    return screen.destroy();
+  form.on('element keypress', (el, ch, key) => {
+    if (key.name === 'enter') {
+      form.submit();
+    }
   });
 
-  form.focusNext();
-  screen.render();
+  blessed.text({
+    parent  : form,
+    left    : 1,
+    top     : 1,
+    align   : 'left',
+    content : 'username:'
   });
-  
+
+  const username = blessed.textbox({
+    parent  : form,
+    mouse   : true,
+    keys    : true,
+    height  : 1,
+    width   : 10,
+    left    : 11,
+    top     : 1
+  });
+  username.on('focus', () => username.readInput());
+  username.on('tab', () => password.focus());
+
+  blessed.text({
+    parent  : form,
+    mouse   : true,
+    keys    : true,
+    left    : 1,
+    top     : 2,
+    align   : 'left',
+    content : 'password:'
+  });
+
+  const password = blessed.textbox({
+    parent  : form,
+    mouse   : true,
+    keys    : true,
+    height  : 1,
+    width   : 20,
+    left    : 11,
+    censor  : true,
+    top     : 2
+  });
+  password.on('focus', () => password.readInput());
+
+  blessed
+    .button({
+      parent  : form,
+      mouse   : true,
+      keys    : true,
+      shrink  : true,
+      padding : {
+        left  : 1,
+        right : 1
+      },
+      left    : 29,
+      top     : 3,
+      content : 'Log In',
+      style   : {
+        focus : {
+          bg  : 'grey'
+        }
+      }
+    })
+    .on('press', () => form.submit());
+
+  return {
+    form,
+    username : () => username.content,
+    password : () => password.value
+  };
 }
