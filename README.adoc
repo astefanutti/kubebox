@@ -67,6 +67,12 @@ $ docker run -it --rm -v ~:/root astefanutti/kubik
 |kbd:[n]
 |Change current namespace
 
+|kbd:[<-], kbd:[->]
+|Navigate screen
+
+|kbd:[q], kbd:[CTRL+c]
+|Exit
+
 |===
 
 == CLI
