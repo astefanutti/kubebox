@@ -530,11 +530,13 @@ function refreshPodAges() {
 
 function getCrendentials() {
   return new Promise(function(fulfill, reject) {
+    screen.saveFocus();
     const { form, username, password } = promptCrendentials();
     form.focusNext();
     screen.render();
     form.on('submit', data => {
       screen.remove(form);
+      screen.restoreFocus();
       screen.render();
       fulfill({ username: username(), password: password() });
     });
