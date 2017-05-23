@@ -14,8 +14,12 @@ const blessed  = require('blessed'),
       os       = require('os'),
       path     = require('path'),
       URI      = require('urijs'),
-      yaml     = require('js-yaml'),
-      screen   = blessed.screen();
+      yaml     = require('js-yaml');
+
+const screen = blessed.screen({
+  ignoreLocked: ['q', 'C-c']
+});
+screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 
 const session = {
   apis         : [],
@@ -390,6 +394,8 @@ namespaces_list.on('select', (item, i) => {
   dashboard().catch(error => console.error(error.stack));
 });
 
+// FIXME: the namespace selection handle should only be active
+// when the connection is established to the cluster
 screen.key(['n'], () => {
   screen.append(namespaces_list);
   namespaces_list.clearItems();
@@ -410,22 +416,26 @@ screen.key(['n'], () => {
     .catch(error => console.error(error.stack));
 });
 
-screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
-
-const carousel = new contrib.carousel([screen => {
-  // TODO: restore selection if any
-  screen.append(pods_table);
-  screen.append(pod_log);
-  pod_log.setScrollPerc(100);
-  pods_table.focus();
-}, screen => {
-  screen.append(debug);
-  debug.setScrollPerc(100);
-}], {
-  screen     : screen,
-  interval   : 0,
-  controlKeys: true
-});
+const carousel = new contrib.carousel(
+  [
+    screen => {
+      // TODO: restore selection if any
+      screen.append(pods_table);
+      screen.append(pod_log);
+      pod_log.setScrollPerc(100);
+      pods_table.focus();
+    },
+    screen => {
+      screen.append(debug);
+      debug.setScrollPerc(100);
+    }
+  ],
+  {
+    screen      : screen,
+    interval    : 0,
+    controlKeys : true
+  }
+);
 carousel.start();
 
 // TODO: log more about client access workflow and info
@@ -531,6 +541,7 @@ function refreshPodAges() {
 function getCrendentials() {
   return new Promise(function(fulfill, reject) {
     screen.saveFocus();
+    screen.grabKeys = true;
     const { form, username, password } = promptCrendentials();
     screen.append(form);
     form.focusNext();
@@ -538,6 +549,7 @@ function getCrendentials() {
     form.on('submit', data => {
       screen.remove(form);
       screen.restoreFocus();
+      screen.grabKeys = false;
       screen.render();
       fulfill({ username: username(), password: password() });
     });
@@ -583,6 +595,8 @@ function promptCrendentials() {
     left         : 11,
     top          : 1
   });
+  // retain key grabbing as text areas reset it after input reading
+  username.on('blur', () => screen.grabKeys = true);
 
   blessed.text({
     parent  : form,
@@ -605,6 +619,8 @@ function promptCrendentials() {
     censor       : true,
     top          : 2
   });
+  // retain key grabbing as text areas reset it after input reading
+  password.on('blur', () => screen.grabKeys = true);
 
   const login = blessed.button({
     parent  : form,
