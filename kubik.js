@@ -20,6 +20,11 @@ const screen = blessed.screen({
   ignoreLocked: ['q', 'C-c']
 });
 screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
+screen.key(['l', 'C-l'], (ch, key) => {
+  authenticate()
+        .then(dashboard)
+        .catch(error => console.error(error.stack));
+})
 
 const session = {
   apis         : [],
@@ -124,14 +129,17 @@ const get_apis = () => Object.assign({
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
-const oauth_authorize = ({username, password}) => merge({
-  path   : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
-  method : 'GET',
-  auth   : `${username}:${password}`,
-  headers: {
-    'X-Csrf-Token' : '1'
-  }
-}, master_api);
+const oauth_authorize = ({username, password}) => { 
+    delete master_api.headers['Authorization'];
+    return merge({
+      path   : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
+      method : 'GET',
+      auth   : `${username}:${password}`,
+      headers: {
+        'X-Csrf-Token' : '1'
+      }
+    }, master_api);
+};
 
 const get_namespaces = () => Object.assign({
   path  : '/api/v1/namespaces',
@@ -460,16 +468,17 @@ get(get_apis())
     // TODO: better error management
   });
 
-function authenticate(credentials = { username: 'admin', password: 'admin' }) {
+function authenticate() {
   if (session.openshift) {
     // try retrieving an OAuth access token from the OpenShift OAuth server
-    return get(oauth_authorize(credentials))
+    return getCrendentials()
+      .then(credentials => get(oauth_authorize(credentials)))
       .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
       .then(token => master_api.headers['Authorization'] = `Bearer ${token}`)
       .catch(error => {
         if (error.response && error.response.statusCode === 401) {
           debug.log(`Authentication required for ${master_api.url} (openshift)`);
-          return getCrendentials().then(authenticate);
+          return authenticate();
         } else {
           throw error;
         }
