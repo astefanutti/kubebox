@@ -15,9 +15,9 @@ const blessed  = require('blessed'),
       path     = require('path'),
       URI      = require('urijs'),
       yaml     = require('js-yaml');
-
+      
 const screen = blessed.screen({
-  ignoreLocked: ['q', 'C-c']
+  ignoreLocked: ['C-c']
 });
 screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
 screen.key(['l', 'C-l'], (ch, key) => {
