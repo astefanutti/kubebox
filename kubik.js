@@ -107,10 +107,6 @@ function getMasterApi(kube_config) {
     master_api.headers['Authorization'] = `Bearer ${user.token}`;
   }
   if (cluster['insecure-skip-tls-verify']) {
-    master_api.rejectUnauthorized = cluster['insecure-skip-tls-verify'];
-  } else {
-    // by default set to false for openshift
-    // TODO: add Openshift certificate as trusted.   
     master_api.rejectUnauthorized = false;
   }
   if (cluster['certificate-authority']) {
