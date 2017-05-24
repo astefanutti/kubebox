@@ -586,6 +586,12 @@ function promptCrendentials() {
     }
   });
 
+  form.on('keypress', (el, ch, key) => {
+    if (ch.name === 'q') {
+      process.exit(0);
+    }
+  });
+
   blessed.text({
     parent  : form,
     left    : 1,
