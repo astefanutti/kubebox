@@ -20,11 +20,10 @@ const screen = blessed.screen({
   ignoreLocked: ['C-c']
 });
 screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
-screen.key(['l', 'C-l'], (ch, key) => {
-  authenticate()
-        .then(dashboard)
-        .catch(error => console.error(error.stack));
-})
+screen.key(['l', 'C-l'], (ch, key) => authenticate()
+  .then(dashboard)
+  .catch(error => console.error(error.stack))
+);
 
 const session = {
   apis         : [],
@@ -71,7 +70,7 @@ function getKubeConfig(master) {
       context = (kube.contexts.find(item => item.context.cluster === clusters[0].name) || {}).context || {};
       cluster = clusters[0].cluster;
     } else {
-      cluster = {server: master};
+      cluster = { server: master };
       context = {};
     }
   }
@@ -125,13 +124,13 @@ const get_apis = () => Object.assign({
 
 // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
 // https://github.com/openshift/openshift-docs/issues/707
-const oauth_authorize = ({username, password}) => { 
-    delete master_api.headers['Authorization'];
-    return merge({
-      path   : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
-      method : 'GET',
-      auth   : `${username}:${password}`,
-      headers: {
+const oauth_authorize = ({ username, password }) => {
+  delete master_api.headers['Authorization'];
+  return merge({
+      path    : '/oauth/authorize?client_id=openshift-challenging-client&response_type=token',
+      method  : 'GET',
+      auth    : `${username}:${password}`,
+      headers : {
         'X-Csrf-Token' : '1'
       }
     }, master_api);
