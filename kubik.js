@@ -40,8 +40,8 @@ const session = {
 const kube_config = getKubeConfig(process.argv[2] || process.env.KUBERNETES_MASTER);
 // TODO: do not set a default namespace as it can lead to permissions issues
 // CLI option > Kube config context > Display namespaces list
-session.namespace = kube_config.context.namespace || 'default';
-const master_api  = getMasterApi(kube_config);
+session.namespace = kube_config[0].context.namespace || 'default';
+var master_api  = getMasterApi(kube_config[0]);
 
 // TODO: support client access information provided as CLI options
 // TODO: better context disambiguation workflow
@@ -51,12 +51,12 @@ const master_api  = getMasterApi(kube_config);
 function getKubeConfig(master) {
   // TODO: check if the file exists and can be read first
   const kube = yaml.safeLoad(fs.readFileSync(path.join(os.homedir(), '.kube/config'), 'utf8'));
-  let cluster, context, current, user;
+  let current, configs = [{}], i;
   if (!master) {
     // TODO: error exit in case no current context is set
     current = kube['current-context'];
-    context = kube.contexts.find(item => item.name === current).context;
-    cluster = kube.clusters.find(item => item.name === context.cluster).cluster;
+    configs[0].context = kube.contexts.find(item => item.name === current).context;
+    configs[0].cluster = kube.clusters.find(item => item.name === configs[0].context.cluster).cluster;
   } else {
     const uri    = URI(master);
     let clusters = kube.clusters.filter(item => URI(item.cluster.server).hostname() === uri.hostname());
@@ -67,29 +67,31 @@ function getKubeConfig(master) {
       });
     }
     if (clusters.length === 1) {
-      context = (kube.contexts.find(item => item.context.cluster === clusters[0].name) || {}).context || {};
-      cluster = clusters[0].cluster;
+      configs[0].context = (kube.contexts.find(item => item.context.cluster === clusters[0].name) || {}).context || {};
+      configs[0].cluster = clusters[0].cluster;
     } else {
-      cluster = { server: master };
-      context = {};
+      configs[0].cluster = { server: master };
+      configs[0].context = {};
     }
   }
-  user = (kube.users.find(user => user.name === context.user) || {}).user || {};
-  return {cluster, context, user};
+  configs[0].user = (kube.users.find(user => user.name === configs[0].context.user) || {}).user || {};
+  let otherClusters = kube.clusters.filter(item => item.cluster !== configs[0].cluster);
+  let otherContexts = kube.contexts.filter(item => item.context !== configs[0].context);
+  for (i = 0; i < otherClusters.length; i++) {
+    configs[i+1] = {}; 
+    configs[i+1].cluster = otherClusters[i].cluster;
+  }
+  for (i = 0; i < otherContexts.length; i++) { 
+    configs[i+1].context = otherContexts[i].context;
+    configs[i+1].user = (kube.users.find(user => user.name === configs[i+1].context.user) || {}).user || {};
+  }  
+
+  return configs;
 }
 
 function getMasterApi(kube_config) {
-  const {cluster, user}              = kube_config;
-  const {protocol, hostname, port}   = URI.parse(cluster.server);
-  const master_api                   = {
-    protocol: protocol + ':', hostname, port,
-    headers : {
-      'Accept': 'application/json, text/plain, */*'
-    },
-    get url() {
-      return this.protocol + '//' + this.hostname + ':' + this.port;
-    }
-  };
+  const {cluster, user}   = kube_config;
+  const master_api        = getBasicMasterApi(cluster.server);
   if (user['client-certificate']) {
     master_api.cert = fs.readFileSync(user['client-certificate']);
   }
@@ -113,6 +115,20 @@ function getMasterApi(kube_config) {
   }
   if (cluster['certificate-authority-data']) {
     master_api.ca = Buffer.from(cluster['certificate-authority-data'], 'base64');
+  }
+  return master_api;
+}
+
+function getBasicMasterApi(url){
+  const {protocol, hostname, port}   = URI.parse(url);
+  const master_api                   = {
+    protocol: protocol + ':', hostname, port,
+    headers : {
+      'Accept': 'application/json, text/plain, */*'
+    },
+    get url() {
+      return this.protocol + '//' + this.hostname + ':' + this.port;
+    }
   }
   return master_api;
 }
@@ -455,6 +471,9 @@ get(get_apis())
     if ((error.response && (error.response.statusCode === 403 || error.response.statusCode === 401))) {
       // fallback to manual authentication
       authenticate()
+        .then(get(get_apis()))
+        .then(response => session.apis = JSON.parse(response.body.toString('utf8')).paths)
+        .catch(error => debug.log(`Unable to retrieve available APIs: ${error.message}`))
         .then(dashboard)
         .catch(error => console.error(error.stack));
     } else {
@@ -467,8 +486,9 @@ function authenticate() {
   if (session.openshift) {
     // try retrieving an OAuth access token from the OpenShift OAuth server
     return getCrendentials()
-      .then(credentials => get(oauth_authorize(credentials)))
-      .then(response => response.headers.location.match(/access_token=([^&]+)/)[1])
+      // TODO: validate token
+      .then(credentials => isEmpty(credentials.token) ? get(oauth_authorize(credentials)) : credentials.token)
+      .then(response => response.headers ? response.headers.location.match(/access_token=([^&]+)/)[1] : response)
       .then(token => master_api.headers['Authorization'] = `Bearer ${token}`)
       .catch(error => {
         if (error.response && error.response.statusCode === 401) {
@@ -539,6 +559,10 @@ function* updatePodTable() {
   dashboard().catch(error => console.error(error.stack));
 }
 
+function isEmpty(str) {
+  return !str || str === "";
+}
+
 function refreshPodAges() {
   session.pods.items.forEach(pod => moment(pod.status.startTime).add(1, 's').toISOString());
   // we may want to avoid recreating the whole table data
@@ -550,29 +574,56 @@ function getCrendentials() {
   return new Promise(function(fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
-    const { form, username, password } = promptCrendentials();
+    const { form, username, password, token, cluster } = promptCrendentials();
     screen.append(form);
     form.focusNext();
     screen.render();
     form.on('submit', data => {
+      const config = kube_config.find(item => {
+          return item.cluster.server === cluster();
+      });
+      if (!config){
+        master_api = getBasicMasterApi(cluster());
+        // TODO: do not set a default namespace as it can lead to permissions issues
+        session.namespace =  'default';
+      } else {
+        //Override token, server URL and user but keep the rest of the config.
+        if (isEmpty(token())) {
+          config.user.token   = undefined;
+        } else {
+          config.user.token   = token();
+        }
+        config.cluster.server = cluster();
+        // Use new master_api
+        master_api            = getMasterApi(config);
+        // TODO: if only the token is defined, get username from token and replace here
+        if (!isEmpty(username())) {
+          config.context.user = username() + '/' + master_api.hostname + ':' + master_api.port;
+        }
+        // TODO: do not set a default namespace as it can lead to permissions issues
+        session.namespace     = config.context.namespace || 'default';
+        // Replace old config
+        const index           = kube_config.indexOf(config);
+        kube_config[index]         = config;
+      }
       screen.remove(form);
       screen.restoreFocus();
       screen.grabKeys = false;
       screen.render();
-      fulfill({ username: username(), password: password() });
+      fulfill({ username: username(), password: password(), token: token()});
     });
   });
 }
 
 function promptCrendentials() {
   const form = blessed.form({
-    mouse  : true,
     keys   : true,
+    mouse  : true,
     vi     : true,
     left   : 'center',
     top    : 'center',
-    width  : 40,
-    height : 6,
+    width  : 53,
+    height : 10,
     shrink : 'never',
     border : {
       type : 'line'
@@ -594,9 +645,33 @@ function promptCrendentials() {
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : 1,
+    top     : 0,
     align   : 'left',
-    content : 'username:'
+    name    : 'clusterUrlText',
+    content : 'Cluster URL :'
+  }); 
+
+  const cluster = blessed.textbox({
+    parent : form,
+    mouse  : true,
+    keys   : true,
+    height : 1,
+    width  : 35,
+    left   : 15,
+    top    : 0,
+    name   : 'cluster',
+    value  : kube_config[0].cluster.server
+  });
+
+  // retain key grabbing as text areas reset it after input reading
+  cluster.on('blur', () => screen.grabKeys = true);
+
+  blessed.text({
+    parent  : form,
+    left    : 1,
+    top     : 2,
+    align   : 'left',
+    content : 'Username    :'
   });
 
   const username = blessed.textbox({
@@ -605,9 +680,10 @@ function promptCrendentials() {
     mouse        : true,
     keys         : true,
     height       : 1,
-    width        : 10,
-    left         : 11,
-    top          : 1
+    width        : 30,
+    left         : 15,
+    top          : 2,
+    value        : kube_config[0].context.user.split('/')[0]
   });
   // retain key grabbing as text areas reset it after input reading
   username.on('blur', () => screen.grabKeys = true);
@@ -617,9 +693,9 @@ function promptCrendentials() {
     mouse   : true,
     keys    : true,
     left    : 1,
-    top     : 2,
+    top     : 3,
     align   : 'left',
-    content : 'password:'
+    content: 'Password    :'
   });
 
   const password = blessed.textbox({
@@ -628,13 +704,40 @@ function promptCrendentials() {
     mouse        : true,
     keys         : true,
     height       : 1,
-    width        : 20,
-    left         : 11,
+    width        : 30,
+    left         : 15,
     censor       : true,
-    top          : 2
+    top          : 3
   });
   // retain key grabbing as text areas reset it after input reading
   password.on('blur', () => screen.grabKeys = true);
+
+  blessed.text({
+    parent  : form,
+    mouse   : true,
+    keys    : true,
+    left    : 1,
+    top     : 4,
+    align   : 'left',
+    name    : 'token',
+    content : 'Token       :'
+  }); 
+
+  const token = blessed.textbox({
+    parent : form,
+    mouse  : true,
+    keys   : true,
+    height : 1,
+    width  : 33,
+    left   : 15,
+    top    : 4,
+    name   : 'token',
+    value  : kube_config[0].user.token
+  });
+
+  // retain key grabbing as text areas reset it after input reading
+  token.on('blur', () => screen.grabKeys = true);
+
 
   const login = blessed.button({
     parent  : form,
@@ -645,8 +748,8 @@ function promptCrendentials() {
       left  : 1,
       right : 1
     },
-    left    : 29,
-    top     : 3,
+    left    : 40,
+    top     : 6,
     content : 'Log In',
     style   : {
       focus : {
@@ -655,10 +758,18 @@ function promptCrendentials() {
     }
   });
   login.on('press', () => form.submit());
+  token.on('focus', function() {
+    token.readInput();
+  });
+  cluster.on('focus', function() {
+    cluster.readInput();
+  });
 
   return {
     form,
-    username : () => username.content,
-    password : () => password.value
+    username : () => username.value,
+    password : () => password.value,
+    token    : () => token.value,
+    cluster  : () => cluster.value
   };
 }
