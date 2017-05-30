@@ -478,7 +478,7 @@ get(get_apis())
     if ((error.response && (error.response.statusCode === 403 || error.response.statusCode === 401))) {
       // fallback to manual authentication
       authenticate()
-        .then(get(get_apis()))
+        .then(() => get(get_apis()))
         .then(response => session.apis = JSON.parse(response.body.toString('utf8')).paths)
         .catch(error => debug.log(`Unable to retrieve available APIs: ${error.message}`))
         .then(dashboard)
