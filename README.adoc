@@ -1,4 +1,4 @@
-= Kubik
+= Kubebox
 Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
 // Meta
 :description: CLI console for Kubernetes clusters
@@ -20,38 +20,38 @@ endif::[]
 
 {description}
 
-image::http://astefanutti.github.io/kubik/kubik.gif[]
+image::http://astefanutti.github.io/kubebox/kubebox.gif[]
 
 == Run
 
 === NPM
 
-Install Kubik globally and run it:
+Install Kubebox globally and run it:
 
 ```sh
-$ npm install -g kubik
-$ kubik
+$ npm install -g kubebox
+$ kubebox
 ```
 
 Or locally:
 
 ```sh
-$ npm install kubik
-$ $(npm bin)/kubik
+$ npm install kubebox
+$ `npm bin`/kubebox
 ```
 
 === Docker
 
-You can run Kubik using Docker, e.g.:
+You can run Kubebox using Docker, e.g.:
 
 ```sh
-$ docker run -it --rm astefanutti/kubik
+$ docker run -it --rm astefanutti/kubebox
 ```
 
-You may want to mount your home directory so that Kubik can rely on the `~./kube/config` file, e.g.:
+You may want to mount your home directory so that Kubebox can rely on the `~./kube/config` file, e.g.:
 
 ```sh
-$ docker run -it --rm -v ~:/root astefanutti/kubik
+$ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
 ```
 
 == Usage
@@ -77,4 +77,4 @@ $ docker run -it --rm -v ~:/root astefanutti/kubik
 
 == CLI
 
-image::http://astefanutti.github.io/kubik/terminal-forever.jpg[link={uri-terminal-forever}]
+image::http://astefanutti.github.io/kubebox/terminal-forever.jpg[link={uri-terminal-forever}]

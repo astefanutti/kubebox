@@ -1,23 +1,22 @@
 {
-  "name": "kubik",
+  "name": "kubebox",
   "description": "CLI console for Kubernetes clusters",
   "author": "Antonin Stefanutti",
   "version": "0.0.3",
   "license": "MIT",
-  "homepage": "https://github.com/astefanutti/kubik",
-  "main": "kubik.js",
+  "homepage": "https://github.com/astefanutti/kubebox",
+  "main": "kubebox.js",
   "bin": {
-    "kubik": "./bin/kubik"
+    "kubebox": "./bin/kubebox"
   },
   "scripts": {
-    "start": "./bin/kubik"
+    "start": "./bin/kubebox"
   },
   "preferGlobal": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/astefanutti/kubik.git"
+    "url": "https://github.com/astefanutti/kubebox.git"
   },
-  "devDependencies": {},
   "dependencies": {
     "blessed-contrib": "~3.5.5",
     "blessed": "~0.1.81",

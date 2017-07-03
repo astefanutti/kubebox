@@ -1,9 +1,0 @@
-#!/usr/bin/env node
-
-/**
- * kubik -  CLI console for Kubernetes clusters
- * Copyright (c) 2017, Antonin Stefanutti (MIT License).
- * https://github.com/astefanutti/kubik
- */
-
-return require('../kubik');
