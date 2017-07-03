@@ -2,7 +2,7 @@
   "name": "kubebox",
   "description": "CLI console for Kubernetes clusters",
   "author": "Antonin Stefanutti",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "license": "MIT",
   "homepage": "https://github.com/astefanutti/kubebox",
   "main": "kubebox.js",
