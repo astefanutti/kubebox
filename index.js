@@ -1,5 +1,12 @@
 'use strict';
 
-const Kubebox = require('./lib/kubebox');
+const blessed = require('blessed'),
+      Kubebox = require('./lib/kubebox');
 
-new Kubebox();
+const screen = blessed.screen({
+  ignoreLocked: ['C-c']
+});
+
+screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
+
+new Kubebox(screen);

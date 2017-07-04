@@ -1,0 +1,65 @@
+<!doctype html>
+<html style="height: 100%">
+
+<head>
+  <link rel="stylesheet" href="xterm/xterm.css" />
+  <script src="xterm/xterm.js"></script>
+  <script src="xterm/fit.js"></script>
+  <script src="kubebox.js"></script>
+
+  <style>
+    .terminal {
+      /*height: 100%;*/
+      font-family: 'Fira Code';
+      font-variant-ligatures: none;
+      font-size: 12px;
+    }
+  </style>
+
+</head>
+
+<body style="height: 100%; margin: 0">
+  <div id="terminal"></div>
+  <script>
+    var blessed = require('blessed');
+    var Kubebox = require('kubebox');
+
+    // Should ideally be inherited from require('events').EventEmitter
+    Terminal.prototype.listenerCount = function (type) {
+      return this.listeners(type).length;
+    };
+    Object.defineProperty(Terminal.prototype, 'columns', {
+      get: function () {
+        return this.cols;
+      }
+    });
+
+    var term = new Terminal();
+    term.open(document.getElementById('#terminal'), true);
+    term.fit();
+    term.isTTY = true;
+
+    var program = blessed.program({ input: term, output: term, tput: false });
+
+    var screen = blessed.screen({
+      program       : program,
+      Terminal      : 'xterm-256color',
+      resizeTimeout : 200,
+      forceUnicode  : true,
+      // smartCSR   : true,
+      dockBorders   : true,
+      autoPadding   : true,
+      warnings      : true
+    });
+
+    window.onresize = function () {
+      term.fit();
+      // screen.render();
+    };
+
+    var kubebox = new Kubebox(screen);
+
+  </script>
+</body>
+
+</html>
