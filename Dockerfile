@@ -6,8 +6,8 @@ WORKDIR /kubebox
 
 COPY package.json ./
 COPY lib lib/
-COPY kubebox.js ./
+COPY index.js ./
 
 RUN npm install
 
-ENTRYPOINT ["node", "kubebox.js"]
+ENTRYPOINT ["node", "index.js"]
