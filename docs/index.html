@@ -17,7 +17,7 @@
 
     .terminal {
       /*height: 100%;*/
-      font-family: 'Fira Code';
+      font-family: 'Fira Code', monospace;
       font-variant-ligatures: none;
       font-size: 12px;
     }
@@ -50,7 +50,7 @@
     var screen = blessed.screen({
       program       : program,
       Terminal      : 'xterm-256color',
-      resizeTimeout : 200,
+      resizeTimeout : 10,
       forceUnicode  : true,
       // smartCSR   : true,
       dockBorders   : true,
@@ -60,8 +60,14 @@
 
     window.onresize = function () {
       term.fit();
-      // screen.render();
     };
+    // seems required by Safari
+    window.onload = function() {
+      term.fit();
+    }
+    screen.on('resize', function() {
+      term.fit();
+    });
 
     var kubebox = new Kubebox(screen);
 
