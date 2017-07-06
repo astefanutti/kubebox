@@ -3933,8 +3933,10 @@ Terminal.prototype.keyPress = function (ev) {
         return false;
     }
     key = String.fromCharCode(key);
-    this.emit('keypress', key, ev);
-    this.emit('key', key, ev);
+    // work-around Blessed / Xterm interfacing as Blessed emits these events
+    // while handling the keypress event
+    // this.emit('keypress', key, ev);
+    // this.emit('key', key, ev);
     this.showCursor();
     this.handler(key);
     return false;
