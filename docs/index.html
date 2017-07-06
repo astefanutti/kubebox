@@ -15,6 +15,10 @@
         font-style: normal;
     }
 
+    body {
+      background-color: black;
+    }
+
     .terminal {
       /*height: 100%;*/
       font-family: 'Fira Code', Courier New, Courier, monospace;
@@ -41,6 +45,7 @@
     });
 
     var term = new Terminal();
+    // TODO: find a way to disable the extra right padding for the scrollbar
     term.open(document.getElementById('#terminal'), true);
     term.fit();
     term.isTTY = true;
