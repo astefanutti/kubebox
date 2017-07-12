@@ -1,4 +1,4 @@
-= Kubebox
+= Kubebox (⎈❏)
 Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
 // Meta
 :description: CLI console for Kubernetes clusters
@@ -66,6 +66,9 @@ $ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
 
 |kbd:[n]
 |Change current namespace
+
+|kbd:[l], kbd:[CTRL+l]
+|Login
 
 |kbd:[<-], kbd:[->]
 |Navigate screen
