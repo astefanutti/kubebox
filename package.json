@@ -18,7 +18,7 @@
     "url": "https://github.com/astefanutti/kubebox.git"
   },
   "devDependencies": {
-    "xterm": "~2.7.0",
+    "xterm": "~2.8.1",
     "browserify": "~14.4.0"
   },
   "dependencies": {
