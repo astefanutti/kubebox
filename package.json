@@ -12,6 +12,9 @@
   "scripts": {
     "start": "./bin/kubebox"
   },
+  "pkg": {
+    "scripts": "node_modules/blessed/lib/widgets/*.js"
+  },
   "preferGlobal": true,
   "repository": {
     "type": "git",
@@ -19,7 +22,8 @@
   },
   "devDependencies": {
     "xterm": "~2.8.1",
-    "browserify": "~14.4.0"
+    "browserify": "~14.4.0",
+    "pkg": "~4.1.1"
   },
   "dependencies": {
     "blessed-contrib": "~3.5.5",
