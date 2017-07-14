@@ -10,12 +10,13 @@
     "kubebox": "./bin/kubebox"
   },
   "scripts": {
-    "start": "./bin/kubebox"
+    "start": "./bin/kubebox",
+    "browserify": "browserify -r ./lib/kubebox.js:kubebox -r blessed -o docs/kubebox.js",
+    "executable": "pkg package.json"
   },
   "pkg": {
     "scripts": "node_modules/blessed/lib/widgets/*.js"
   },
-  "preferGlobal": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/astefanutti/kubebox.git"
