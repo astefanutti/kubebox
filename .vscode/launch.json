@@ -5,26 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch Program",
-            "type": "node2",
+            "name": "Node (launch)",
+            "type": "node",
             "request": "launch",
-            "program": "${workspaceRoot}/kubik.js",
-            "cwd": "${workspaceRoot}"
+            "program": "${workspaceRoot}/index.js",
+            "cwd": "${workspaceRoot}",
+            "console": "integratedTerminal"
         },
         {
-            "name": "Attach to Process",
+            "name": "Node (attach)",
             "type": "node",
             "request": "attach",
             "port": 5858
         },
         {
-            "name": "Launch localhost",
+            "name": "Chrome",
             "type": "chrome",
             "request": "launch",
-            "url": "http://localhost:8081/docs/index.html",
-            "webRoot": "${workspaceRoot}",
-            "sourceMaps": true,
-            "trace": true
+            "url": "http://localhost:8080/index.html",
+            "webRoot": "${workspaceRoot}/",
+            "sourceMaps": true
         }
     ]
 }
