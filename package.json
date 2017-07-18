@@ -12,6 +12,7 @@
   "scripts": {
     "start": "node index.js",
     "browserify": "browserify -r ./lib/kubebox.js:kubebox -r blessed -o docs/kubebox.js",
+    "bundle": "webpack --target node index.js bundle.js",
     "executable": "pkg package.json"
   },
   "pkg": {
@@ -22,9 +23,10 @@
     "url": "https://github.com/astefanutti/kubebox.git"
   },
   "devDependencies": {
-    "xterm": "~2.8.1",
     "browserify": "~14.4.0",
-    "pkg": "~4.1.1"
+    "pkg": "~4.1.1",
+    "webpack": "^3.3.0",
+    "xterm": "~2.8.1"
   },
   "dependencies": {
     "blessed-contrib": "~3.5.5",
