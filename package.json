@@ -7,10 +7,10 @@
   "homepage": "https://github.com/astefanutti/kubebox",
   "main": "index.js",
   "bin": {
-    "kubebox": "./bin/kubebox"
+    "kubebox": "index.js"
   },
   "scripts": {
-    "start": "./bin/kubebox",
+    "start": "node index.js",
     "browserify": "browserify -r ./lib/kubebox.js:kubebox -r blessed -o docs/kubebox.js",
     "executable": "pkg package.json"
   },

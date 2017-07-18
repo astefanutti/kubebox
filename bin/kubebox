@@ -1,9 +1,0 @@
-#!/usr/bin/env node
-
-/**
- * kubebox -  CLI console for Kubernetes clusters
- * Copyright (c) 2017, Antonin Stefanutti (MIT License).
- * https://github.com/astefanutti/kubebox
- */
-
-return require('../index');
