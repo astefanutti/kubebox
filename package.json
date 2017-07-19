@@ -11,8 +11,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "browserify": "browserify -r ./lib/kubebox.js:kubebox -r blessed -o docs/kubebox.js",
-    "browserify-debug": "browserify --debug -r ./lib/kubebox.js:kubebox -r blessed | exorcist docs/kubebox.js.map > docs/kubebox.js",
+    "browserify": "browserify -r ./lib/kubebox.js:kubebox -r blessed -i pty.js -i term.js -o docs/kubebox.js",
+    "browserify-debug": "browserify --debug -r ./lib/kubebox.js:kubebox -r blessed -i pty.js -i term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
     "bundle": "webpack --target node index.js bundle.js",
     "executable": "pkg package.json"
   },
