@@ -1,9 +1,8 @@
-# IDE
-.idea
-.vscode
-
 # Dependency directories
 node_modules/
 
 # Logs
 *.log
+
+# Sourcemap
+*.js.map
