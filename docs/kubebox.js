@@ -98443,6 +98443,7 @@ class Kubebox {
       session.namespace = kube_config[0].context.namespace;
     }
 
+    // FIXME: correct login > connect > authentication flow
     screen.key(['l', 'C-l'], (ch, key) => reauthenticate()
       .then(dashboard)
       .catch(error => console.error(error.stack))
@@ -98635,6 +98636,7 @@ class Kubebox {
     );
     carousel.start();
 
+    // TODO: display login prompt with message on error
     if (client.master_api) {
       connect().catch(error => console.error(error.stack));
     } else {
@@ -98659,7 +98661,7 @@ class Kubebox {
 
     function authenticate(credentials) {
       if (!session.openshift)
-        throw Error(`No authentication available for: ${client.url}`);
+        return Promise.reject(Error(`No authentication available for: ${client.url}`));
 
       // TODO: display an error message in the login prompt when authentication has failed
       return (credentials ? Promise.resolve(credentials)
