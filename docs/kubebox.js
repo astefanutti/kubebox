@@ -748,6 +748,8 @@ module.exports.prompt = prompt;
 
 module.exports.isEmpty = str => !str || str === '';
 
+module.exports.isNotEmpty = str => str && str.length > 0;
+
 module.exports.formatDuration = function(duration) {
   if (duration.years() > 0)
     return duration.format('y[y] M[M]');
@@ -98425,6 +98427,8 @@ const { call, delay, wait } = require('./promise');
 const login      = require('./ui/login'),
       namespaces = require('./ui/namespaces');
 
+const { isEmpty, isNotEmpty } = util;
+
 class Kubebox {
 
   constructor(screen) {
@@ -98501,12 +98505,14 @@ class Kubebox {
             // skip empty data frame payload on connect!
             if (log.length === 0) continue;
             log = log.toString('utf8');
-            const i = log.indexOf(' ');
-            timestamp = log.substring(0, i);
-            const msg = log.substring(i + 1);
-            // avoid scanning the whole buffer if the timestamp differs from the since time
-            if (!timestamp.startsWith(sinceTime) || !pod_log.logLines.includes(msg))
-              pod_log.log(msg);
+            log.split(/\r\n|\r|\n/).filter(isNotEmpty).forEach(line => {
+              const i = line.indexOf(' ');
+              timestamp = line.substring(0, i);
+              const msg = line.substring(i + 1);
+              // avoid scanning the whole buffer if the timestamp differs from the since time
+              if (!timestamp.startsWith(sinceTime) || !pod_log.logLines.includes(msg))
+                pod_log.log(msg);
+            });
           }
         } catch (e) {
           // HTTP chunked transfer-encoding / streaming requests abort on timeout instead of being ended.
@@ -98672,7 +98678,7 @@ class Kubebox {
         return Promise.reject(Error(`No authentication available for: ${client.url}`));
 
       // TODO: display an error message in the login prompt when authentication has failed
-      return (!util.isEmpty(login.token) ? Promise.resolve(login.token)
+      return (isNotEmpty(login.token) ? Promise.resolve(login.token)
         // try retrieving an OAuth access token from the OpenShift OAuth server
         : os.platform() === 'browser'
           ? get(client.oauth_authorize_web(login))
@@ -98791,7 +98797,7 @@ class Kubebox {
         client.master_api = getBaseMasterApi(login.cluster);
       } else {
         // override token, server URL and user but keep the rest of the config
-        if (!util.isEmpty(login.token)) {
+        if (isNotEmpty(login.token)) {
           config.user.token = login.token;
         }
         config.cluster.server = login.cluster;
@@ -98799,7 +98805,7 @@ class Kubebox {
         const master_api = getMasterApi(config);
         client.master_api = master_api;
         // TODO: if only the token is defined, get username from token and replace here
-        if (!util.isEmpty(login.username)) {
+        if (isNotEmpty(login.username)) {
           config.context.user = login.username + '/' + master_api.hostname + ':' + master_api.port;
         }
         session.namespace = config.context.namespace;
