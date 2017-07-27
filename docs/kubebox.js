@@ -98822,8 +98822,15 @@ class Kubebox {
 // - http://kubernetes.io/docs/user-guide/accessing-the-cluster/
 // - http://kubernetes.io/docs/user-guide/kubeconfig-file/
 function getKubeConfig(master) {
-  // TODO: check if the file exists and can be read first
-  const kube = yaml.safeLoad(fs.readFileSync(path.join(os.homedir(), '.kube/config'), 'utf8'));
+  const kube_config_path = path.join(os.homedir(), '.kube/config');
+  try {
+    fs.accessSync(kube_config_path, fs.constants.F_OK | fs.constants.R_OK);
+  } catch (e) {
+    console.error('Error reading kubernetes config file from:%s\n%s', kube_config_path, e);
+    return [];
+  }
+  
+  const kube = yaml.safeLoad(fs.readFileSync(kube_config_path, 'utf8'));
   const configs = [];
   if (!master) {
     const current = kube['current-context'];
