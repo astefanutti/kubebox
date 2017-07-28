@@ -142,10 +142,20 @@ module.exports = Client;
 'use strict';
 
 const http  = require('http'),
-      https = require('https');
+      https = require('https'),
+      os    = require('os'),
+      URI   = require('urijs');
 
 module.exports.get = function (options, generator, async = true) {
-  return generator ? getStream(options, generator, async) : getBody(options);
+  if (generator) {
+    if (os.platform() === 'browser' && WebSocket) {
+      return getWebSocketStream(options, generator, async);
+    } else {
+      return getStream(options, generator, async);
+    }
+  } else {
+    return getBody(options);
+  }
 };
 
 // we may want to support cancellation of the returned pending promise
@@ -173,12 +183,72 @@ function getBody(options) {
   })
 }
 
+function getWebSocketStream(options, generator, async = true) {
+  let cancellation = Function.prototype;
+  const promise = new Promise((resolve, reject) => {
+    const url = new URI(options.path)
+      .protocol((options.protocol || 'http').startsWith('https') ? 'wss' : 'ws')
+      .hostname(options.hostname)
+      .port(options.port);
+    if (options.headers['Authorization']) {
+      url.addQuery('access_token', options.headers['Authorization'].substring(7));
+    }
+
+    const socket = new WebSocket(url.toString(), ['binary.k8s.io']);
+    socket.binaryType = 'arraybuffer';
+
+    socket.addEventListener('error', event => {
+      reject(Error(`WebSocket connection failed to ${event.target.url}`));
+    });
+
+    socket.addEventListener('open', event => {
+      let clientAbort;
+      cancellation = () => {
+        clientAbort = true;
+        socket.close();
+      };
+
+      const gen = generator();
+      gen.next();
+
+      socket.addEventListener('message', event => {
+        const res = gen.next(new Buffer(event.data, 'binary'));
+        if (res.done) {
+          socket.close();
+          event.body = res.value;
+          // ignored for async as it's already been resolved
+          resolve(event);
+        }
+      });
+
+      socket.addEventListener('close', event => {
+        if (!clientAbort) {
+          const res = gen.next();
+          // the generator may have already returned from the 'data' event
+          if (!async && !res.done) {
+            event.body = res.value;
+            resolve(event);
+          }
+        }
+        // ignored if the generator is done already
+        gen.return();
+      });
+
+      if (async) {
+        resolve(event);
+      }
+    });
+  });
+
+  return { promise, cancellation: () => cancellation() };
+}
+
 // TODO: add wrapper method getStreamAsync instead of a boolean flag
 function getStream(options, generator, async = true) {
   let cancellation = Function.prototype;
-  const promise    = new Promise((resolve, reject) => {
+  const promise = new Promise((resolve, reject) => {
     let clientAbort, serverAbort;
-    const client  = (options.protocol || 'http').startsWith('https') ? https : http;
+    const client = (options.protocol || 'http').startsWith('https') ? https : http;
     const request = client.get(options)
       .on('error', error => {
         // FIXME: check the state of the connection and the promise
@@ -188,7 +258,7 @@ function getStream(options, generator, async = true) {
       })
       .on('response', response => {
         if (response.statusCode >= 400) {
-          const error    = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
+          const error = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
           // standard promises don't handle multi-parameters reject callbacks
           error.response = response;
           response.destroy(error);
@@ -246,7 +316,7 @@ function getStream(options, generator, async = true) {
         // TODO: verify 'Sec-WebSocket-Accept' during WebSocket handshake
         // TODO: we may want to offer an API to pipe the socket
         if (response.statusCode !== 101) {
-          const error    = new Error(`Failed to upgrade resource ${options.path}, status code: ${response.statusCode}`);
+          const error = new Error(`Failed to upgrade resource ${options.path}, status code: ${response.statusCode}`);
           // standard promises don't handle multi-parameters reject callbacks
           error.response = response;
           response.destroy(error);
@@ -292,7 +362,7 @@ function getStream(options, generator, async = true) {
       request.abort();
     };
   });
-  return {promise, cancellation: () => cancellation()};
+  return { promise, cancellation: () => cancellation() };
 }
 
 // TODO: handle fragmentation and continuation frame
@@ -345,7 +415,7 @@ function decodeFrame(frame) {
 
   // just return the opcode on connection close
   if (opcode === 0x8) {
-    return {opcode};
+    return { opcode };
   }
 
   let nextByte = 2;
@@ -369,10 +439,10 @@ function decodeFrame(frame) {
       payload[i] = payload[i] ^ maskingKey[i % 4];
     }
   }
-  return {FIN, opcode, length, payload};
+  return { FIN, opcode, length, payload };
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":137,"http":321,"https":205}],3:[function(require,module,exports){
+},{"buffer":137,"http":321,"https":205,"os":252,"urijs":342}],3:[function(require,module,exports){
 'use strict';
 
 module.exports.delay = delay => new Promise(resolve => setTimeout(resolve, delay));
