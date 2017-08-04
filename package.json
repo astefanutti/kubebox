@@ -27,7 +27,7 @@
     "browserify": "~14.4.0",
     "exorcist": "^0.4.0",
     "nexe": "~1.1.3",
-    "xterm": "~2.8.1"
+    "xterm": "~2.9.0"
   },
   "dependencies": {
     "blessed-contrib": "~3.5.5",
@@ -47,7 +47,11 @@
     "browserify": {
       "requires": [],
       "excludes": [
-        "pty.js", "term.js", "map-canvas", "marked-terminal", "picture-tube"
+        "pty.js",
+        "term.js",
+        "map-canvas",
+        "marked-terminal",
+        "picture-tube"
       ],
       "paths": []
     },
