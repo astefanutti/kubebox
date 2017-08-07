@@ -8,6 +8,16 @@ class Client {
   constructor(master_api) {
     // should ideally be a defensive copy
     this.master_api = master_api;
+    this.apis = [];
+  }
+
+  get master_api() {
+    return this._master_api;
+  }
+
+  set master_api(master_api) {
+    this.apis = [];
+    this._master_api = master_api;
   }
 
   get headers() {
@@ -16,6 +26,10 @@ class Client {
 
   get url() {
     return this.master_api.url;
+  }
+
+  get openshift() {
+    return this.apis.some(path => path === '/oapi' || path === '/oapi/v1');
   }
 
   get_apis() {
@@ -819,6 +833,7 @@ const blessed  = require('blessed'),
       duration = require('moment-duration-format'),
       get      = require('../http-then').get,
       moment   = require('moment'),
+      task     = require('../task'),
       util     = require('../util');
 
 const { isNotEmpty } = util;
@@ -827,8 +842,9 @@ const { delay } = require('../promise');
 
 class Dashboard {
 
-  constructor(screen, session, client, debug) {
-    let pod_selected, pods_list = [];
+  constructor(screen, client, debug) {
+    let current_namespace, pod_selected, pods_list = [];
+    const cancellations = new task.Cancellations();
 
     const grid = new contrib.grid({ rows: 12, cols: 12, screen: screen });
 
@@ -861,7 +877,7 @@ class Dashboard {
       const name = pods_list.items[i - 1].metadata.name;
       if (name === pod_selected)
         return;
-      session.cancellations.run('dashboard.logs');
+      cancellations.run('dashboard.logs');
       pod_selected = name;
       // just to update the table with the new selection
       setTableData(pods_list);
@@ -893,7 +909,7 @@ class Dashboard {
         }
         // wait 1s and retry the pod log follow request from the latest timestamp if any
         delay(1000)
-          .then(() => get(client.get_pod(session.namespace, name)))
+          .then(() => get(client.get_pod(current_namespace, name)))
           .then(response => JSON.parse(response.body.toString('utf8')))
           .then(pod => {
             // TODO: checks should be done at the level of the container (like CrashLoopBackOff)
@@ -905,14 +921,14 @@ class Dashboard {
             } else {
               // TODO: max number of retries window
               // re-follow log from the latest timestamp received
-              const { promise, cancellation } = get(client.follow_log(session.namespace, name, timestamp), timestamp
+              const { promise, cancellation } = get(client.follow_log(current_namespace, name, timestamp), timestamp
                 ? function*() {
                   // sub-second info from the 'sinceTime' parameter are not taken into account
                   // so just strip the info and add a 'startsWith' check to avoid duplicates
                   yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
                 }
                 : logger);
-              session.cancellations.add('dashboard.logs', cancellation);
+              cancellations.add('dashboard.logs', cancellation);
               return promise.then(() => debug.log(`Following log for pod ${pod_selected} ...`));
             }
           })
@@ -924,8 +940,8 @@ class Dashboard {
       };
 
       // FIXME: deal with multi-containers pod
-      const { promise, cancellation } = get(client.follow_log(session.namespace, name), logger);
-      session.cancellations.add('dashboard.logs', cancellation);
+      const { promise, cancellation } = get(client.follow_log(current_namespace, name), logger);
+      cancellations.add('dashboard.logs', cancellation);
       promise
         .then(() => debug.log(`Following log for pod ${pod_selected} ...`))
         .then(() => pod_log.setLabel(`Logs {grey-fg}[${name}]{/grey-fg}`))
@@ -974,8 +990,9 @@ class Dashboard {
 
     this.reset = function () {
       // cancel current running tasks and open requests
-      session.cancellations.run('dashboard');
+      cancellations.run('dashboard');
       // reset dashboard widgets
+      current_namespace = null;
       pod_selected = null;
       pods_table.setData([]);
       pod_log.setLabel('Logs');
@@ -984,22 +1001,23 @@ class Dashboard {
       screen.render();
     }
 
-    this.run = function () {
-      return get(client.get_pods(session.namespace))
+    this.run = function (namespace) {
+      current_namespace = namespace;
+      return get(client.get_pods(current_namespace))
         .then(response => {
           pods_list = JSON.parse(response.body.toString('utf8'));
           pods_list.items = pods_list.items || [];
         })
         .then(() => setTableData(pods_list))
-        .then(() => debug.log(`Watching for pods changes in namespace ${session.namespace} ...`))
+        .then(() => debug.log(`Watching for pods changes in namespace ${current_namespace} ...`))
         .then(() => screen.render())
         .then(() => {
           const id = setInterval(refreshPodAges, 1000);
-          session.cancellations.add('dashboard.refreshPodAges', () => clearInterval(id));
+          cancellations.add('dashboard.refreshPodAges', () => clearInterval(id));
         })
         .then(() => {
-          const { promise, cancellation } = get(client.watch_pods(session.namespace,pods_list.metadata.resourceVersion), updatePodTable);
-          session.cancellations.add('dashboard', cancellation);
+          const { promise, cancellation } = get(client.watch_pods(current_namespace,pods_list.metadata.resourceVersion), updatePodTable);
+          cancellations.add('dashboard', cancellation);
           return promise;
         });
     }
@@ -1036,8 +1054,8 @@ class Dashboard {
         // WebSocket upgraded watch requests (idle?) end when timed out on Kubernetes.
       }
       // retry the pods list watch request
-      session.cancellations.run('dashboard.refreshPodAges');
-      this.run().catch(error => console.error(error.stack));
+      cancellations.run('dashboard.refreshPodAges');
+      this.run(current_namespace).catch(error => console.error(error.stack));
     }
 
     function refreshPodAges() {
@@ -1051,7 +1069,7 @@ class Dashboard {
 
 module.exports = Dashboard;
 
-},{"../http-then":7,"../promise":8,"../util":13,"blessed":"blessed","blessed-contrib":33,"moment":257,"moment-duration-format":256}],11:[function(require,module,exports){
+},{"../http-then":7,"../promise":8,"../task":9,"../util":13,"blessed":"blessed","blessed-contrib":33,"moment":257,"moment-duration-format":256}],11:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -1288,19 +1306,19 @@ function namespaces_list() {
   return namespaces_list;
 }
 
-function prompt(screen, session, client, { promptAfterRequest } = { promptAfterRequest : false }) {
+function prompt(screen, client, { current_namespace, promptAfterRequest } = { promptAfterRequest : false }) {
   return new Promise(function(fulfill, reject) {
     const list = namespaces_list();
     let namespaces = [];
 
-    // TODO: watch for namespace changes when the selection list is open    
+    // TODO: watch for namespaces changes when the selection list is open
     function request_namespaces() {
-      return get(session.openshift ? client.get_projects() : client.get_namespaces())
+      return get(client.openshift ? client.get_projects() : client.get_namespaces())
         .then(response => JSON.parse(response.body.toString('utf8')))
         // TODO: display a message in case the user has access to no namespaces
         .then(response => namespaces = response)
         .then(namespaces => list.setItems(namespaces.items.reduce((data, namespace) => {
-          data.push(namespace.metadata.name === session.namespace
+          data.push(namespace.metadata.name === current_namespace
             ? `{blue-fg}${namespace.metadata.name}{/blue-fg}`
             : namespace.metadata.name);
           return data;
@@ -1338,14 +1356,14 @@ function prompt(screen, session, client, { promptAfterRequest } = { promptAfterR
 
     list.on('action', (item) => {
       // Force the user to select a namespace
-      if (item || session.namespace) {
+      if (item || current_namespace) {
         close_namespaces_list();
       }
     });
 
     list.on('cancel', () => {
-      if (session.namespace) {
-        fulfill(session.namespace);
+      if (current_namespace) {
+        fulfill(current_namespace);
       }
     });
 
@@ -99034,7 +99052,6 @@ const blessed = require('blessed'),
       contrib = require('blessed-contrib'),
       get     = require('./http-then').get,
       os      = require('os'),
-      task    = require('./task'),
       URI     = require('urijs');
 
 const KubeConfig = require('./config/manager');
@@ -99050,15 +99067,7 @@ const { call, wait } = require('./promise');
 class Kubebox {
 
   constructor(screen) {
-    const session = {
-      cancellations : new task.Cancellations(),
-      namespace     : null,
-      // TODO: move to Client
-      apis          : [],
-      get openshift() {
-        return this.apis.some(path => path === '/oapi' || path === '/oapi/v1');
-      }
-    };
+    let current_namespace;
 
     // TODO: enable user scrolling and add timestamps
     const debug = contrib.log({
@@ -99080,22 +99089,22 @@ class Kubebox {
     const kube_config = new KubeConfig({ debug });
     const client = new Client();
     client.master_api = kube_config.current_context.getMasterApi();
-    session.namespace = kube_config.current_context.namespace.name;
+    current_namespace = kube_config.current_context.namespace.name;
 
-    const dashboard = new Dashboard(screen, session, client, debug);
+    const dashboard = new Dashboard(screen, client, debug);
 
     // FIXME: the namespace selection handle should only be active
     // when the connection is established to the cluster
     screen.key(['n'], () => {
-      namespaces.prompt(screen, session, client)
+      namespaces.prompt(screen, client, { current_namespace })
         .then(namespace => {
-          if (namespace === session.namespace) return;
+          if (namespace === current_namespace) return;
           dashboard.reset();
           // switch dashboard to new namespace
-          session.namespace = namespace;
-          debug.log(`Switching to namespace ${session.namespace}`);
+          current_namespace = namespace;
+          debug.log(`Switching to namespace ${current_namespace}`);
           screen.render();
-          return dashboard.run();
+          return dashboard.run(current_namespace);
         })
         .catch(error => console.error(error.stack));
     });
@@ -99132,12 +99141,12 @@ class Kubebox {
     function connect(login) {
       // TODO: log more about client access workflow and info
       return get(client.get_apis())
-        .then(response => session.apis = JSON.parse(response.body.toString('utf8')).paths)
+        .then(response => client.apis = JSON.parse(response.body.toString('utf8')).paths)
         .catch(error => debug.log(`Unable to retrieve available APIs: ${error.message}`))
-        .then(_ => session.namespace
-          ? Promise.resolve(session.namespace)
-          : namespaces.prompt(screen, session, client, { promptAfterRequest : true })
-            .then(namespace => session.namespace = namespace))
+        .then(_ => current_namespace
+          ? Promise.resolve(current_namespace)
+          : namespaces.prompt(screen, client, { promptAfterRequest : true })
+            .then(namespace => current_namespace = namespace))
         .then(dashboard.run)
         .catch(error => error.response && [401, 403].includes(error.response.statusCode)
           ? log(`Authentication required for ${client.url} (openshift)`)
@@ -99154,7 +99163,7 @@ class Kubebox {
     }
 
     function authenticate(login) {
-      if (!session.openshift)
+      if (!client.openshift)
         return Promise.reject(Error(`No authentication available for: ${client.url}`));
 
       return (isNotEmpty(login.token) ? Promise.resolve(login.token)
@@ -99195,7 +99204,7 @@ class Kubebox {
     function updateSessionAfterLogin(login) {
       kube_config.updateOrInsertContext(login);
       client.master_api = kube_config.current_context.getMasterApi();
-      session.namespace = kube_config.current_context.namespace.name;
+      current_namespace = kube_config.current_context.namespace.name;
       return login;
     }
   }
@@ -99203,4 +99212,4 @@ class Kubebox {
 
 module.exports = Kubebox;
 
-},{"./client":1,"./config/manager":4,"./http-then":7,"./promise":8,"./task":9,"./ui/dashboard":10,"./ui/login":11,"./ui/namespaces":12,"./util":13,"blessed":"blessed","blessed-contrib":33,"os":258,"urijs":348}]},{},[]);
+},{"./client":1,"./config/manager":4,"./http-then":7,"./promise":8,"./ui/dashboard":10,"./ui/login":11,"./ui/namespaces":12,"./util":13,"blessed":"blessed","blessed-contrib":33,"os":258,"urijs":348}]},{},[]);
