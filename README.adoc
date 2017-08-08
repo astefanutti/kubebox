@@ -1,4 +1,4 @@
-= Kubebox (⎈❏)
+= Kubebox [small]#^⎈❏^#
 Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
 // Meta
 :description: CLI console for Kubernetes clusters
@@ -16,13 +16,52 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/latest
+:uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
+:uri-minikube: https://github.com/kubernetes/minikube
+:uri-minishift: https://github.com/minishift/minishift
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 
 {description}
 
-image::http://astefanutti.github.io/kubebox/kubebox.gif[]
+image::https://astefanutti.github.io/kubebox/kubebox.gif[align="center"]
 
 == Run
+
+=== Executables
+
+Download the Kubebox standalone executable for your OS:
+
+--
+[source,shell,subs=attributes+]
+# OSX
+$ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
+# Linux
+$ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
+# Windows
+$ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
+--
+
+=== Online
+
+Kubebox is available online at http://kube.sh. Note that this requires this address to match the allowed origins for CORS by the API server.
+This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.g.:
+
+```sh
+$ kube-apiserver --cors-allowed-origins .*
+```
+
+In case you use {uri-minikube}[Minikube], this can be achieved with:
+
+```sh
+$ minikube start --extra-config=apiserver.GenericServerRunOptions.CorsAllowedOriginList=.*
+```
+
+Or if you use {uri-minishift}[Minishift]:
+
+```sh
+$ minishift openshift config set --patch '{"corsAllowedOrigins": [".*"]}'
+```
 
 === NPM
 
@@ -78,6 +117,6 @@ $ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
 
 |===
 
-== CLI
+== Terminal forever
 
-image::http://astefanutti.github.io/kubebox/terminal-forever.jpg[link={uri-terminal-forever}]
+image::https://astefanutti.github.io/kubebox/terminal-forever.jpg[align="center", link={uri-terminal-forever}]
