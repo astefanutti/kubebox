@@ -301,22 +301,24 @@ const User      = require('./user'),
 
 const { isNotEmpty } = require('../util');
 
-// TODO: support client access information provided as CLI options
-//       CLI option -> Kube config context -> prompt user
-// TODO: better context disambiguation workflow
-// see:
-// - http://kubernetes.io/docs/user-guide/accessing-the-cluster/
-// - http://kubernetes.io/docs/user-guide/kubeconfig-file/
-
 class KubeConfigManager {
 
   constructor({ debug }) {
     this.debug = debug;
     const kube_config = loadKubeConfig({ debug });
     this.contexts = loadContexts(kube_config);
-    this.current_context = findContextByClusterUrl(this.contexts, process.argv[2] || process.env.KUBERNETES_MASTER)
-      || this.contexts.find(context => context.name === kube_config['current-context'])
-      || Context.default;
+
+    // TODO: support client access information provided as CLI options
+    //       CLI option -> Kube config context -> prompt user
+    // see:
+    // - http://kubernetes.io/docs/user-guide/accessing-the-cluster/
+    // - http://kubernetes.io/docs/user-guide/kubeconfig-file/
+    const url = process.argv[2] || process.env.KUBERNETES_MASTER;
+    if (url) {
+      this.current_context = findOrCreateContext(this.contexts, { url });
+    } else {
+      this.current_context = this.contexts.find(context => context.name === kube_config['current-context']) || Context.default;
+    }
   }
 
   /**
@@ -325,27 +327,17 @@ class KubeConfigManager {
    * @param {*} login the login form
    */
   updateOrInsertContext(login) {
-    // FIXME: there can be multiple contexts for the same cluster
-    // that could be disambiguated with the login info like username
-    // or when the URL matches that of the current context server
-    let context = findContextByClusterUrl(this.contexts, login.cluster);
-    if (!context) {
-      // create a new context
-      const cluster = new Cluster({ server: login.cluster });
-      // TODO: use spread properties when its browsers and Node support becomes mainstream
-      const user = new User(Object.assign({ name: cluster.name }, login));
-      context = new Context({ cluster, namespace: Namespace.default, user });
+    const context = findOrCreateContext(this.contexts, login);
+    // add context if newly created
+    if (!this.contexts.find(c => c.name === context.name)) {
       this.contexts.push(context);
+    }
+    // update context with login form information
+    if (isNotEmpty(login.token)) {
+      context.user.token = login.token;
     } else {
-      // update context with login form information
-      if (isNotEmpty(login.token)) {
-        context.user.token = login.token;
-      } else {
-        context.user.name = login.username + '/' + context.cluster.name;
-        context.user.username = login.username;
-        context.user.password = login.password;
-      }
-      context.cluster.server = login.cluster;
+      context.user.username = login.username;
+      context.user.password = login.password;
     }
     this.current_context = context;
   }
@@ -390,8 +382,44 @@ function loadContexts(kube_config) {
   return contexts;
 }
 
-function findContextByClusterUrl(contexts, url) {
-  if (!url) return null;
+// TODO: use rest/spread properties when its browsers and Node support becomes mainstream
+function findOrCreateContext(contexts, { url, username, namespace/*, ...login*/ }) {
+  const byUrl = findContextsByClusterUrl(contexts, url);
+  if (byUrl.length === 1) return byUrl[0];
+
+  const byUser = byUrl.filter(context => context.user.username === username);
+  if (byUser.length === 1) return byUser[0];
+
+  const byNamespace = byUser.filter(context => context.namespace.name === namespace);
+  if (byNamespace.length === 1) return byNamespace[0];
+
+  let cluster, user;
+  if (byUser.length > 0) {
+    cluster = byUser[0].cluster;
+    user = byUser[0].user;
+  } else if (byUrl.length > 0) {
+    cluster = byUrl[0].cluster;
+  } else {
+    cluster = new Cluster({
+      server: url
+      // ...login
+    });
+  }
+  if (!user && username) {
+    user = new User({
+      name: `${username}/${cluster.name}`,
+      username: username
+      // ...login
+    });
+  }
+  return new Context({
+    cluster,
+    user: user || User.default,
+    namespace: namespace ? new Namespace(namespace) : Namespace.default
+  })
+}
+
+function findContextsByClusterUrl(contexts, url) {
   const uri = URI(url);
   let matches = contexts.filter(context => URI(context.cluster.server).hostname() === uri.hostname());
   if (matches.length > 1) {
@@ -400,10 +428,7 @@ function findContextByClusterUrl(contexts, url) {
       return server.protocol() === uri.protocol() && server.port() === uri.port();
     });
   }
-  if (matches.length > 1) {
-    throw Error(`Multiple clusters found for server: ${url}!`);
-  }
-  return matches.length === 1 ? matches[0] : null;
+  return matches;
 }
 
 module.exports = KubeConfigManager;
@@ -1135,9 +1160,9 @@ function login_form(kube_config, screen) {
     content : 'Cluster URL :'
   }); 
 
-  const cluster = blessed.textbox({
+  const url = blessed.textbox({
     parent       : form,
-    name         : 'cluster',
+    name         : 'url',
     inputOnFocus : true,
     mouse        : true,
     keys         : true,
@@ -1148,7 +1173,7 @@ function login_form(kube_config, screen) {
     value        : kube_config.current_context.cluster.server
   });
   // retain key grabbing as text areas reset it after input reading
-  cluster.on('blur', () => form.screen.grabKeys = true);
+  url.on('blur', () => form.screen.grabKeys = true);
 
   blessed.text({
     parent  : form,
@@ -1249,20 +1274,20 @@ function login_form(kube_config, screen) {
   focusOnclick(username);
   focusOnclick(password);
   focusOnclick(token);
-  focusOnclick(cluster);
+  focusOnclick(url);
   
   // This is a hack to not 'rewind' the focus stack on 'blur'
   username.options.inputOnFocus = false;
   password.options.inputOnFocus = false;
   token.options.inputOnFocus    = false;
-  cluster.options.inputOnFocus  = false;
+  url.options.inputOnFocus  = false;
 
   return {
     form,
     username : () => username.value,
     password : () => password.value,
     token    : () => token.value,
-    cluster  : () => cluster.value
+    url      : () => url.value
   };
 }
 
@@ -1270,7 +1295,7 @@ function prompt(screen, kube_config) {
   return new Promise(function(fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
-    const { form, username, password, token, cluster } = login_form(kube_config, screen);
+    const { form, username, password, token, url } = login_form(kube_config, screen);
     screen.append(form);
     form.focusNext();
     screen.render();
@@ -1281,7 +1306,7 @@ function prompt(screen, kube_config) {
       screen.grabKeys = false;
       screen.render();
       fulfill({
-        cluster  : cluster(),
+        url      : url(),
         username : username(),
         password : password(),
         token    : token()
