@@ -24,7 +24,12 @@ endif::[]
 
 {description}
 
-image::https://astefanutti.github.io/kubebox/kubebox.gif[align="center"]
+//image::https://astefanutti.github.io/kubebox/kubebox.gif[align="center"]
+++++
+<p align="center">
+  <img align="center" style="image-rendering: crisp-edges" src="https://astefanutti.github.io/kubebox/kubebox.gif">
+</p>
+++++
 
 == Run
 
@@ -119,4 +124,11 @@ $ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
 
 == Terminal forever
 
-image::https://astefanutti.github.io/kubebox/terminal-forever.jpg[align="center", link={uri-terminal-forever}]
+//image::https://astefanutti.github.io/kubebox/terminal-forever.jpg[align="center", link={uri-terminal-forever}]
+++++
+<p align="center">
+  <a href="http://www.commitstrip.com/en/2016/12/22/terminal-forever/">
+    <img src="https://astefanutti.github.io/kubebox/terminal-forever.jpg">
+  </a>
+</p>
+++++
