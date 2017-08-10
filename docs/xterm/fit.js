@@ -37,7 +37,8 @@
     }
     var parentElementStyle = window.getComputedStyle(term.element.parentElement),
         parentElementHeight = parseInt(parentElementStyle.getPropertyValue('height')),
-        parentElementWidth = Math.max(0, parseInt(parentElementStyle.getPropertyValue('width')) - 17),
+        // Remove reserved space for the scrollbar as Kubebox is full screen
+        parentElementWidth = Math.max(0, parseInt(parentElementStyle.getPropertyValue('width'))),
         elementStyle = window.getComputedStyle(term.element),
         elementPaddingVer = parseInt(elementStyle.getPropertyValue('padding-top')) + parseInt(elementStyle.getPropertyValue('padding-bottom')),
         elementPaddingHor = parseInt(elementStyle.getPropertyValue('padding-right')) + parseInt(elementStyle.getPropertyValue('padding-left')),
