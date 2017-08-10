@@ -1,5 +1,5 @@
 <!doctype html>
-<html style="height: 100%">
+<html>
 
 <head>
   <link rel="stylesheet" href="xterm/xterm.css" />
@@ -8,19 +8,24 @@
   <script src="kubebox.js"></script>
 
   <style>
-    @font-face{
-        font-family: 'Fira Code';
-        src: url('FiraCode-Regular.woff2') format('woff2');
-        font-weight: 400;
-        font-style: normal;
+    html {
+      height: 100%;
     }
 
     body {
+      height: 100%;
+      margin: 0;
       background-color: black;
     }
 
+    @font-face {
+      font-family: 'Fira Code';
+      src: url('FiraCode-Regular.woff2') format('woff2');
+      font-weight: 400;
+      font-style: normal;
+    }
+
     .terminal {
-      /*height: 100%;*/
       font-family: 'Fira Code', Courier New, Courier, monospace;
       font-variant-ligatures: none;
       font-size: 12px;
@@ -28,7 +33,7 @@
   </style>
 </head>
 
-<body style="height: 100%; margin: 0">
+<body>
   <div id="terminal"></div>
   <script>
     var blessed = require('blessed');
@@ -67,10 +72,10 @@
       term.fit();
     };
     // seems required by Safari
-    window.onload = function() {
+    window.onload = function () {
       term.fit();
     }
-    screen.on('resize', function() {
+    screen.on('resize', function () {
       term.fit();
     });
 
