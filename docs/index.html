@@ -48,6 +48,12 @@
         return this.cols;
       }
     });
+    // By-pass Xterm.js event queue as Blessed expect a single event to be sent
+    // to the data handler. This actually happens on iOS with the mouseover and
+    // mouseup events.
+    Terminal.prototype.send = function (data) {
+      this.handler(data);
+    }
 
     var term = new Terminal();
     // TODO: find a way to disable the extra right padding for the scrollbar
