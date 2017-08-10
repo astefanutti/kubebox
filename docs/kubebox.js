@@ -878,6 +878,7 @@ class Dashboard {
       align         : 'left',
       keys          : true,
       tags          : true,
+      mouse         : true,
       shrink        : false,
       noCellBorders : true,
       // FIXME: margin isn't incremented for child list in scrollable list table
@@ -1265,11 +1266,7 @@ function login_form(kube_config, screen) {
   login.on('press', () => form.submit());
 
   // Reset the focus stack when clicking on a form element
-  function focusOnclick(element){
-    element.on('click', function(data) {
-      form._selected = element;
-    });
-  }
+  const focusOnclick = element => element.on('click', () => form._selected = element);
 
   focusOnclick(username);
   focusOnclick(password);
@@ -1279,8 +1276,8 @@ function login_form(kube_config, screen) {
   // This is a hack to not 'rewind' the focus stack on 'blur'
   username.options.inputOnFocus = false;
   password.options.inputOnFocus = false;
-  token.options.inputOnFocus    = false;
-  url.options.inputOnFocus  = false;
+  token.options.inputOnFocus = false;
+  url.options.inputOnFocus = false;
 
   return {
     form,
@@ -1335,6 +1332,7 @@ function namespaces_list() {
     label     : 'Namespaces',
     keys      : true,
     tags      : true,
+    mouse     : true,
     border    : { type: 'line' },
     scrollbar : {
       ch      : ' ',
