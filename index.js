@@ -1,3 +1,5 @@
+#!/usr/bin/env
+
 'use strict';
 
 const blessed = require('blessed'),
