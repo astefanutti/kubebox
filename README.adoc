@@ -27,13 +27,13 @@ endif::[]
 //image::https://astefanutti.github.io/kubebox/kubebox.gif[align="center"]
 ++++
 <p align="center">
-  <img align="center" style="image-rendering: crisp-edges" src="https://astefanutti.github.io/kubebox/kubebox.gif">
+  <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.gif">
 </p>
 ++++
 
 == Run
 
-=== Executables
+=== Executable
 
 Download the Kubebox standalone executable for your OS:
 
