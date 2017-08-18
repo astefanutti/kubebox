@@ -1,4 +1,5 @@
 .dockerignore
 .gitignore
+.vscode/
 docs/
 Dockerfile
