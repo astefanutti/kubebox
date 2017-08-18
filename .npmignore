@@ -1,5 +1,5 @@
-.dockerignore
-.gitignore
-.vscode/
-docs/
-Dockerfile
+/*
+!lib
+!index.js
+!package.json
+!README.adoc
