@@ -413,9 +413,6 @@ class User {
     if (typeof name === 'undefined') {
       throw Error("User name must be defined!");
     }
-    if (isNotEmpty(token) && (isNotEmpty(username) || isNotEmpty(password))) {
-      throw Error("Username/password and token are mutually exclusive!");
-    }
 
     this.name = name;
     this.token = token;
@@ -98556,10 +98553,13 @@ const { call, wait } = require('./promise');
 
 class Kubebox {
 
-  constructor(screen) {
+  constructor(screen, config) {
     let current_namespace;
     const { debug, log } = require('./ui/debug');
-    const kube_config    = getKubeConfig(debug);
+    const kube_config    = config ? createKubeConfig(yaml.safeLoad(config)) : getKubeConfig(debug);
+    if (config) {
+      saveKubeConfig(kube_config);
+    }
     const client         = new Client();
     client.master_api    = kube_config.current_context.getMasterApi();
     current_namespace    = kube_config.current_context.namespace.name;
@@ -98669,7 +98669,11 @@ class Kubebox {
         }
       }
 
-      const kube_config     = loadKubeConfig({ debug });
+      const kube_config     = getKubeConfigFile({ debug });
+      return createKubeConfig(kube_config);
+    }
+
+    function createKubeConfig(kube_config) {
       const contexts        = loadContexts(kube_config);
       // TODO: support client access information provided as CLI options
       //       CLI option -> Kube config context -> prompt user
@@ -98681,7 +98685,7 @@ class Kubebox {
       return new KubeConfig({ contexts, current_context });
     }
 
-    function loadKubeConfig({ debug }) {
+    function getKubeConfigFile({ debug }) {
       if (os.platform() === 'browser') {
         return [];    
       }
@@ -98761,12 +98765,16 @@ class Kubebox {
 
     function updateSessionAfterLogin(login) {
       kube_config.updateOrInsertContext(login);
-      if (isLocalStorageAvailable()) {
-        localStorage.setItem('.kube-config', JSON.stringify(kube_config));
-      }
+      saveKubeConfig(kube_config);
       client.master_api = kube_config.current_context.getMasterApi();
       current_namespace = kube_config.current_context.namespace.name;
       return login;
+    }
+
+    function saveKubeConfig(kube_config){
+      if (isLocalStorageAvailable()) {
+        localStorage.setItem('.kube-config', JSON.stringify(kube_config));
+      }
     }
   }
 }

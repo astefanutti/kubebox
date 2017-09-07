@@ -3,6 +3,10 @@
 
 <head>
   <link rel="stylesheet" href="xterm/xterm.css" />
+  <div id="upload" class="terminal">
+    <label for="file">Upload Kubernetes configuration file</label>
+    <input name="file" type="file">
+  </div>
   <script src="xterm/xterm.js"></script>
   <script src="xterm/fit.js"></script>
   <script src="kubebox.js"></script>
@@ -29,6 +33,11 @@
       font-family: 'Fira Code', Courier New, Courier, monospace;
       font-variant-ligatures: none;
       font-size: 12px;
+    }
+
+    #upload {
+      text-align: center;
+      color: white;
     }
   </style>
 </head>
@@ -86,6 +95,15 @@
     });
 
     var kubebox = new Kubebox(screen);
+    var input = document.querySelector('input');
+    input.addEventListener('change', function upload(){
+      const file_reader = new FileReader();
+      file_reader.onload = function(){
+        kubebox = new Kubebox(screen, file_reader.result)
+      }
+      //TODO: support file references in the kube config (certificates for example)
+      file_reader.readAsText(input.files[0], 'utf8');
+    });
 
   </script>
 </body>
