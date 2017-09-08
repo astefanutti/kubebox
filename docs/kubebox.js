@@ -305,6 +305,24 @@ class KubeConfigManager {
   }
 
   /**
+   * Switches the current_context to the next one in the array of contexts
+   */
+  nextContext() {
+    const pos            = this.contexts.indexOf(this.current_context);
+    const next           = (pos+1) % this.contexts.length;
+    this.current_context = this.contexts[next];
+  }
+
+  /**
+   * Switches the current_context to the previous one in the array of contexts
+   */
+  previousContext() {
+    const pos            = this.contexts.indexOf(this.current_context);
+    const prev           = pos === 0 ? this.contexts.length - 1 : pos - 1;
+    this.current_context = this.contexts[prev];
+  }
+
+  /**
    * This will create a new Context from the login form and set it as the current context.
    * If the created context already exists it will be updated instead of creating a new one.
    * @param {*} login the login form
@@ -1065,6 +1083,8 @@ module.exports.log = message => new Promise(resolve => {
 const blessed = require('blessed'),
       os      = require('os');
 
+const {isNotEmpty} = require('../util');
+
 function login_form(kube_config, screen) {
   const form = blessed.form({
     parent : screen,
@@ -1082,9 +1102,21 @@ function login_form(kube_config, screen) {
     }
   });
 
+  const next = os.platform() === 'browser' ? 'C-right' : 'M-right';
+  const prev = os.platform() === 'browser' ? 'C-left'  : 'M-left';
+
   form.on('element keypress', (el, ch, key) => {
-    if (key.name === 'enter') {
-      form.submit();
+    switch(key.full) {
+      case 'enter':
+        return form.submit();
+      case prev:
+        kube_config.previousContext();
+        updateCurrentContext();
+        break;
+      case next:
+        kube_config.nextContext();
+        updateCurrentContext();
+        break;
     }
   });
 
@@ -1158,7 +1190,8 @@ function login_form(kube_config, screen) {
     width        : 30,
     left         : 15,
     censor       : true,
-    top          : 3
+    top          : 3,
+    value        : kube_config.current_context.user.password
   });
   // retain key grabbing as text areas reset it after input reading
   password.on('blur', () => form.screen.grabKeys = true);
@@ -1220,6 +1253,21 @@ function login_form(kube_config, screen) {
   token.options.inputOnFocus = false;
   url.options.inputOnFocus = false;
 
+  function updateCurrentContext() {
+    url.value      = emptyStringIfUndefined(kube_config.current_context.cluster.server);
+    username.value = emptyStringIfUndefined(kube_config.current_context.user.username);
+    token.value    = emptyStringIfUndefined(kube_config.current_context.user.token);
+    password.value = emptyStringIfUndefined(kube_config.current_context.user.password);
+    form.screen.render();
+  }
+
+  function emptyStringIfUndefined(str){
+   if (isNotEmpty(str)) {
+     return str;
+   }
+   return '';
+  }
+
   return {
     form,
     username : () => username.value,
@@ -1255,7 +1303,7 @@ function prompt(screen, kube_config) {
 
 module.exports.prompt = prompt;
 }).call(this,require('_process'))
-},{"_process":284,"blessed":"blessed","os":260}],13:[function(require,module,exports){
+},{"../util":14,"_process":284,"blessed":"blessed","os":260}],13:[function(require,module,exports){
 (function (process){
 'use strict';
 
