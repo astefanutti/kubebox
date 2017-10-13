@@ -298,11 +298,12 @@ module.exports = Context;
 (function (process){
 'use strict';
 
-const fs        = require('fs'),
-      os        = require('os'),
-      path      = require('path'),
-      URI       = require('urijs'),
-      yaml      = require('js-yaml');
+const EventEmitter = require('events'),
+      fs           = require('fs'),
+      os           = require('os'),
+      path         = require('path'),
+      URI          = require('urijs'),
+      yaml         = require('js-yaml');
 
 const User      = require('./user'),
       Namespace = require('./namespace'),
@@ -311,9 +312,10 @@ const User      = require('./user'),
 
 const { isNotEmpty, isLocalStorageAvailable } = require('../util');
 
-class KubeConfigManager {
+class KubeConfigManager extends EventEmitter {
 
   constructor({ debug }) {
+    super();
     if (os.platform() === 'browser') {
       const kube_config = readKubeConfigFromLocalStore({ debug });
       this.contexts = kube_config.contexts;
@@ -342,6 +344,7 @@ class KubeConfigManager {
     if (os.platform() === 'browser') {
       writeKubeConfigInLocalStore(this);
     }
+    this.emit('kubeConfigChange');
   }
 
   /**
@@ -511,7 +514,7 @@ function findContextsByClusterUrl(contexts, url) {
 
 module.exports = KubeConfigManager;
 }).call(this,require('_process'))
-},{"../util":16,"./cluster":2,"./context":4,"./namespace":6,"./user":7,"_process":285,"fs":132,"js-yaml":220,"os":261,"path":278,"urijs":351}],6:[function(require,module,exports){
+},{"../util":16,"./cluster":2,"./context":4,"./namespace":6,"./user":7,"_process":285,"events":187,"fs":132,"js-yaml":220,"os":261,"path":278,"urijs":351}],6:[function(require,module,exports){
 'use strict';
 
 class Namespace {
@@ -1233,11 +1236,7 @@ function login_form(kube_config, screen) {
       default:
         return;
     }
-    url.value = kube_config.current_context.cluster.server || '';
-    username.value = kube_config.current_context.user.username || '';
-    token.value = kube_config.current_context.user.token || '';
-    password.value = kube_config.current_context.user.password || '';
-    form.screen.render();
+    refresh();
   });
 
   form.on('key q', () => {
@@ -1366,15 +1365,23 @@ function login_form(kube_config, screen) {
   focusOnclick(password);
   focusOnclick(token);
   focusOnclick(url);
-  
+
   // This is a hack to not 'rewind' the focus stack on 'blur'
   username.options.inputOnFocus = false;
   password.options.inputOnFocus = false;
   token.options.inputOnFocus = false;
   url.options.inputOnFocus = false;
 
+  const refresh  = function () {
+    url.value      = kube_config.current_context.cluster.server || '';
+    username.value = kube_config.current_context.user.username || '';
+    token.value    = kube_config.current_context.user.token || '';
+    password.value = kube_config.current_context.user.password || '';
+    form.screen.render();
+  }
+
   return {
-    form,
+    form, refresh,
     username : () => username.value,
     password : () => password.value,
     token    : () => token.value,
@@ -1386,12 +1393,14 @@ function prompt(screen, kube_config) {
   return new Promise(function (fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
-    const { form, username, password, token, url } = login_form(kube_config, screen);
+    const { form, refresh, username, password, token, url } = login_form(kube_config, screen);
+    kube_config.on('kubeConfigChange', refresh);
     screen.append(form);
     form.focus();
     screen.render();
     // TODO: enable cancelling when already logged
     form.on('submit', data => {
+      kube_config.removeListener('kubeConfigChange', refresh);
       screen.remove(form);
       screen.restoreFocus();
       screen.grabKeys = false;

@@ -102,6 +102,7 @@
       const file_reader = new FileReader();
       file_reader.onload = function () {
         kubebox.loadKubeConfig(file_reader.result);
+        term.focus();
       }
       // TODO: support file references in the kube config (certificates for example)
       file_reader.readAsText(input.files[0], 'utf8');
