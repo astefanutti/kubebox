@@ -289,9 +289,14 @@ Context.default = new Context({
 module.exports = Context;
 }).call(this,require("buffer").Buffer)
 },{"./cluster":2,"./namespace":5,"./user":6,"buffer":144,"fs":130,"urijs":349}],4:[function(require,module,exports){
+(function (process){
 'use strict';
 
-const URI       = require('urijs');
+const fs        = require('fs'),
+      os        = require('os'),
+      path      = require('path'),
+      URI       = require('urijs'),
+      yaml      = require('js-yaml');
 
 const User      = require('./user'),
       Namespace = require('./namespace'),
@@ -302,17 +307,43 @@ const { isNotEmpty, isLocalStorageAvailable } = require('../util');
 
 class KubeConfigManager {
 
-  constructor({ contexts, current_context }) {
-    this.contexts        = contexts;
-    this.current_context = current_context;
+  constructor({ debug }) {
+    if (os.platform() === 'browser') {
+      const kube_config = readKubeConfigFromLocalStore({ debug });
+      this.contexts = kube_config.contexts;
+      this.current_context = kube_config.current_context;
+    } else {
+      const kube_config = readKubeConfigFromFile({ debug });
+      this.contexts = loadContexts(kube_config);
+      // TODO: support client access information provided as CLI options
+      //       CLI option -> Kube config context -> prompt user
+      // see:
+      // - http://kubernetes.io/docs/user-guide/accessing-the-cluster/
+      // - http://kubernetes.io/docs/user-guide/kubeconfig-file/
+      const url = process.argv[2] || process.env.KUBERNETES_MASTER;
+      if (url) {
+        this.current_context = findOrCreateContext(this.contexts, { url });
+      } else {
+        this.current_context = this.contexts.find(context => context.name === kube_config['current-context']) || Context.default;
+      }
+    }
+  }
+
+  loadFromConfig(config) {
+    const kube_config = yaml.safeLoad(config);
+    this.contexts = loadContexts(kube_config);
+    this.current_context = this.contexts.find(context => context.name === kube_config['current-context']) || Context.default;
+    if (os.platform() === 'browser') {
+      writeKubeConfigInLocalStore(this);
+    }
   }
 
   /**
    * Switches the current_context to the next one in the array of contexts
    */
   nextContext() {
-    const pos            = this.contexts.indexOf(this.current_context);
-    const next           = (pos+1) % this.contexts.length;
+    const pos = this.contexts.indexOf(this.current_context);
+    const next = (pos + 1) % this.contexts.length;
     this.current_context = this.contexts[next];
   }
 
@@ -320,8 +351,8 @@ class KubeConfigManager {
    * Switches the current_context to the previous one in the array of contexts
    */
   previousContext() {
-    const pos            = this.contexts.indexOf(this.current_context);
-    const prev           = pos === 0 ? this.contexts.length - 1 : pos - 1;
+    const pos = this.contexts.indexOf(this.current_context);
+    const prev = pos === 0 ? this.contexts.length - 1 : pos - 1;
     this.current_context = this.contexts[prev];
   }
 
@@ -344,7 +375,83 @@ class KubeConfigManager {
       context.user.password = login.password;
     }
     this.current_context = context;
+
+    if (os.platform() === 'browser') {
+      writeKubeConfigInLocalStore(this);
+    }
   }
+}
+
+function readKubeConfigFromFile({ debug }) {
+  const config_path = path.join(os.homedir(), '.kube/config');
+  try {
+    fs.accessSync(config_path, fs.constants.F_OK | fs.constants.R_OK);
+  } catch (error) {
+    debug.log(`Unable to read Kube config file from: ${config_path}`);
+    return {};
+  }
+  return yaml.safeLoad(fs.readFileSync(config_path, 'utf8'));
+}
+
+function readKubeConfigFromLocalStore({ debug }) {
+  const kube_config = isLocalStorageAvailable() && localStorage.getItem('.kube-config');
+  if (kube_config) {
+    try {
+      return JSON.parse(kube_config, (key, value) => {
+        switch (key) {
+          case 'cluster':
+            return new Cluster(value);
+          case 'user':
+            return new User(value);
+          case 'namespace':
+            return new Namespace(value.name);
+          case 'context':
+          case 'current_context':
+            return new Context(value);
+          case 'contexts':
+            return value.map(i => new Context(i));
+          default:
+            return value;
+        }
+      });
+    } catch (error) {
+      localStorage.removeItem('.kube-config');
+      debug.log(`Unable to load '.kube-config' from local storage: ${error}`);
+    }
+  }
+  return { contexts: [], current_context: Context.default };
+}
+
+function writeKubeConfigInLocalStore(kube_config) {
+  if (isLocalStorageAvailable()) {
+    // TODO: should be serialized as the original YAML Kube config file instead of custom JSON
+    localStorage.setItem('.kube-config', JSON.stringify(kube_config));
+  }
+}
+
+function loadContexts(kube_config) {
+  const users    = [];
+  const clusters = [];
+  const contexts = [];
+  if (kube_config.users) {
+    // TODO: use spread properties when its browsers and Node support becomes mainstream
+    kube_config.users.forEach(user => users.push(new User(Object.assign({ name: user.name }, user.user))));
+  }
+  if (kube_config.clusters) {
+    // TODO: use spread properties when its browsers and Node support becomes mainstream
+    kube_config.clusters.forEach(cluster => clusters.push(
+      new Cluster(Object.assign({ server: cluster.cluster.server, name: cluster.name }, cluster.cluster))
+    ));
+  }
+  if (kube_config.contexts) {
+    kube_config.contexts.forEach(context => contexts.push(new Context({
+      cluster   : clusters.find(cluster => cluster.name === context.context.cluster),
+      namespace : new Namespace(context.context.namespace),
+      user      : users.find(user => user.name === context.context.user),
+      name      : context.name,
+    })));
+  }
+  return contexts;
 }
 
 // TODO: use rest/spread properties when its browsers and Node support becomes mainstream
@@ -366,21 +473,21 @@ function findOrCreateContext(contexts, { url, username, namespace/*, ...login*/ 
     cluster = byUrl[0].cluster;
   } else {
     cluster = new Cluster({
-      server: url
-      // ...login
+      server: url,
+      // ...login,
     });
   }
   if (!user && username) {
     user = new User({
-      name: `${username}/${cluster.name}`,
-      username: username
-      // ...login
+      name     : `${username}/${cluster.name}`,
+      username : username,
+      // ...login,
     });
   }
   return new Context({
     cluster,
-    user: user || User.default,
-    namespace: namespace ? new Namespace(namespace) : Namespace.default
+    user      : user || User.default,
+    namespace : namespace ? new Namespace(namespace) : Namespace.default,
   })
 }
 
@@ -396,9 +503,9 @@ function findContextsByClusterUrl(contexts, url) {
   return matches;
 }
 
-module.exports.KubeConfig          = KubeConfigManager;
-module.exports.findOrCreateContext = findOrCreateContext;
-},{"../util":14,"./cluster":2,"./context":3,"./namespace":5,"./user":6,"urijs":349}],5:[function(require,module,exports){
+module.exports = KubeConfigManager;
+}).call(this,require('_process'))
+},{"../util":14,"./cluster":2,"./context":3,"./namespace":5,"./user":6,"_process":283,"fs":130,"js-yaml":218,"os":259,"path":276,"urijs":349}],5:[function(require,module,exports){
 'use strict';
 
 class Namespace {
@@ -99097,48 +99204,42 @@ blessed.helpers.merge(blessed, blessed.widget);
 module.exports = blessed;
 
 },{"./colors":55,"./helpers":58,"./program":60,"./tput":61,"./unicode":62,"./widget":63}],"kubebox":[function(require,module,exports){
-(function (process){
 'use strict';
 
 // TODO: display uncaught exception in a popup
 // TODO: handle current namespace deletion nicely
 
-const Client  = require('./client'),
-      contrib = require('blessed-contrib'),
-      get     = require('./http-then').get,
-      fs      = require('fs'),
-      os      = require('os'),
-      path    = require('path'),
-      URI     = require('urijs'),
-      yaml    = require('js-yaml');
+const Client     = require('./client'),
+      contrib    = require('blessed-contrib'),
+      get        = require('./http-then').get,
+      KubeConfig = require('./config/manager'),
+      os         = require('os'),
+      URI        = require('urijs');
 
-const { KubeConfig, findOrCreateContext } = require('./config/manager');
+// TODO: introduce directory parent module
+const User      = require('./config/user'),
+      Namespace = require('./config/namespace'),
+      Context   = require('./config/context'),
+      Cluster   = require('./config/cluster');
 
-const User       = require('./config/user'),
-      Namespace  = require('./config/namespace'),
-      Context    = require('./config/context'),
-      Cluster    = require('./config/cluster');
+const Dashboard      = require('./ui/dashboard'),
+      login          = require('./ui/login'),
+      namespaces     = require('./ui/namespaces');
 
-const Dashboard  = require('./ui/dashboard'),
-      login      = require('./ui/login'),
-      namespaces = require('./ui/namespaces');
-
-const { isNotEmpty, isLocalStorageAvailable } = require('./util');
+const { isNotEmpty } = require('./util');
 
 const { call, wait } = require('./promise');
 
 class Kubebox {
 
-  constructor(screen, config) {
-    let current_namespace;
+  constructor(screen) {
     const { debug, log } = require('./ui/debug');
-    const kube_config    = config ? createKubeConfig(yaml.safeLoad(config)) : getKubeConfig(debug);
-    if (config) {
-      saveKubeConfig(kube_config);
-    }
-    const client         = new Client();
-    client.master_api    = kube_config.current_context.getMasterApi();
-    current_namespace    = kube_config.current_context.namespace.name;
+    const kube_config = new KubeConfig({ debug });
+    this.loadKubeConfig = config => kube_config.loadFromConfig(config);
+
+    const client = new Client();
+    client.master_api = kube_config.current_context.getMasterApi();
+    let current_namespace = kube_config.current_context.namespace.name;
 
     const dashboard = new Dashboard(screen, client, debug);
 
@@ -99158,9 +99259,7 @@ class Kubebox {
         .catch(error => console.error(error.stack));
     });
 
-    screen.key(['l', 'C-l'], (ch, key) =>
-      logging().catch(error => console.error(error.stack))
-    );
+    screen.key(['l', 'C-l'], (ch, key) => logging().catch(error => console.error(error.stack)));
 
     const carousel = new contrib.carousel(
       [
@@ -99182,9 +99281,11 @@ class Kubebox {
 
     // TODO: display login prompt with message on error
     if (typeof client.master_api !== 'undefined') {
-      connect(kube_config.current_context.user);
+      connect(kube_config.current_context.user)
+        .catch(error => console.error(error.stack));
     } else {
-      logging().catch(error => console.error(error.stack));
+      logging()
+        .catch(error => console.error(error.stack));
     }
 
     function connect(login) {
@@ -99210,95 +99311,6 @@ class Kubebox {
         .then(updateSessionAfterLogin)
         .then(connect);
     }
-
-    function getKubeConfig(debug) {
-      const local_storage   = isLocalStorageAvailable() && localStorage.getItem('.kube-config');
-      if (local_storage) {
-        try {
-          return new KubeConfig(JSON.parse(localStorage.getItem('.kube-config'), (key, value) => {
-            switch(key) {
-              case 'cluster':
-                return new Cluster(value);
-              case 'user':
-                return new User(value);
-              case 'namespace':
-                return new Namespace(value.name);
-              case 'context':
-              case 'current_context':
-                return new Context(value);
-              case 'contexts':
-                const contexts = [];
-                value.forEach(function(element){
-                  contexts.push(new Context(element));
-                });
-                return contexts;
-              case '':
-                return new KubeConfig(value);  
-              default:
-                return value;
-            }
-          }
-          ));
-        } catch( error ) { 
-          localStorage.removeItem('.kube-config');
-          debug.log(`Unable to load '.kube-config' from local storage: ${error}`);  
-        }
-      }
-
-      const kube_config     = getKubeConfigFile({ debug });
-      return createKubeConfig(kube_config);
-    }
-
-    function createKubeConfig(kube_config) {
-      const contexts        = loadContexts(kube_config);
-      // TODO: support client access information provided as CLI options
-      //       CLI option -> Kube config context -> prompt user
-      // see:
-      // - http://kubernetes.io/docs/user-guide/accessing-the-cluster/
-      // - http://kubernetes.io/docs/user-guide/kubeconfig-file/
-      const url             = process.argv[2] || process.env.KUBERNETES_MASTER;
-      const current_context = url ? findOrCreateContext(contexts, { url }) : contexts.find(context => context.name === kube_config['current-context']) || Context.default;
-      return new KubeConfig({ contexts, current_context });
-    }
-
-    function getKubeConfigFile({ debug }) {
-      if (os.platform() === 'browser') {
-        return [];    
-      }
-      const config_path = path.join(os.homedir(), '.kube/config');
-      try {
-        fs.accessSync(config_path, fs.constants.F_OK | fs.constants.R_OK);
-      } catch (error) {
-        debug.log(`Unable to read Kube config file from: ${config_path}`);
-        return [];
-      }
-      return yaml.safeLoad(fs.readFileSync(config_path, 'utf8'));
-    }
-
-    function loadContexts(kube_config) {
-      const users    = [];
-      const clusters = [];
-      const contexts = [];
-      if (kube_config.users) {
-        // TODO: use spread properties when its browsers and Node support becomes mainstream
-        kube_config.users.forEach(user => users.push(new User(Object.assign({ name: user.name }, user.user))));
-      }
-      if (kube_config.clusters) {
-        // TODO: use spread properties when its browsers and Node support becomes mainstream
-        kube_config.clusters.forEach(cluster => clusters.push(
-          new Cluster(Object.assign({ server: cluster.cluster.server, name: cluster.name }, cluster.cluster))
-        ));
-      }
-      if (kube_config.contexts) {
-        kube_config.contexts.forEach(context => contexts.push(new Context({
-          cluster   : clusters.find(cluster => cluster.name === context.context.cluster),
-          namespace : new Namespace(context.context.namespace),
-          user      : users.find(user => user.name === context.context.user),
-          name      : context.name
-        })));
-      }
-      return contexts;
-    }    
 
     function authenticate(login) {
       if (!client.openshift)
@@ -99341,21 +99353,13 @@ class Kubebox {
 
     function updateSessionAfterLogin(login) {
       kube_config.updateOrInsertContext(login);
-      saveKubeConfig(kube_config);
       client.master_api = kube_config.current_context.getMasterApi();
       current_namespace = kube_config.current_context.namespace.name;
       return login;
-    }
-
-    function saveKubeConfig(kube_config){
-      if (isLocalStorageAvailable()) {
-        localStorage.setItem('.kube-config', JSON.stringify(kube_config));
-      }
     }
   }
 }
 
 module.exports = Kubebox;
 
-}).call(this,require('_process'))
-},{"./client":1,"./config/cluster":2,"./config/context":3,"./config/manager":4,"./config/namespace":5,"./config/user":6,"./http-then":7,"./promise":8,"./ui/dashboard":10,"./ui/debug":11,"./ui/login":12,"./ui/namespaces":13,"./util":14,"_process":283,"blessed-contrib":34,"fs":130,"js-yaml":218,"os":259,"path":276,"urijs":349}]},{},[]);
+},{"./client":1,"./config/cluster":2,"./config/context":3,"./config/manager":4,"./config/namespace":5,"./config/user":6,"./http-then":7,"./promise":8,"./ui/dashboard":10,"./ui/debug":11,"./ui/login":12,"./ui/namespaces":13,"./util":14,"blessed-contrib":34,"os":259,"urijs":349}]},{},[]);

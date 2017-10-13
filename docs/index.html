@@ -3,10 +3,6 @@
 
 <head>
   <link rel="stylesheet" href="xterm/xterm.css" />
-  <div id="upload" class="terminal">
-    <label for="file">Upload Kubernetes configuration file</label>
-    <input name="file" type="file">
-  </div>
   <script src="xterm/xterm.js"></script>
   <script src="xterm/fit.js"></script>
   <script src="kubebox.js"></script>
@@ -43,7 +39,13 @@
 </head>
 
 <body>
+  <div id="upload" class="terminal">
+    <label for="file">Upload Kubernetes configuration file</label>
+    <input name="file" type="file">
+  </div>
+
   <div id="terminal"></div>
+
   <script>
     var blessed = require('blessed');
     var Kubebox = require('kubebox');
@@ -65,7 +67,6 @@
     }
 
     var term = new Terminal();
-    // TODO: find a way to disable the extra right padding for the scrollbar
     term.open(document.getElementById('#terminal'), true);
     term.fit();
     term.isTTY = true;
@@ -95,16 +96,16 @@
     });
 
     var kubebox = new Kubebox(screen);
+
     var input = document.querySelector('input');
-    input.addEventListener('change', function upload(){
+    input.addEventListener('change', function () {
       const file_reader = new FileReader();
-      file_reader.onload = function(){
-        kubebox = new Kubebox(screen, file_reader.result)
+      file_reader.onload = function () {
+        kubebox.loadKubeConfig(file_reader.result);
       }
-      //TODO: support file references in the kube config (certificates for example)
+      // TODO: support file references in the kube config (certificates for example)
       file_reader.readAsText(input.files[0], 'utf8');
     });
-
   </script>
 </body>
 
