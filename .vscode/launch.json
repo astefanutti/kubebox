@@ -19,24 +19,25 @@
             "port": 5858
         },
         {
+            // Serve the 'docs' directory to http://localhost:8080
             "name": "Chrome (launch)",
             "type": "chrome",
             "request": "launch",
-            "url": "http://localhost:8080/docs/index.html",
+            "url": "http://localhost:8080/index.html",
             "webRoot": "${workspaceRoot}/",
             "sourceMaps": true
         },
         {
+            // Launch Chrome in debug mode
+            // google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
             "name": "Chrome (attach)",
             "type": "chrome",
             "request": "attach",
             "port": 9222,
-            "url": "http://localhost:8080/docs/index.html",
+            "url": "http://localhost:8080/index.html",
             "webRoot": "${workspaceRoot}",
             "sourceMaps": true,
             "trace": true
-            //launch Chrome in debug mode
-            //google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
         }
     ]
 }
