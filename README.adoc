@@ -16,11 +16,16 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
+:uri-badge-npm: https://img.shields.io/npm/v/kubebox.svg
+:uri-badge-node: https://img.shields.io/node/v/kubebox.svg
+:uri-kubebox-npm: https://www.npmjs.com/package/kubebox
 :uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/latest
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-minikube: https://github.com/kubernetes/minikube
 :uri-minishift: https://github.com/minishift/minishift
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
+
+image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
 
 {description}
 
