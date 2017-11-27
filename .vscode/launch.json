@@ -9,6 +9,9 @@
             "type": "node",
             "request": "launch",
             "program": "${workspaceRoot}/index.js",
+            "args": [
+                ""
+            ],
             "cwd": "${workspaceRoot}",
             "console": "integratedTerminal"
         },
