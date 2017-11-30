@@ -1398,7 +1398,7 @@ class Dashboard {
       },
       commands: {
         'Memory': {
-          keys: ['M'],
+          keys: ['M', 'm'],
           callback: function() {
             graphs.find(g => g.visible).toggle();
             memory_graph.toggle();
@@ -1406,12 +1406,12 @@ class Dashboard {
           }
         },
         'CPU': {
-          keys: ['C'],
+          keys: ['C', 'c'],
           callback: function() {
             graphs.find(g => g.visible).toggle();
             cpu_graph.toggle();
             screen.render();
-          }
+          } 
         },
       }
     });
@@ -1594,91 +1594,41 @@ class Dashboard {
         .then(response => {
           const timestamps = response.stats.map(s => moment(s.timestamp).format('HH:mm:ss'));
           // memory
-          const cache = {
+          const memory_cache = {
             title : 'Cache',
             x     : timestamps,
             y     : response.stats.map(s => s.memory.cache),
             style : { line: 'yellow' },
           };
-          const usage = {
+          const memory_usage = {
             title : 'Usage',
             x     : timestamps,
             y     : response.stats.map(s => s.memory.usage),
             style : { line: 'blue' },
           };
-          const stats = [usage, cache];
+          const memory_stats = [memory_usage, memory_cache];
           if (container.resources.limits && container.resources.limits.memory) {
-            const limit = {
+            const memory_limit = {
               title : 'Limit',
               x     : timestamps,
               y     : Array(timestamps.length).fill(response.spec.memory.limit),
               style : { line: 'red' },
             };
-            stats.push(limit);
+            memory_stats.push(memory_limit);
           }
-          memory_graph.setData(stats);
+          memory_graph.setData(memory_stats);
           // CPU
-          const cpu = {
+          const periods = response.stats.map(s => moment(s.timestamp).format('X')).delta();
+          const cpu_total = {
             title : 'Total',
             x     : timestamps.slice(1),
-            y     : response.stats.map(s => s.cpu.usage.total)
-                      .reduce((r, v, i, a) => {
-                        if (i < a.length - 1)
-                          r.push(a[i + 1] - a[i])
-                        return r;
-                      }, []),
+            y     : response.stats.map(s => s.cpu.usage.total).delta().map((d, i) => d / 1000000 / periods[i]),
             style : { line: 'blue' },
           };
-          cpu_graph.setData([cpu]);
+          const cpu_stats = [cpu_total];
+          cpu_graph.setData(cpu_stats);
         });
     }
-
-    /* function pollStatsFromSummaryApi(pod) {
-      return get(client.summary_stats(pod.spec.nodeName))
-        .then(response => JSON.parse(response.body.toString('utf8')))
-        .then(response => response.pods
-          .filter(p => p.podRef.namespace === current_namespace)
-          .forEach(p => {
-            const m = metrics.pods.find(p1 => p1.podRef.uid === p.podRef.uid);
-            if (m) {
-              m.containers.push(...p.containers.filter(c1 =>
-                !m.containers.find(c2 => c1.name === c2.name && c1.memory.time === c2.memory.time)));
-            } else {
-              metrics.pods.push(p);
-            }
-          }))
-        .then(updateStatsChart);
-    } */
-
-    /* function updateStatsChart() {
-      if (!pod_selected) return;
-
-      const stats = metrics.pods
-        .filter(p => p.podRef.uid === pod_selected.metadata.uid)
-        .flatMap(p => p.containers)
-        //TODO
-        .filter(c => c.name === c.name);
-
-      const memory = stats.map(c => c.memory);
-      const timestamps = memory.map(m => moment(m.time).format('HH:mm:ss'));
-
-      const available = {
-        title : 'Avail.',
-        x     : timestamps,
-        y     : memory.map(m => m.availableBytes),
-        style : { line: 'yellow' }
-      };
-      const usage = {
-        title : 'Usage',
-        x     : timestamps,
-        y     : memory.map(m => m.usageBytes),
-        style : { line: 'blue' }
-      };
-      memory_graph.stats = [available, usage];
-      if (!memory_graph.detached) {
-        memory_graph.setData(memory_graph.stats);
-      }
-    } */
 
     this.render = function () {
       // TODO: restore selection if any
@@ -2146,6 +2096,20 @@ Object.defineProperties(Array.prototype, {
   flatMap: {
     value: function (f) {
       return Array.prototype.concat.apply([], this.map(f));
+    },
+    writeable  : false,
+    enumerable : false,
+  }
+});
+
+Object.defineProperties(Array.prototype, {
+  delta: {
+    value: function () {
+      return this.reduce((r, v, i, a) => {
+        if (i < a.length - 1)
+          r.push(a[i + 1] - a[i]);
+        return r;
+      }, []);
     },
     writeable  : false,
     enumerable : false,
