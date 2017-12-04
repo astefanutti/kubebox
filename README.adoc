@@ -1,7 +1,7 @@
 = Kubebox [small]#^⎈❏^#
 Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
 // Meta
-:description: CLI console for Kubernetes clusters
+:description: Terminal console for Kubernetes clusters
 // Settings
 :idprefix:
 :idseparator: -
@@ -21,7 +21,9 @@ endif::[]
 :uri-kubebox-npm: https://www.npmjs.com/package/kubebox
 :uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/latest
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
+:uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
 :uri-minikube: https://github.com/kubernetes/minikube
+:uri-minikube-kubernetes: https://github.com/kubernetes/minikube/blob/master/docs/configuring_kubernetes.md
 :uri-minishift: https://github.com/minishift/minishift
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 
@@ -35,6 +37,17 @@ image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
   <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.gif">
 </p>
 ++++
+
+=== Features
+
+* [x] Connections configuration sourcing from Kube config (`$HOME/.kube`)
+* [x] Login and OAuth authentication support
+* [x] Namespace selection
+* [x] Pods list watching
+* [x] Pod / container log watching
+* [x] Container resources usage (memory, CPU, network charts)
+* [ ] Container remote exec terminal
+* [ ] Cluster and node views
 
 == Run
 
@@ -51,27 +64,6 @@ $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
 # Windows
 $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 --
-
-=== Online
-
-Kubebox is available online at http://kube.sh. Note that this requires this address to match the allowed origins for CORS by the API server.
-This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.g.:
-
-```sh
-$ kube-apiserver --cors-allowed-origins .*
-```
-
-In case you use {uri-minikube}[Minikube], this can be achieved with:
-
-```sh
-$ minikube start --extra-config=apiserver.GenericServerRunOptions.CorsAllowedOriginList=.*
-```
-
-Or if you use {uri-minishift}[Minishift]:
-
-```sh
-$ minishift openshift config set --patch '{"corsAllowedOrigins": [".*"]}'
-```
 
 === NPM
 
@@ -103,9 +95,48 @@ You may want to mount your home directory so that Kubebox can rely on the `~./ku
 $ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
 ```
 
-== Usage
+=== Online
 
-{icon-edit}
+Kubebox is available online at http://kube.sh. Note that this requires this address to match the allowed origins for CORS by the API server.
+This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.g.:
+
+```sh
+$ kube-apiserver --cors-allowed-origins .*
+```
+
+In case you use {uri-minikube}[Minikube], this can be achieved with:
+
+```sh
+$ minikube start --extra-config=apiserver.GenericServerRunOptions.CorsAllowedOriginList=.*
+```
+See {uri-minikube-kubernetes}[Configuring Kubernetes] for more information.
+
+Or if you use {uri-minishift}[Minishift]:
+
+```sh
+$ minishift openshift config set --patch '{"corsAllowedOrigins": [".*"]}'
+```
+
+=== On Premises
+
+==== Kubernetes
+
+```sh
+$ kubectl create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/kubernetes.yaml
+```
+
+In order for the Ingress resource to work, the cluster must have an Ingress controller running. See {uri-ingress-controllers}[Ingress controllers] for more information.
+In case you use Minikube, this can be achieved with:
+
+```
+$ minikube addons enable ingress
+```
+
+==== OpenShift
+
+```sh
+$ oc create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/openshift.yaml
+```
 
 == Commands
 
@@ -113,8 +144,7 @@ $ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
 |===
 |Keybinding |Description
 
-|kbd:[n]
-|Change current namespace
+2+^.e|General
 
 |kbd:[l], kbd:[CTRL+l]
 |Login
@@ -125,7 +155,34 @@ $ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
 |kbd:[q], kbd:[CTRL+c]
 |Exit
 
+2+^.e|Dashboard
+
+|kbd:[n]
+|Change current namespace
+
+|kbd:[m]
+|Memory usage
+
+|kbd:[c]
+|CPU usage
+
+|kbd:[t]
+|Network usage
+
 |===
+
+== Usage
+
+{icon-edit}
+
+== Development
+
+```sh
+$ git clone https://github.com/astefanutti/kubebox.git
+$ cd kubebox
+$ npm install
+$ node index.js
+```
 
 == Terminal forever
 
