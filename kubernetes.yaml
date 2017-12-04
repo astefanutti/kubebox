@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubebox
+  labels:
+    template: kubebox
+spec:
+  ports:
+    - name: kubebox
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+      nodePort: 0
+  selector:
+    name: kubebox
+  type: ClusterIP
+  sessionAffinity: None
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: kubebox
+  annotations:
+    kubernetes.io/ingress.allow-http: "true"
+    ingress.kubernetes.io/ssl-redirect: "false"
+    ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        backend:
+          serviceName: kubebox
+          servicePort: 8080
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: kubebox
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: kubebox
+  template:
+    metadata:
+      name: kubebox
+      labels:
+        name: kubebox
+    spec:
+      containers:
+      - image: astefanutti/kubebox:server
+        name: kubebox
+        ports:
+        - containerPort: 8080
+          protocol: TCP
