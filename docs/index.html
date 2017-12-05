@@ -31,20 +31,76 @@
       font-size: 12px;
     }
 
-    #upload {
-      text-align: center;
-      color: white;
+    .overlay {
+      position: fixed;
+      z-index: 1000;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.6);
+      transition: opacity 500ms;
+      visibility: hidden;
     }
+    .popup {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 10px;
+      background: #000;
+      border:1px solid #fff;
+      font-family: 'Fira Code', Courier New, Courier, monospace;
+      font-size: 12px;
+      color: white;
+      box-shadow: 3px 3px 0 0 #aaa;
+    }
+    .popup .cancel {
+      border: 0 none;
+      padding: 0 1em 0 1em;
+      font-family: inherit;
+      border-radius: unset;
+      background-color: unset;
+      color: unset;
+      font-size: unset;
+    }
+    .popup .cancel:hover,
+    .popup .cancel:focus {
+      background-color: grey;
+      outline: none;
+    }
+    .popup .file {
+      width: 0.1px;
+      height: 0.1px;
+      opacity: 0;
+      overflow: hidden;
+      position: absolute;
+      z-index: -1;
+    }
+    .popup .file + label {
+      padding: 0 1em 0 1em;
+    }
+    .popup .file:focus + label,
+    .popup .file + label:hover {
+      background-color: grey;
+    }
+
   </style>
 </head>
 
 <body>
-  <div id="upload" class="terminal">
-    <label for="file">Upload Kubernetes configuration file</label>
-    <input name="file" type="file">
-  </div>
-
   <div id="terminal"></div>
+
+  <div id="popup" class="overlay">
+    <div class="popup">
+      <div>Select a file to import from:</div>
+      <div style="text-align: right; margin-top: 1em">
+        <input id="file" name="file" type="file" class="file" />
+        <label for="file">Select...</label>
+        <input id="cancel" type="button" value="Cancel" class="cancel">
+      </div>
+    </div>
+  </div>
 
   <script>
     var blessed = require('blessed');
@@ -95,17 +151,45 @@
       term.fit();
     });
 
+    // TODO: pass cluster URL for on-premises deployment with a template environment variable
     var kubebox = new Kubebox(screen);
 
-    var input = document.querySelector('input');
+    // Kube config import modal popup
+    var popup  = document.getElementById('popup');
+    var file   = document.getElementById('file');
+    var cancel = document.getElementById('cancel');
+    var input  = document.querySelector('input');
+    cancel.addEventListener('click', function () {
+      popup.style.visibility = 'hidden';
+      term.focus();
+    });
+    // Trap focus into the modal
+    // TODO: handle arrows
+    cancel.addEventListener('keydown', function (e) {
+      if (e.which === 9) {
+          e.preventDefault();
+          file.focus();
+      }
+    });
+    file.addEventListener('keydown', function (e) {
+      if (e.which === 9 && e.shiftKey) {
+          e.preventDefault();
+          cancel.focus();
+      }
+    });
     input.addEventListener('change', function () {
       const file_reader = new FileReader();
       file_reader.onload = function () {
         kubebox.loadKubeConfig(file_reader.result);
+        popup.style.visibility = 'hidden';
         term.focus();
       }
       // TODO: support file references in the kube config (certificates for example)
       file_reader.readAsText(input.files[0], 'utf8');
+    });
+    kubebox.on('kubeConfigImport', function () {
+      popup.style.visibility = 'visible';
+      file.focus();
     });
   </script>
 </body>

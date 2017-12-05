@@ -379,7 +379,6 @@ class KubeConfigManager extends EventEmitter {
       // - http://kubernetes.io/docs/user-guide/kubeconfig-file/
       const url = process.argv[2] || process.env.KUBERNETES_MASTER;
       if (url) {
-        // TODO: use the current context if it matches the URL
         this.current_context = findOrCreateContext(this.contexts, { url });
       } else {
         this.current_context = this.contexts.find(context => context.name === kube_config['current-context']) || Context.default;
@@ -1007,7 +1006,14 @@ class Chart {
       numYLabels    : 5,
     }, options));
 
-    graph.on('attach', () => {
+    graph.on('attach', function () {
+      if (data) {
+        graph.setData(data);
+      }
+    });
+
+    graph.on('resize', function () {
+      graph.resize();
       if (data) {
         graph.setData(data);
       }
@@ -1023,11 +1029,11 @@ class Chart {
       }
     });
 
-    this.message = function (msg) {
-      message = blessed.text({
+    this.message = function (msg, options = {}) {
+      message = blessed.text(Object.assign({
         parent  : graph,
         tags    : true,
-        top     : 'center',
+        top     : '50%-2',
         left    : 'center',
         width   : 'shrink',
         height  : 'shrink',
@@ -1035,7 +1041,7 @@ class Chart {
         valign  : 'middle',
         bg      : 'red',
         content : msg,
-      });
+      }, options));
     };
 
     this.setData = function (d) {
@@ -1064,6 +1070,7 @@ var blessed = require('blessed')
 , utils = require('./utils')
 , x256 = require('x256')
 , _ = require('lodash')
+, InnerCanvas = require('drawille-canvas-blessed-contrib').Canvas
 
 function Line(options) {
 
@@ -1095,6 +1102,12 @@ Line.prototype.calcSize = function() {
 Line.prototype.__proto__ = Canvas.prototype;
 
 Line.prototype.type = 'line';
+
+Line.prototype.resize = function(data) {
+  this.calcSize();
+  this._canvas = new InnerCanvas(this.canvasSize.width, this.canvasSize.height);
+  this.ctx = this._canvas.getContext();
+}
 
 Line.prototype.setData = function(data) {
 
@@ -1303,7 +1316,7 @@ Line.prototype.setData = function(data) {
 
 module.exports = Line
 
-},{"./utils":13,"blessed":"blessed","blessed-contrib":39,"lodash":253,"x256":364}],13:[function(require,module,exports){
+},{"./utils":13,"blessed":"blessed","blessed-contrib":39,"drawille-canvas-blessed-contrib":172,"lodash":253,"x256":364}],13:[function(require,module,exports){
 function getColorCode(color) {
   if (Array.isArray(color) && color.length == 3) {
     return x256(color[0], color[1], color[2]);
@@ -1413,12 +1426,21 @@ class Dashboard {
             screen.render();
           } 
         },
+        'Net': {
+          keys: ['T', 't'],
+          callback: function() {
+            graphs.find(g => g.visible).toggle();
+            net_graph.toggle();
+            screen.render();
+          }
+        },
       }
     });
 
     const memory_graph = new chart(resources, { top: 3, abbreviate: humanBytes });
     const cpu_graph = new chart(resources, { top: 3 });
-    const graphs = [memory_graph, cpu_graph];
+    const net_graph = new chart(resources, { top: 3 });
+    const graphs = [memory_graph, cpu_graph, net_graph];
     graphs.slice(1).forEach(g => g.toggle());
 
     // TODO: enable user scrolling
@@ -1553,9 +1575,7 @@ class Dashboard {
               default:
                 message = 'Resources usage metrics unavailable';
             }
-            // TODO: move message logic outside graphs
-            memory_graph.message(message);
-            cpu_graph.message(message);
+            graphs.forEach(g => g.message(message));
           } else {
             console.error(error.stack);
           }
@@ -1619,14 +1639,48 @@ class Dashboard {
           memory_graph.setData(memory_stats);
           // CPU
           const periods = response.stats.map(s => moment(s.timestamp).format('X')).delta();
+          const cpu_user = {
+            title : 'User',
+            x     : timestamps.slice(1),
+            y     : response.stats.map(s => s.cpu.usage.user).delta().map((d, i) => d / 1000000000 / periods[i]),
+            style : { line: 'cyan' },
+          };
           const cpu_total = {
             title : 'Total',
             x     : timestamps.slice(1),
-            y     : response.stats.map(s => s.cpu.usage.total).delta().map((d, i) => d / 1000000 / periods[i]),
+            y     : response.stats.map(s => s.cpu.usage.total).delta().map((d, i) => d / 1000000000 / periods[i]),
             style : { line: 'blue' },
           };
-          const cpu_stats = [cpu_total];
+          const cpu_stats = [cpu_user, cpu_total];
+          if (response.spec.cpu.quota) {
+            const cpu_limit = {
+              title : 'Limit',
+              x     : timestamps.slice(1),
+              y     : Array(timestamps.length - 1).fill(response.spec.cpu.quota / response.spec.cpu.period),
+              style : { line: 'red' },
+            };
+            cpu_stats.push(cpu_limit);
+          }
           cpu_graph.setData(cpu_stats);
+          // network
+          if (response.spec.has_network) {
+            const net_rx = {
+              title : 'RX',
+              x     : timestamps,
+              y     : response.stats.map(s => s.network.rx_bytes),
+              style : { line: 'green' },
+            };
+            const net_tx = {
+              title : 'TX',
+              x     : timestamps,
+              y     : response.stats.map(s => s.network.tx_bytes),
+              style : { line: 'cyan' },
+            };
+            const net_stats = [net_rx, net_tx];
+            net_graph.setData(net_stats);
+          } else {
+            net_graph.message('Network usage unavailable', { bg: 'yellow' });
+          }
         });
     }
 
@@ -1754,7 +1808,7 @@ module.exports.log = message => new Promise(resolve => {
 const blessed = require('blessed'),
       os      = require('os');
 
-function login_form(kube_config, screen) {
+function login_form(kube_config, screen, kubebox) {
   const form = blessed.form({
     parent : screen,
     name   : 'form',
@@ -1767,12 +1821,13 @@ function login_form(kube_config, screen) {
     height : 10,
     shrink : 'never',
     border : {
-      type : 'line'
+      type : 'line',
     }
   });
 
   form.on('element keypress', (el, ch, key) => {
-    if (key.name === 'enter') {
+    // submit the form on enter for textboxes
+    if (key.name === 'enter' && el.type === 'textbox') {
       form.submit();
     }
   });
@@ -1802,7 +1857,7 @@ function login_form(kube_config, screen) {
     left    : 1,
     top     : 0,
     align   : 'left',
-    content : 'Cluster URL :'
+    content : 'Cluster URL :',
   }); 
 
   const url = blessed.textbox({
@@ -1815,7 +1870,7 @@ function login_form(kube_config, screen) {
     width        : 35,
     left         : 15,
     top          : 0,
-    value        : kube_config.current_context.cluster.server
+    value        : kube_config.current_context.cluster.server,
   });
   // retain key grabbing as text areas reset it after input reading
   url.on('blur', () => form.screen.grabKeys = true);
@@ -1825,7 +1880,7 @@ function login_form(kube_config, screen) {
     left    : 1,
     top     : 2,
     align   : 'left',
-    content : 'Username    :'
+    content : 'Username    :',
   });
 
   const username = blessed.textbox({
@@ -1838,7 +1893,7 @@ function login_form(kube_config, screen) {
     width        : 30,
     left         : 15,
     top          : 2,
-    value        : kube_config.current_context.user.username
+    value        : kube_config.current_context.user.username,
   });
   // retain key grabbing as text areas reset it after input reading
   username.on('blur', () => form.screen.grabKeys = true);
@@ -1848,7 +1903,7 @@ function login_form(kube_config, screen) {
     left    : 1,
     top     : 3,
     align   : 'left',
-    content: 'Password    :'
+    content: 'Password    :',
   });
 
   const password = blessed.textbox({
@@ -1862,7 +1917,7 @@ function login_form(kube_config, screen) {
     left         : 15,
     censor       : true,
     top          : 3,
-    value        : kube_config.current_context.user.password
+    value        : kube_config.current_context.user.password,
   });
   // retain key grabbing as text areas reset it after input reading
   password.on('blur', () => form.screen.grabKeys = true);
@@ -1872,7 +1927,7 @@ function login_form(kube_config, screen) {
     left    : 1,
     top     : 4,
     align   : 'left',
-    content : 'Token       :'
+    content : 'Token       :',
   }); 
 
   const token = blessed.textbox({
@@ -1885,10 +1940,35 @@ function login_form(kube_config, screen) {
     width        : 33,
     left         : 15,
     top          : 4,
-    value        : kube_config.current_context.user.token
+    value        : kube_config.current_context.user.token,
   });
   // retain key grabbing as text areas reset it after input reading
   token.on('blur', () => form.screen.grabKeys = true);
+
+  if (os.platform() === 'browser') {
+    const config = blessed.button({
+      parent  : form,
+      mouse   : true,
+      keys    : true,
+      shrink  : true,
+      padding : {
+        left  : 1,
+        right : 1,
+      },
+      right   : 10,
+      bottom  : 1,
+      content : 'Import...',
+      style   : {
+        focus : {
+          bg : 'grey',
+        },
+        hover : {
+          bg : 'grey',
+        }
+      }
+    });
+    config.on('press', () => kubebox.emit('kubeConfigImport'));
+  }
 
   const login = blessed.button({
     parent  : form,
@@ -1897,14 +1977,17 @@ function login_form(kube_config, screen) {
     shrink  : true,
     padding : {
       left  : 1,
-      right : 1
+      right : 1,
     },
-    left    : 40,
-    top     : 6,
+    right   : 1,
+    bottom  : 1,
     content : 'Log In',
     style   : {
       focus : {
-        bg  : 'grey'
+        bg : 'grey',
+      },
+      hover : {
+        bg : 'grey',
       }
     }
   });
@@ -1924,7 +2007,7 @@ function login_form(kube_config, screen) {
   token.options.inputOnFocus = false;
   url.options.inputOnFocus = false;
 
-  const refresh  = function () {
+  const refresh = function () {
     url.value      = kube_config.current_context.cluster.server || '';
     username.value = kube_config.current_context.user.username || '';
     token.value    = kube_config.current_context.user.token || '';
@@ -1937,22 +2020,27 @@ function login_form(kube_config, screen) {
     username : () => username.value,
     password : () => password.value,
     token    : () => token.value,
-    url      : () => url.value
+    url      : () => url.value,
   };
 }
 
-function prompt(screen, kube_config) {
+function prompt(screen, kube_config, kubebox) {
   return new Promise(function (fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
-    const { form, refresh, username, password, token, url } = login_form(kube_config, screen);
-    kube_config.on('kubeConfigChange', refresh);
+    const { form, refresh, username, password, token, url } = login_form(kube_config, screen, kubebox);
+    const kubeConfigChange = function () {
+      form.resetSelected();
+      form.focus();
+      refresh();
+    };
+    kube_config.on('kubeConfigChange', kubeConfigChange);
     screen.append(form);
     form.focus();
     screen.render();
     // TODO: enable cancelling when already logged
     form.on('submit', data => {
-      kube_config.removeListener('kubeConfigChange', refresh);
+      kube_config.removeListener('kubeConfigChange', kubeConfigChange);
       screen.remove(form);
       screen.restoreFocus();
       screen.grabKeys = false;
@@ -1961,7 +2049,7 @@ function prompt(screen, kube_config) {
         url      : url(),
         username : username(),
         password : password(),
-        token    : token()
+        token    : token(),
       });
     });
   });
@@ -99824,20 +99912,23 @@ module.exports = blessed;
 // TODO: display uncaught exception in a popup
 // TODO: handle current namespace deletion nicely
 
-const Client  = require('./client'),
-      contrib = require('blessed-contrib'),
-      get     = require('./http-then').get,
-      os      = require('os'),
-      URI     = require('urijs');
+const Client       = require('./client'),
+      contrib      = require('blessed-contrib'),
+      EventEmitter = require('events'),
+      get          = require('./http-then').get,
+      os           = require('os'),
+      URI          = require('urijs');
 
 const { Cluster, Context, KubeConfig, Namespace, User } = require('./config/config');
 const { Dashboard, login, namespaces } = require('./ui/ui');
 const { isNotEmpty } = require('./util');
 const { call, wait } = require('./promise');
 
-class Kubebox {
+class Kubebox extends EventEmitter {
 
   constructor(screen) {
+    super();
+    const kubebox = this;
     const { debug, log } = require('./ui/debug');
     const kube_config = new KubeConfig({ debug });
     this.loadKubeConfig = config => kube_config.loadFromConfig(config);
@@ -99910,7 +100001,7 @@ class Kubebox {
     }
 
     function logging() {
-      return login.prompt(screen, kube_config)
+      return login.prompt(screen, kube_config, kubebox)
         // it may be better to reset the dashboard when authentication has succeeded
         .then(call(dashboard.reset))
         .then(updateSessionAfterLogin)
@@ -99967,4 +100058,4 @@ class Kubebox {
 
 module.exports = Kubebox;
 
-},{"./client":1,"./config/config":3,"./http-then":8,"./promise":9,"./ui/debug":15,"./ui/ui":18,"./util":19,"blessed-contrib":39,"os":264,"urijs":354}]},{},[]);
+},{"./client":1,"./config/config":3,"./http-then":8,"./promise":9,"./ui/debug":15,"./ui/ui":18,"./util":19,"blessed-contrib":39,"events":190,"os":264,"urijs":354}]},{},[]);
