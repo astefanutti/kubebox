@@ -1030,6 +1030,7 @@ class Chart {
     });
 
     this.message = function (msg, options = {}) {
+      if (message) message.destroy();
       message = blessed.text(Object.assign({
         parent  : graph,
         tags    : true,
@@ -1487,8 +1488,7 @@ class Dashboard {
       // just to update the table with the new selection
       updatePodsTable(pods_list);
       // reset the selected pod widgets
-      memory_graph.reset();
-      cpu_graph.reset();
+      graphs.forEach(g => g.reset());
       pod_log.reset();
       screen.render();
 
@@ -1701,8 +1701,7 @@ class Dashboard {
       container_selected = null;
       // reset dashboard widgets
       pods_table.setData([]);
-      memory_graph.reset();
-      cpu_graph.reset();
+      graphs.forEach(g => g.reset());
       pod_log.reset();
       // render
       screen.render();
