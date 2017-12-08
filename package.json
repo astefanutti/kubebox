@@ -15,7 +15,7 @@
     "browserify-debug": "browserify --debug -r ./lib/kubebox.js:kubebox -r blessed -i pty.js -i term.js -i map-canvas -i marked-terminal -i picture-tube | exorcist docs/kubebox.js.map > docs/kubebox.js",
     "bundle": "browserify index.js -o bundle.js -i pty.js -i term.js -i map-canvas -i marked-terminal -i picture-tube --bare",
     "executable": "nexe package.json",
-    "http-server": "node_modules/.bin/http-server ./docs -c-1"
+    "online": "http-server ./docs -c-1"
   },
   "pkg": {
     "scripts": "node_modules/blessed/lib/widgets/*.js"
