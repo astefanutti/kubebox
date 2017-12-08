@@ -1814,7 +1814,7 @@ module.exports.log = message => new Promise(resolve => {
 const blessed = require('blessed'),
       os      = require('os');
 
-function login_form(kube_config, screen, kubebox, { closable } = { closable: false }) {
+function login_form(kube_config, screen, kubebox, { closable, message } = { closable: false }) {
   const form = blessed.form({
     parent : screen,
     name   : 'form',
@@ -1824,7 +1824,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
     left   : 'center',
     top    : 'center',
     width  : 53,
-    height : 10,
+    height : 9 + (message ? 2 : 0),
     shrink : 'never',
     border : {
       type : 'line',
@@ -1860,10 +1860,23 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
     }
   });
 
+  let top = 0;
+  if (message) {
+    blessed.text({
+      parent  : form,
+      tags    : true,
+      left    : 1,
+      top     : top++,
+      align   : 'left',
+      content : message,
+    });
+    top++;
+  }
+
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : 0,
+    top     : top,
     align   : 'left',
     content : 'Cluster URL :',
   }); 
@@ -1877,7 +1890,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
     height       : 1,
     width        : 35,
     left         : 15,
-    top          : 0,
+    top          : top++,
     value        : kube_config.current_context.cluster.server,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -1886,7 +1899,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : 2,
+    top     : ++top,
     align   : 'left',
     content : 'Username    :',
   });
@@ -1900,7 +1913,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
     height       : 1,
     width        : 30,
     left         : 15,
-    top          : 2,
+    top          : top++,
     value        : kube_config.current_context.user.username,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -1909,7 +1922,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : 3,
+    top     : top,
     align   : 'left',
     content: 'Password    :',
   });
@@ -1924,7 +1937,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
     width        : 30,
     left         : 15,
     censor       : true,
-    top          : 3,
+    top          : top++,
     value        : kube_config.current_context.user.password,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -1933,7 +1946,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : 4,
+    top     : top,
     align   : 'left',
     content : 'Token       :',
   }); 
@@ -1947,7 +1960,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
     height       : 1,
     width        : 33,
     left         : 15,
-    top          : 4,
+    top          : top,
     value        : kube_config.current_context.user.token,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -1964,7 +1977,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
         right : 1,
       },
       left    : 1,
-      bottom  : 1,
+      bottom  : 0,
       content : 'Import...',
       style   : {
         focus : {
@@ -1989,7 +2002,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
         right : 1,
       },
       right   : 10,
-      bottom  : 1,
+      bottom  : 0,
       content : 'Cancel',
       style   : {
         focus : {
@@ -2013,7 +2026,7 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
       right : 1,
     },
     right   : 1,
-    bottom  : 1,
+    bottom  : 0,
     content : 'Log In',
     style   : {
       focus : {
@@ -2057,12 +2070,12 @@ function login_form(kube_config, screen, kubebox, { closable } = { closable: fal
   };
 }
 
-function prompt(screen, kube_config, kubebox, { closable } = { closable: false }) {
+function prompt(screen, kube_config, kubebox, options) {
   return new Promise(function (fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
 
-    const { form, refresh, username, password, token, url } = login_form(kube_config, screen, kubebox, { closable });
+    const { form, refresh, username, password, token, url } = login_form(kube_config, screen, kubebox, options);
 
     function kubeConfigChange() {
       form.resetSelected();
@@ -100029,12 +100042,11 @@ class Kubebox extends EventEmitter {
         .catch(error => console.error(error.stack));
     }
 
-    function connect(login, options) {
+    function connect(login, options = {}) {
       debug.log(`Connecting to ${client.url} ...`);
       return get(client.get_apis())
         .then(response => client.apis = JSON.parse(response.body.toString('utf8')).paths)
-        .catch(error => debug.log(`Unable to retrieve available APIs: ${error.message}`))
-        .then(_ => current_namespace
+        .then(() => current_namespace
           ? Promise.resolve(current_namespace)
           : namespaces.prompt(screen, client, { promptAfterRequest : true })
             .then(namespace => current_namespace = namespace))
@@ -100048,10 +100060,16 @@ class Kubebox extends EventEmitter {
                     ? log(`Authentication failed for ${client.url}`)
                         // throttle reauthentication
                         .then(wait(1000))
-                        .then(() => logging(options))
+                        .then(() => logging(Object.assign(options, { error })))
                     : Promise.reject(error))
               : logging(options))
-          : Promise.reject(error));
+          : error.message
+            ? log(`Connection failed to ${client.url}`)
+                // throttle reconnection
+                .then(wait(1000))
+                // FIXME: network errors are not consistent in Web browsers compared to Node
+                .then(() => logging(Object.assign(options, { message: `{red-fg}${error.message}{/red-fg}` })))
+            : Promise.reject(error));
     }
 
     function logging(options = { closable: false }) {
