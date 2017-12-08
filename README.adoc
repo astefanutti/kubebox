@@ -45,7 +45,7 @@ image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
 * [x] Namespace selection
 * [x] Pods list watching
 * [x] Pod / container log watching
-* [x] Container resources usage (memory, CPU, network charts)
+* [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires `cluster-admin` permission on OpenShift.]
 * [ ] Container remote exec terminal
 * [ ] Cluster and node views
 
@@ -149,11 +149,22 @@ $ oc create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/open
 |kbd:[l], kbd:[CTRL+l]
 |Login
 
-|kbd:[<-], kbd:[->]
+|kbd:[←], kbd:[→]
 |Navigate screen
 
+|kbd:[↑], kbd:[↓]
+|Navigate list / form
+
+|kbd:[ESC]
+|Close modal window / cancel form
+
 |kbd:[q], kbd:[CTRL+c]
-|Exit
+|Exit footnoteref:[online keys, Not available in online version.]
+
+2+^.e|Login
+
+|kbd:[←], kbd:[→]
+|Navigate Kube configurations
 
 2+^.e|Dashboard
 
