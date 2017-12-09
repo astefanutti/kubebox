@@ -2057,10 +2057,13 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
   url.options.inputOnFocus = false;
 
   const refresh = function () {
+    if (!kube_config.current_context) return;
+
     url.value      = kube_config.current_context.cluster.server || '';
     username.value = kube_config.current_context.user.username || '';
     token.value    = kube_config.current_context.user.token || '';
     password.value = kube_config.current_context.user.password || '';
+
     screen.render();
   }
 
