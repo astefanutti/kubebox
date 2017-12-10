@@ -100057,15 +100057,17 @@ class Kubebox extends EventEmitter {
                     ? log(`Authentication failed for ${client.url}`)
                         // throttle reauthentication
                         .then(wait(1000))
-                        .then(() => logging(Object.assign(options, { error })))
+                        .then(() => logging(Object.assign({}, options, { message: `{red-fg}${error.toString()}{/red-fg}` })))
                     : Promise.reject(error))
               : logging(options))
           : error.message
             ? log(`Connection failed to ${client.url}`)
                 // throttle reconnection
                 .then(wait(1000))
-                // FIXME: network errors are not consistent in Web browsers compared to Node
-                .then(() => logging(Object.assign(options, { message: `{red-fg}${error.message}{/red-fg}` })))
+                .then(() => logging(Object.assign({}, options, { message: os.platform() === 'browser'
+                  // Fetch and XHR API do not expose connection network error details :(
+                  ? `{red-fg}Connection failed to ${client.url}{/red-fg}`
+                  : `{red-fg}${error.message}{/red-fg}` })))
             : Promise.reject(error));
     }
 
