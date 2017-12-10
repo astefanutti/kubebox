@@ -161,6 +161,7 @@
     var input  = document.querySelector('input');
     popup.addEventListener('keydown', function (e) {
       if (e.which === 27) {
+        e.preventDefault();
         popup.style.visibility = 'hidden';
         term.focus();
       }
