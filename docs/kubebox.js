@@ -483,15 +483,9 @@ function readKubeConfigFromLocalStore({ debug }) {
 function writeKubeConfigInLocalStore(kube_config) {
   if (isLocalStorageAvailable()) {
     // TODO: should be serialized as the original YAML Kube config file instead of custom JSON
-    localStorage.setItem('.kube-config', JSON.stringify(kube_config, erasePasswords));
+    localStorage.setItem('.kube-config',
+      JSON.stringify(kube_config, (name, value) => name === 'password' ? '' : value));
   }
-}
-
-function erasePasswords(name, value) {
-  if( name === 'password'){
-    return '';
-  }
-  return value;
 }
 
 function loadContexts(kube_config) {
