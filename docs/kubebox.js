@@ -1783,6 +1783,7 @@ const contrib = require('blessed-contrib');
 
 module.exports.debug = contrib.log({
   label  : 'Debug',
+  tags   : true,
   height : '100%',
   width  : '100%',
   border : 'line',
@@ -100054,14 +100055,14 @@ class Kubebox extends EventEmitter {
               ? authenticate(login)
                   .then(_ => connect(null, options))
                   .catch(error => error.response && error.response.statusCode === 401
-                    ? log(`Authentication failed for ${client.url}`)
+                    ? log(`{red-fg}Authentication failed for ${client.url}{/red-fg}`)
                         // throttle reauthentication
                         .then(wait(1000))
                         .then(() => logging(Object.assign({}, options, { message: `{red-fg}${error.toString()}{/red-fg}` })))
                     : Promise.reject(error))
               : logging(options))
           : error.message
-            ? log(`Connection failed to ${client.url}`)
+            ? log(`{red-fg}Connection failed to ${client.url}{/red-fg}`)
                 // throttle reconnection
                 .then(wait(1000))
                 .then(() => logging(Object.assign({}, options, { message: os.platform() === 'browser'
