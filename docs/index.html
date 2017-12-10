@@ -159,22 +159,31 @@
     var file   = document.getElementById('file');
     var cancel = document.getElementById('cancel');
     var input  = document.querySelector('input');
+    popup.addEventListener('keydown', function (e) {
+      if (e.which === 27) {
+        popup.style.visibility = 'hidden';
+        term.focus();
+      }
+    });
     cancel.addEventListener('click', function () {
       popup.style.visibility = 'hidden';
       term.focus();
     });
-    // Trap focus into the modal
-    // TODO: handle arrows
+    // trap focus into the modal
     cancel.addEventListener('keydown', function (e) {
       if (e.which === 9) {
-          e.preventDefault();
-          file.focus();
+        e.preventDefault();
+        file.focus();
+      } else if (e.which === 38) {
+        file.focus();
       }
     });
     file.addEventListener('keydown', function (e) {
       if (e.which === 9 && e.shiftKey) {
-          e.preventDefault();
-          cancel.focus();
+        e.preventDefault();
+        cancel.focus();
+      } else if (e.which === 40) {
+        cancel.focus();
       }
     });
     input.addEventListener('change', function () {
