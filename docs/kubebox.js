@@ -488,7 +488,7 @@ function writeKubeConfigInLocalStore(kube_config) {
 }
 
 function erasePasswords(name, value) {
-  if( name === 'password') {
+  if( name === 'password'){
     return '';
   }
   return value;
@@ -558,14 +558,11 @@ function findOrCreateContext(contexts, { url, username, namespace/*, ...login*/ 
 
 function findContextsByClusterUrl(contexts, url) {
   const uri = URI(url);
-  let matches = contexts.filter(context => URI(context.cluster.server).hostname() === uri.hostname());
-  if (matches.length > 1) {
-    matches = matches.filter(item => {
-      const server = URI(item.cluster.server);
-      return server.protocol() === uri.protocol() && server.port() === uri.port();
-    });
-  }
-  return matches;
+  const port = uri.protocol() === 'https' ? '443' : '80';
+  return contexts.filter(context => {
+    const u = URI(context.cluster.server);
+    return u.hostname() === uri.hostname() && u.protocol() === uri.protocol() && u.port() === (uri.port() || port);
+  });
 }
 
 module.exports = KubeConfigManager;
