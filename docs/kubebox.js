@@ -1806,9 +1806,8 @@ module.exports.log = message => new Promise(resolve => {
 const blessed = require('blessed'),
       os      = require('os');
 
-function login_form(kube_config, screen, kubebox, { closable, message } = { closable: false }) {
+function login_form(kube_config, kubebox, { closable } = { closable: false }) {
   const form = blessed.form({
-    parent : screen,
     name   : 'form',
     keys   : true,
     mouse  : true,
@@ -1816,8 +1815,8 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
     left   : 'center',
     top    : 'center',
     width  : 53,
-    height : 9 + (message ? 2 : 0),
-    shrink : 'never',
+    height : 9,
+    shrink : false,
     border : {
       type : 'line',
     }
@@ -1855,23 +1854,10 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
     }
   });
 
-  let top = 0;
-  if (message) {
-    blessed.text({
-      parent  : form,
-      tags    : true,
-      left    : 1,
-      top     : top++,
-      align   : 'left',
-      content : message,
-    });
-    top++;
-  }
-
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : top,
+    bottom  : 6,
     align   : 'left',
     content : 'Cluster URL :',
   }); 
@@ -1885,7 +1871,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
     height       : 1,
     width        : 35,
     left         : 15,
-    top          : top++,
+    bottom       : 6,
     value        : kube_config.current_context.cluster.server,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -1894,7 +1880,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : ++top,
+    bottom  : 4,
     align   : 'left',
     content : 'Username    :',
   });
@@ -1908,7 +1894,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
     height       : 1,
     width        : 30,
     left         : 15,
-    top          : top++,
+    bottom       : 4,
     value        : kube_config.current_context.user.username,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -1917,7 +1903,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : top,
+    bottom  : 3,
     align   : 'left',
     content: 'Password    :',
   });
@@ -1932,7 +1918,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
     width        : 30,
     left         : 15,
     censor       : true,
-    top          : top++,
+    bottom       : 3,
     value        : kube_config.current_context.user.password,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -1941,7 +1927,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
   blessed.text({
     parent  : form,
     left    : 1,
-    top     : top,
+    bottom  : 2,
     align   : 'left',
     content : 'Token       :',
   }); 
@@ -1955,7 +1941,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
     height       : 1,
     width        : 33,
     left         : 15,
-    top          : top,
+    bottom       : 2,
     value        : kube_config.current_context.user.token,
   });
   // retain key grabbing as text areas reset it after input reading
@@ -2056,7 +2042,7 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
     token.value    = kube_config.current_context.user.token || '';
     password.value = kube_config.current_context.user.password || '';
 
-    screen.render();
+    form.screen.render();
   }
 
   return {
@@ -2068,12 +2054,12 @@ function login_form(kube_config, screen, kubebox, { closable, message } = { clos
   };
 }
 
-function prompt(screen, kube_config, kubebox, options) {
+function prompt(screen, kube_config, kubebox, { closable, message }) {
   return new Promise(function (fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
 
-    const { form, refresh, username, password, token, url } = login_form(kube_config, screen, kubebox, options);
+    const { form, refresh, username, password, token, url } = login_form(kube_config, kubebox, { closable });
 
     function kubeConfigChange() {
       form.resetSelected();
@@ -2107,6 +2093,22 @@ function prompt(screen, kube_config, kubebox, options) {
     screen.append(form);
     form.focus();
     screen.render();
+
+    if (message) {
+      const text = blessed.text({
+        parent  : form,
+        tags    : true,
+        left    : 1,
+        right   : 1,
+        top     : 0,
+        align   : 'left',
+        height  : 'shrink',
+        content : message,
+      });
+      text.render();
+      form.height += text.lpos.yl - text.lpos.yi + 1;
+      screen.render();
+    }
   });
 }
 
