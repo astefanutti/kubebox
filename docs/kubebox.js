@@ -100028,7 +100028,7 @@ class Kubebox extends EventEmitter {
       {
         screen      : screen,
         interval    : 0,
-        controlKeys : true
+        controlKeys : true,
       }
     );
     carousel.start();
@@ -100079,7 +100079,7 @@ class Kubebox extends EventEmitter {
         // it may be better to reset the dashboard when authentication has succeeded
         .then(call(dashboard.reset))
         .then(updateSessionAfterLogin)
-        .then(login => connect(login, options));
+        .then(login => connect(login, Object.assign(options, { closable: false })));
     }
 
     function authenticate(login) {
