@@ -100060,7 +100060,7 @@ class Kubebox extends EventEmitter {
                     ? log(`{red-fg}Authentication failed for ${client.url}{/red-fg}`)
                         // throttle reauthentication
                         .then(wait(1000))
-                        .then(() => logging(Object.assign({}, options, { message: `{red-fg}${error.toString()}{/red-fg}` })))
+                        .then(() => logging(Object.assign({}, options, { message: `{red-fg}Authentication failed for ${client.url}{/red-fg}` })))
                     : Promise.reject(error))
               : logging(options))
           : error.message
