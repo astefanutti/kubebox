@@ -333,9 +333,7 @@ class Context {
 }
 
 function getBaseMasterApi(url) {
-  const { protocol, hostname, port } = URI.parse(url);
   const api = {
-    protocol : protocol + ':', hostname, port,
     headers  : {
       'Accept' : 'application/json, text/plain, */*',
     },
@@ -346,12 +344,20 @@ function getBaseMasterApi(url) {
       return `${this.protocol}//${this.hostname}${skipPort ? '' : `:${this.port}`}`;
     },
     set url(url) {
-      const { protocol, hostname, port } = URI.parse(url);
+      const uri = URI.parse(url);
+      let parts = {};
+      if (uri.protocol) {
+        parts = uri;
+      } else {
+        URI.parseHost(url, parts);
+      }
+      const { protocol = 'https', hostname, port } = parts;
       this.protocol = protocol + ':';
       this.hostname = hostname;
       this.port     = port;
     }
   }
+  api.url = url;
   return api;
 }
 
@@ -572,7 +578,10 @@ function findOrCreateContext(contexts, { url, username, namespace/*, ...login*/ 
 }
 
 function findContextsByClusterUrl(contexts, url) {
-  const uri = URI(url);
+  let uri = URI(url);
+  if (!uri.protocol()) {
+    uri = URI(`https://${url}`);
+  }
   const port = uri.protocol() === 'https' ? '443' : '80';
   return contexts.filter(context => {
     const u = URI(context.cluster.server);
@@ -661,7 +670,7 @@ module.exports.get = function (options, generator, async = true) {
 // we may want to support cancellation of the returned pending promise
 function getBody(options) {
   return new Promise((resolve, reject) => {
-    const client = (options.protocol || 'http').startsWith('https') ? https : http;
+    const client = (options.protocol || 'https').startsWith('https') ? https : http;
     client.get(options, response => {
       if (response.statusCode >= 400) {
         const error = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
@@ -687,7 +696,7 @@ function getWebSocketStream(options, generator, async = true) {
   let cancellation = Function.prototype;
   const promise = new Promise((resolve, reject) => {
     const url = new URI(options.path)
-      .protocol((options.protocol || 'http').startsWith('https') ? 'wss' : 'ws')
+      .protocol((options.protocol || 'https').startsWith('https') ? 'wss' : 'ws')
       .hostname(options.hostname)
       .port(options.port);
     if (options.headers['Authorization']) {
@@ -748,7 +757,7 @@ function getStream(options, generator, async = true) {
   let cancellation = Function.prototype;
   const promise = new Promise((resolve, reject) => {
     let clientAbort, serverAbort;
-    const client = (options.protocol || 'http').startsWith('https') ? https : http;
+    const client = (options.protocol || 'https').startsWith('https') ? https : http;
     const request = client.get(options)
       .on('error', error => {
         // FIXME: check the state of the connection and the promise
