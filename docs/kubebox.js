@@ -29,8 +29,23 @@ class Client {
     return this.master_api.url;
   }
 
+  set url(url) {
+    this.master_api.url = url;
+  }
+
   get openshift() {
     return this.apis.some(path => path === '/oapi' || path === '/oapi/v1');
+  }
+
+  get_api() {
+    const apis = merge({
+      path   : '/api',
+      method : 'GET',
+    },
+    this.master_api);
+    // This is an unauthenticated request
+    delete apis.headers['Authorization'];
+    return apis;
   }
 
   get_apis() {
@@ -322,13 +337,19 @@ function getBaseMasterApi(url) {
   const api = {
     protocol : protocol + ':', hostname, port,
     headers  : {
-      'Accept' : 'application/json, text/plain, */*'
+      'Accept' : 'application/json, text/plain, */*',
     },
     get url() {
       // Do not report default ports as it can cause non matching redirection URLs
       // during OAuth authentication
       const skipPort = !this.port || this.protocol === 'http:' && this.port === '80' || this.protocol === 'https:' && this.port === '443';
       return `${this.protocol}//${this.hostname}${skipPort ? '' : `:${this.port}`}`;
+    },
+    set url(url) {
+      const { protocol, hostname, port } = URI.parse(url);
+      this.protocol = protocol + ':';
+      this.hostname = hostname;
+      this.port     = port;
     }
   }
   return api;
@@ -100043,8 +100064,13 @@ class Kubebox extends EventEmitter {
     }
 
     function connect(login, options = {}) {
-      debug.log(`Connecting to ${client.url} ...`);
-      return get(client.get_apis())
+      if (login) debug.log(`Connecting to ${client.url} ...`);
+      return get(client.get_api())
+        // update the master URL based on federation information
+        // TODO: select the server whose client CIDR matches the client IP
+        .then(response => client.url = `${client.master_api.protocol}//${JSON.parse(response.body.toString('utf8')).serverAddressByClientCIDRs[0].serverAddress}`)
+        .then(() => login ? log(`{green-fg}Connected to {bold}${client.url}{/bold}{/green-fg}`) : '')
+        .then(() => get(client.get_apis()))
         .then(response => client.apis = JSON.parse(response.body.toString('utf8')).paths)
         .then(() => current_namespace
           ? Promise.resolve(current_namespace)
@@ -100055,7 +100081,8 @@ class Kubebox extends EventEmitter {
           ? log(`Authentication required for ${client.url}`)
             .then(() => login
               ? authenticate(login)
-                  .then(_ => connect(null, options))
+                  .then(user => log(`{green-fg}Authenticated as {bold}${user.metadata.name}{/bold}{/green-fg}`))
+                  .then(() => connect(null, options))
                   .catch(error => error.response && error.response.statusCode === 401
                     ? log(`{red-fg}Authentication failed for ${client.url}{/red-fg}`)
                         // throttle reauthentication
