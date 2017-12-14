@@ -1589,7 +1589,7 @@ class Dashboard {
       const { promise, cancellation } = get(client.follow_log(namespace, name, { container: container_selected }), { stream: logger });
       cancellations.add('dashboard.pod.logs', cancellation);
       promise
-        .then(() => debug.log(`Following log for ${pod_selected}/${container_selected} ...`))
+        .then(() => debug.log(`{grey-fg}Following log for ${pod_selected}/${container_selected} ...{/grey-fg}`))
         .then(() => pod_log.setLabel(`Logs {grey-fg}[${container_selected}]{/grey-fg}`))
         .then(() => screen.render())
         .catch(error => console.error(error.stack));
@@ -1757,7 +1757,7 @@ class Dashboard {
           pods_list.items = pods_list.items || [];
         })
         .then(() => updatePodsTable(pods_list))
-        .then(() => debug.log(`Watching for pods changes in namespace ${current_namespace} ...`))
+        .then(() => debug.log(`{grey-fg}Watching for pods changes in namespace ${current_namespace} ...{/grey-fg}`))
         .then(() => screen.render())
         .then(() => {
           const id = setInterval(refreshPodAges, 1000);
