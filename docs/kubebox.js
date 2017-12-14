@@ -655,23 +655,24 @@ const http  = require('http'),
       os    = require('os'),
       URI   = require('urijs');
 
-module.exports.get = function (options, generator, async = true) {
-  if (generator) {
+module.exports.get = function (options, { stream, async = true, cancellable = false } = {}) {
+  if (stream) {
     if (os.platform() === 'browser' && WebSocket) {
-      return getWebSocketStream(options, generator, async);
+      return getWebSocketStream(options, stream, async);
     } else {
-      return getStream(options, generator, async);
+      return getStream(options, stream, async);
     }
   } else {
-    return getBody(options);
+    return getBody(options, cancellable);
   }
 };
 
-// we may want to support cancellation of the returned pending promise
-function getBody(options) {
-  return new Promise((resolve, reject) => {
+function getBody(options, cancellable = false) {
+  let cancellation = Function.prototype;
+  const promise = new Promise((resolve, reject) => {
     const client = (options.protocol || 'https').startsWith('https') ? https : http;
-    client.get(options, response => {
+    let clientAbort, finished;
+    const request = client.get(options, response => {
       if (response.statusCode >= 400) {
         const error = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
         // standard promises don't handle multi-parameters reject callbacks
@@ -686,10 +687,23 @@ function getBody(options) {
         .on('data', chunk => body.push(chunk))
         .on('end', () => {
           response.body = Buffer.concat(body);
+          finished = true;
           resolve(response);
         });
-    }).on('error', reject);
-  })
+    }).on('error', error => {
+      finished = true;
+      // 'Error: socket hang up' may be thrown on abort
+      if (!clientAbort) reject(error);
+    });
+    cancellation  = () => {
+      if (!finished) {
+        clientAbort = true;
+        request.abort();
+        return true;
+      }
+    };
+  });
+  return cancellable ? { promise, cancellation: () => cancellation() } : promise;
 }
 
 function getWebSocketStream(options, generator, async = true) {
@@ -1554,13 +1568,13 @@ class Dashboard {
             } else {
               // TODO: max number of retries window
               // re-follow log from the latest timestamp received
-              const { promise, cancellation } = get(client.follow_log(namespace, name, { container: container_selected, sinceTime: timestamp }), timestamp
+              const { promise, cancellation } = get(client.follow_log(namespace, name, { container: container_selected, sinceTime: timestamp }), { stream: timestamp
                 ? function*() {
                   // sub-second info from the 'sinceTime' parameter are not taken into account
                   // so just strip the info and add a 'startsWith' check to avoid duplicates
                   yield* logger(timestamp.substring(0, timestamp.indexOf('.')));
                 }
-                : logger);
+                : logger });
               cancellations.add('dashboard.pod.logs', cancellation);
               return promise.then(() => debug.log(`Following log for ${pod_selected}/${container_selected} ...`));
             }
@@ -1572,7 +1586,7 @@ class Dashboard {
           });
       };
 
-      const { promise, cancellation } = get(client.follow_log(namespace, name, { container: container_selected }), logger);
+      const { promise, cancellation } = get(client.follow_log(namespace, name, { container: container_selected }), { stream: logger });
       cancellations.add('dashboard.pod.logs', cancellation);
       promise
         .then(() => debug.log(`Following log for ${pod_selected}/${container_selected} ...`))
@@ -1750,7 +1764,7 @@ class Dashboard {
           cancellations.add('dashboard.refreshPodAges', () => clearInterval(id));
         })
         .then(() => {
-          const { promise, cancellation } = get(client.watch_pods(current_namespace, pods_list.metadata.resourceVersion), updatePodTable);
+          const { promise, cancellation } = get(client.watch_pods(current_namespace, pods_list.metadata.resourceVersion), { stream: updatePodTable });
           cancellations.add('dashboard', cancellation);
           return promise;
         });
@@ -100004,6 +100018,7 @@ const Client       = require('./client'),
       EventEmitter = require('events'),
       get          = require('./http-then').get,
       os           = require('os'),
+      task         = require('./task'),
       URI          = require('urijs');
 
 const { Cluster, Context, KubeConfig, Namespace, User } = require('./config/config');
@@ -100016,6 +100031,7 @@ class Kubebox extends EventEmitter {
   constructor(screen) {
     super();
     const kubebox = this;
+    const cancellations = new task.Cancellations();
     const { debug, log } = require('./ui/debug');
     const kube_config = new KubeConfig({ debug });
     this.loadKubeConfig = config => kube_config.loadFromConfig(config);
@@ -100074,7 +100090,11 @@ class Kubebox extends EventEmitter {
 
     function connect(login, options = {}) {
       if (login) debug.log(`Connecting to ${client.url} ...`);
-      return get(client.get_api())
+      const { promise, cancellation } = get(client.get_api(), { cancellable: true });
+      cancellations.add('connect', () => {
+        if (cancellation()) debug.log(`{grey-fg}Cancelled connection to ${client.url}{/grey-fg}`);
+      });
+      return promise
         // update the master URL based on federation information
         // TODO: select the server whose client CIDR matches the client IP
         .then(response => client.url = `${client.master_api.protocol}//${JSON.parse(response.body.toString('utf8')).serverAddressByClientCIDRs[0].serverAddress}`)
@@ -100112,8 +100132,11 @@ class Kubebox extends EventEmitter {
 
     function logging(options = { closable: false }) {
       return login.prompt(screen, kube_config, kubebox, options)
-        // it may be better to reset the dashboard when authentication has succeeded
-        .then(call(dashboard.reset))
+      .then(call(_ => {
+          cancellations.run('connect');
+          // it may be better to reset the dashboard when authentication has succeeded
+          dashboard.reset();
+        }))
         .then(updateSessionAfterLogin)
         .then(login => connect(login, Object.assign(options, { closable: false })));
     }
@@ -100161,4 +100184,4 @@ class Kubebox extends EventEmitter {
 
 module.exports = Kubebox;
 
-},{"./client":1,"./config/config":3,"./http-then":8,"./promise":9,"./ui/debug":15,"./ui/ui":18,"./util":19,"blessed-contrib":39,"events":190,"os":264,"urijs":354}]},{},[]);
+},{"./client":1,"./config/config":3,"./http-then":8,"./promise":9,"./task":10,"./ui/debug":15,"./ui/ui":18,"./util":19,"blessed-contrib":39,"events":190,"os":264,"urijs":354}]},{},[]);
