@@ -1542,6 +1542,7 @@ class Dashboard {
       // just to update the table with the new selection
       updatePodsTable(pods_list);
       // reset the selected pod widgets
+      resources.setLabel('Resources');
       graphs.forEach(g => g.reset());
       pod_log.reset();
       screen.render();
@@ -1576,6 +1577,7 @@ class Dashboard {
             if (pod.status.phase !== 'Running') return;
             // check if the pod is not terminating
             if (pod.metadata.deletionTimestamp) {
+              resources.setLabel(`Resources {grey-fg}[${container_selected}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
               pod_log.setLabel(`Logs {grey-fg}[${container_selected}]{/grey-fg} {red-fg}TERMINATING{/red-fg}`);
             } else {
               // TODO: max number of retries window
@@ -1620,6 +1622,7 @@ class Dashboard {
           cancellations.add('dashboard.pod.stats', () => clearInterval(id));
         })
         .catch(error => {
+          resources.setLabel('Resources');
           if (error.response) {
             let message;
             switch (error.response.statusCode) {
@@ -1755,6 +1758,7 @@ class Dashboard {
       container_selected = null;
       // reset dashboard widgets
       pods_table.setData([]);
+      resources.setLabel('Resources');
       graphs.forEach(g => g.reset());
       pod_log.reset();
       // render
