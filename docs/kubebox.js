@@ -1862,7 +1862,7 @@ module.exports.log = message => new Promise(resolve => {
 const blessed = require('blessed'),
       os      = require('os');
 
-function login_form(kube_config, kubebox, { closable } = { closable: false }) {
+function login_form(kube_config, kubebox, { closable, server } = { closable: false }) {
   const form = blessed.form({
     name   : 'form',
     keys   : true,
@@ -1871,7 +1871,7 @@ function login_form(kube_config, kubebox, { closable } = { closable: false }) {
     left   : 'center',
     top    : 'center',
     width  : 53,
-    height : 9,
+    height : server ? 7 : 9,
     shrink : false,
     border : {
       type : 'line',
@@ -1911,6 +1911,8 @@ function login_form(kube_config, kubebox, { closable } = { closable: false }) {
   });
 
   blessed.text({
+    // hide the URL input when a server URL is already provided
+    hidden  : server,
     parent  : form,
     left    : 1,
     bottom  : 6,
@@ -1919,6 +1921,8 @@ function login_form(kube_config, kubebox, { closable } = { closable: false }) {
   }); 
 
   const url = blessed.textbox({
+    // hide the URL input when a server URL is already provided
+    hidden       : server,
     parent       : form,
     name         : 'url',
     inputOnFocus : true,
@@ -2106,16 +2110,16 @@ function login_form(kube_config, kubebox, { closable } = { closable: false }) {
     username : () => username.value,
     password : () => password.value,
     token    : () => token.value,
-    url      : () => url.value,
+    url      : () => server || url.value,
   };
 }
 
-function prompt(screen, kube_config, kubebox, { closable, message }) {
+function prompt(screen, kube_config, kubebox, { closable, message, server }) {
   return new Promise(function (fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
 
-    const { form, refresh, username, password, token, url } = login_form(kube_config, kubebox, { closable });
+    const { form, refresh, username, password, token, url } = login_form(kube_config, kubebox, { closable, server });
 
     function kubeConfigChange() {
       form.resetSelected();
@@ -2169,6 +2173,7 @@ function prompt(screen, kube_config, kubebox, { closable, message }) {
 }
 
 module.exports.prompt = prompt;
+
 }).call(this,require('_process'))
 },{"_process":253,"blessed":"blessed","os":229}],17:[function(require,module,exports){
 (function (process){
@@ -100985,7 +100990,7 @@ const { call, wait } = require('./promise');
 
 class Kubebox extends EventEmitter {
 
-  constructor(screen) {
+  constructor(screen, server) {
     super();
     const kubebox = this;
     const cancellations = new task.Cancellations();
@@ -101015,7 +101020,7 @@ class Kubebox extends EventEmitter {
         .catch(error => console.error(error.stack));
     });
 
-    screen.key(['l', 'C-l'], (ch, key) => logging({ closable: true })
+    screen.key(['l', 'C-l'], (ch, key) => logging({ closable: true, server })
       .catch(error => console.error(error.stack)));
 
     const carousel = new contrib.carousel(
@@ -101038,10 +101043,10 @@ class Kubebox extends EventEmitter {
 
     // TODO: display login prompt with message on error
     if (typeof client.master_api !== 'undefined') {
-      connect(kube_config.current_context.user)
+      connect(kube_config.current_context.user, { server })
         .catch(error => console.error(error.stack));
     } else {
-      logging()
+      logging({ closable: false, server })
         .catch(error => console.error(error.stack));
     }
 

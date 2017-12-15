@@ -45,7 +45,7 @@ image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
 * [x] Namespace selection
 * [x] Pods list watching
 * [x] Pod / container log watching
-* [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires `cluster-admin` permission on OpenShift.]
+* [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires `cluster-admin` role on OpenShift.]
 * [ ] Container remote exec terminal
 * [ ] Cluster and node views
 
@@ -119,9 +119,13 @@ $ minishift openshift config set --patch '{"corsAllowedOrigins": [".*"]}'
 
 === On Premises
 
+Kubebox can be served from a container deployed in a Kubernetes cluster whose address to connect to is pre-configured during the deployment.
+Note that the externally-reachable host name that routes to the Kubebox service is required to match the allowed origins for CORS by the API server.
+
 ==== Kubernetes
 
 ```sh
+# Replace the ROUTE_HOSTNAME and the KUBERNETES_MASTER variables
 $ kubectl create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
@@ -135,7 +139,9 @@ $ minikube addons enable ingress
 ==== OpenShift
 
 ```sh
-$ oc create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/openshift.yaml
+$ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/openshift.yaml \
+  -p ROUTE_HOSTNAME=<HOST> \
+  -p OPENSHIFT_MASTER=<URL>
 ```
 
 == Commands

@@ -1,52 +1,68 @@
 apiVersion: v1
-kind: Service
+kind: Template
 metadata:
   name: kubebox
-  labels:
-    template: kubebox
-spec:
-  ports:
-    - name: kubebox
-      protocol: TCP
-      port: 8080
-      targetPort: 8080
-      nodePort: 0
-  selector:
+parameters:
+- name: ROUTE_HOSTNAME
+  description: The externally-reachable host name that routes to the Kubebox service
+  required: false
+- name: OPENSHIFT_MASTER
+  description: The cluster Master API address
+  required: true
+message: |-
+  Kubebox is deployed at ${ROUTE_HOSTNAME}.
+objects:
+- apiVersion: v1
+  kind: Service
+  metadata:
     name: kubebox
-  type: ClusterIP
-  sessionAffinity: None
----
-apiVersion: v1
-kind: Route
-metadata:
-  name: kubebox
-spec:
-  to:
-    kind: Service
+    labels:
+      template: kubebox
+  spec:
+    ports:
+      - name: kubebox
+        protocol: TCP
+        port: 8080
+        targetPort: 8080
+        nodePort: 0
+    selector:
+      name: kubebox
+    type: ClusterIP
+    sessionAffinity: None
+- apiVersion: v1
+  kind: Route
+  metadata:
     name: kubebox
-  tls:
-    insecureEdgeTerminationPolicy: Redirect
-    termination: edge
----
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: kubebox
-spec:
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
+  spec:
+    host: ${ROUTE_HOSTNAME}
+    to:
+      kind: Service
       name: kubebox
-  template:
-    metadata:
-      name: kubebox
-      labels:
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    name: kubebox
+  spec:
+    strategy:
+      type: Recreate
+    selector:
+      matchLabels:
         name: kubebox
-    spec:
-      containers:
-      - image: astefanutti/kubebox:server
+    template:
+      metadata:
         name: kubebox
-        ports:
-        - containerPort: 8080
-          protocol: TCP
+        labels:
+          name: kubebox
+      spec:
+        containers:
+        - image: astefanutti/kubebox:server
+          name: kubebox
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          env:
+          - name: KUBEBOX_MASTER_API
+            value: ${OPENSHIFT_MASTER}

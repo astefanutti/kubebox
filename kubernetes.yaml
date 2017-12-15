@@ -26,7 +26,8 @@ metadata:
     ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
-  - http:
+  - host: ${ROUTE_HOSTNAME}
+    http:
       paths:
       - path: /
         backend:
@@ -55,3 +56,6 @@ spec:
         ports:
         - containerPort: 8080
           protocol: TCP
+        env:
+        - name: KUBEBOX_MASTER_API
+          value: ${KUBERNETES_MASTER}

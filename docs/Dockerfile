@@ -4,15 +4,22 @@ ENV NODE_ENV production
 
 WORKDIR /kubebox
 
+# Client
 COPY xterm xterm/
 COPY kubebox.js ./
 COPY FiraCode-Regular.woff2 ./
 COPY index.html ./
 
+# Server
+COPY package.json ./
+COPY server.js ./
+
 RUN chown -R node:node /kubebox
 
-RUN npm install -g http-server
+RUN npm install express
 
 USER node
 
-CMD ["http-server", "-s"]
+EXPOSE 8080
+
+CMD ["node", "server.js"]
