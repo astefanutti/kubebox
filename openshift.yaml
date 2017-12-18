@@ -13,11 +13,25 @@ message: |-
   Kubebox is deployed at ${ROUTE_HOSTNAME}.
 objects:
 - apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: kubebox
+    labels:
+      app: kubebox
+  spec:
+    tags:
+    - from:
+        kind: DockerImage
+        name: docker.io/astefanutti/kubebox:server
+      importPolicy:
+        scheduled: true
+      name: server
+- apiVersion: v1
   kind: Service
   metadata:
     name: kubebox
     labels:
-      template: kubebox
+      app: kubebox
   spec:
     ports:
       - name: kubebox
@@ -26,7 +40,7 @@ objects:
         targetPort: 8080
         nodePort: 0
     selector:
-      name: kubebox
+      app: kubebox
     type: ClusterIP
     sessionAffinity: None
 - apiVersion: v1
@@ -41,24 +55,26 @@ objects:
     tls:
       insecureEdgeTerminationPolicy: Redirect
       termination: edge
-- apiVersion: extensions/v1beta1
-  kind: Deployment
+- apiVersion: v1
+  kind: DeploymentConfig
   metadata:
+    labels:
+      app: kubebox
     name: kubebox
   spec:
+    replicas: 1
     strategy:
       type: Recreate
     selector:
-      matchLabels:
-        name: kubebox
+      app: kubebox
     template:
       metadata:
-        name: kubebox
         labels:
-          name: kubebox
+          app: kubebox
       spec:
         containers:
         - image: astefanutti/kubebox:server
+          imagePullPolicy: Always
           name: kubebox
           ports:
           - containerPort: 8080
@@ -66,3 +82,13 @@ objects:
           env:
           - name: KUBEBOX_MASTER_API
             value: ${OPENSHIFT_MASTER}
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - kubebox
+        from:
+          kind: ImageStreamTag
+          name: kubebox:server
+      type: ImageChange
+    - type: ConfigChange
