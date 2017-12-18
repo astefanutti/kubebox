@@ -153,21 +153,21 @@
 
     // checking the Master API environment variable
     var env = new XMLHttpRequest();
-      env.onreadystatechange = function () {
-        if (this.readyState === 4) {
-          switch (this.status) {
-            case 200:
-              kubebox(JSON.parse(this.responseText).KUBEBOX_MASTER_API);
-              break;
-            case 404:
-              kubebox();
-              break;
-            default:
-              console.log('Error getting Kubebox environment');
-              kubebox();
-          }
+    env.onreadystatechange = function () {
+      if (this.readyState === 4) {
+        switch (this.status) {
+          case 200:
+            kubebox(JSON.parse(this.responseText).KUBEBOX_MASTER_API);
+            break;
+          case 404:
+            kubebox();
+            break;
+          default:
+            console.log('Error getting Kubebox environment');
+            kubebox();
         }
-      };
+      }
+    };
     env.open('GET', '/env');
     env.setRequestHeader('Accept', 'application/json');
     env.send();
