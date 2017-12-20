@@ -1404,6 +1404,7 @@ class Dashboard {
   constructor(screen, client, debug) {
     let current_namespace, pod_selected, container_selected, pods_list = [];
     const cancellations = new task.Cancellations();
+    const dashboard = this;
     const { until } = spinner(screen);
 
     const grid = new contrib.grid({ rows: 12, cols: 12, screen: screen });
@@ -1824,7 +1825,7 @@ class Dashboard {
       }
       // retry the pods list watch request
       cancellations.run('dashboard.refreshPodAges');
-      this.run(current_namespace).catch(error => console.error(error.stack));
+      dashboard.run(current_namespace).catch(error => console.error(error.stack));
     }
 
     function refreshPodAges() {
