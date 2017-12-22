@@ -1407,15 +1407,18 @@ class Dashboard {
     const dashboard = this;
     const { until } = spinner(screen);
 
-    const grid = new contrib.grid({ rows: 12, cols: 12, screen: screen });
-
-    const pods_table = grid.set(0, 0, 6, 6, blessed.listtable, {
+    const pods_table = blessed.listtable({
+      label         : 'Pods',
+      parent        : screen,
+      left          : 0,
+      top           : 0,
+      width         : '50%',
+      height        : '50%',
       border        : 'line',
       align         : 'left',
       keys          : true,
       tags          : true,
       mouse         : true,
-      shrink        : false,
       noCellBorders : true,
       // FIXME: margin isn't incremented for child list in scrollable list table
       scrollbar     : {
@@ -1432,12 +1435,18 @@ class Dashboard {
       }
     });
 
-    const resources = grid.set(0, 6, 6, 6, blessed.box, {
+    const resources = blessed.box({
       label  : 'Resources',
+      parent : screen,
+      left   : '50%',
+      top    : 0,
+      right  : 0,
+      height : '50%',
       tags   : true,
+      border : 'line',
       style  : {
-        border   : { fg: 'white' },
-        text     : 'white',
+        border : { fg: 'white' },
+        text   : 'white',
       },
     });
 
@@ -1495,11 +1504,13 @@ class Dashboard {
     graphs.slice(1).forEach(g => g.toggle());
 
     // TODO: enable user scrolling
-    const pod_log = grid.set(6, 0, 6, 12, contrib.log, {
-      border : 'line',
-      align  : 'left',
+    const pod_log = contrib.log({
       label  : 'Logs',
+      top    : '50%',
+      height : '50%-1',
+      align  : 'left',
       tags   : true,
+      border : 'line',
       style  : {
         border : { fg: 'white' },
       },
@@ -1844,7 +1855,7 @@ const contrib = require('blessed-contrib');
 module.exports.debug = contrib.log({
   label  : 'Debug',
   tags   : true,
-  height : '100%',
+  height : '100%-1',
   width  : '100%',
   border : 'line',
   style  : {
@@ -2321,11 +2332,15 @@ class Spinner {
 }
 
 function until(screen, promise) {
-  let spin, fail;
+  let begin, spin, succeed, fail;
   const spinner = new Spinner();
   const spinned = promise.then(
     (result) => {
       spinner.stop();
+      if (succeed) {
+        succeed('{green-fg}✔{/green-fg}');
+        screen.render();
+      }
       return result;
     },
     (error) => {
@@ -2333,18 +2348,24 @@ function until(screen, promise) {
       if (fail) {
         fail('{red-fg}✖{/red-fg}');
         screen.render();
-        // do not propagate error when there is an explicitly callback
-        // throw error;
-      } else if (spin) {
-        spin('{red-fg}✖{/red-fg}');
-        screen.render();
-        throw error;
       }
+      throw error;
     }
   );
 
+  spinned.begin = function (cb) {
+    cb();
+    screen.render();
+    return spinned;
+  };
+
   spinned.spin = function (cb) {
     spin = cb;
+    return spinned;
+  };
+
+  spinned.succeed = function (cb) {
+    succeed = cb;
     return spinned;
   };
 
@@ -101277,10 +101298,12 @@ module.exports = blessed;
 // TODO: handle current namespace deletion nicely
 
 const Client       = require('./client'),
+      blessed      = require('blessed'),
       contrib      = require('blessed-contrib'),
       EventEmitter = require('events'),
       get          = require('./http-then').get,
       os           = require('os'),
+      spinner      = require('./ui/spinner'),
       task         = require('./task'),
       URI          = require('urijs');
 
@@ -101296,6 +101319,7 @@ class Kubebox extends EventEmitter {
     const kubebox = this;
     const cancellations = new task.Cancellations();
     const { debug, log } = require('./ui/debug');
+    const { until } = spinner(screen);
     const kube_config = new KubeConfig({ debug });
     this.loadKubeConfig = config => kube_config.loadFromConfig(config);
 
@@ -101324,14 +101348,30 @@ class Kubebox extends EventEmitter {
     screen.key(['l', 'C-l'], (ch, key) => logging({ closable: true, server })
       .catch(error => console.error(error.stack)));
 
+    const status = blessed.text({
+      tags    : true,
+      width   : '100%',
+      height  : 1,
+      bottom  : 0,
+      padding : {
+        left  : 1,
+        right : 1,
+      },
+      style : {
+        bg : 'grey',
+      }
+    });
+
     const carousel = new contrib.carousel(
       [
         screen => {
           dashboard.render();
+          screen.append(status);
         },
         screen => {
           screen.append(debug);
           debug.setScrollPerc(100);
+          screen.append(status);
         }
       ],
       {
@@ -101342,7 +101382,6 @@ class Kubebox extends EventEmitter {
     );
     carousel.start();
 
-    // TODO: display login prompt with message on error
     if (typeof client.master_api !== 'undefined') {
       connect(kube_config.current_context.user, { server })
         .catch(error => console.error(error.stack));
@@ -101357,7 +101396,7 @@ class Kubebox extends EventEmitter {
       cancellations.add('connect', () => {
         if (cancellation()) debug.log(`{grey-fg}Cancelled connection to ${client.url}{/grey-fg}`);
       });
-      return promise
+      return until(promise
         // update the master URL based on federation information
         // TODO: select the server whose client CIDR matches the client IP
         .then(response => client.url = `${client.master_api.protocol}//${JSON.parse(response.body.toString('utf8')).serverAddressByClientCIDRs[0].serverAddress}`)
@@ -101368,24 +101407,30 @@ class Kubebox extends EventEmitter {
           ? Promise.resolve(current_namespace)
           : namespaces.prompt(screen, client, { promptAfterRequest : true })
             .then(namespace => current_namespace = namespace))
-        .then(dashboard.run)
+        .then(dashboard.run))
+        .spin(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}...`))
+          .succeed(s => status.setContent(`${s} Connected to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
+          .fail(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
         .catch(error => error.response && [401, 403].includes(error.response.statusCode)
           ? log(`Authentication required for ${client.url}`)
             .then(() => login
-              ? authenticate(login)
-                  .then(user => log(`{green-fg}Authenticated as {bold}${user.metadata.name}{/bold}{/green-fg}`))
-                  .then(() => connect(null, options))
+              ? until(authenticate(login))
+                  .spin(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}...`))
+                    .succeed(s => status.setContent(`${s} Authenticated to {bold}${client.url}{/bold}`))
+                    .fail(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}`))
+                  .then(user => log(`{green-fg}Authenticated as {bold}${user.metadata.name}{/bold}{/green-fg}`)
+                    .then(() => connect(null, Object.assign({}, options, { user: user }))))
                   .catch(error => error.response && error.response.statusCode === 401
                     ? log(`{red-fg}Authentication failed for ${client.url}{/red-fg}`)
                         // throttle reauthentication
-                        .then(wait(1000))
+                        .then(wait(100))
                         .then(() => logging(Object.assign({}, options, { message: `{red-fg}Authentication failed for ${client.url}{/red-fg}` })))
                     : Promise.reject(error))
               : logging(options))
           : error.message
             ? log(`{red-fg}Connection failed to ${client.url}{/red-fg}`)
                 // throttle reconnection
-                .then(wait(1000))
+                .then(wait(100))
                 .then(() => logging(Object.assign({}, options, { message: os.platform() === 'browser'
                   // Fetch and XHR API do not expose connection network error details :(
                   ? `{red-fg}Connection failed to ${client.url}{/red-fg}`
@@ -101401,7 +101446,6 @@ class Kubebox extends EventEmitter {
           dashboard.reset();
         }))
         .then(updateSessionAfterLogin)
-        // TODO: add a modal that displays the connection status
         .then(login => connect(login, Object.assign(options, { closable: false })));
     }
 
@@ -101448,4 +101492,4 @@ class Kubebox extends EventEmitter {
 
 module.exports = Kubebox;
 
-},{"./client":1,"./config/config":3,"./http-then":8,"./promise":9,"./task":10,"./ui/debug":15,"./ui/ui":19,"./util":20,"blessed-contrib":21,"events":205,"os":230,"urijs":348}]},{},[]);
+},{"./client":1,"./config/config":3,"./http-then":8,"./promise":9,"./task":10,"./ui/debug":15,"./ui/spinner":18,"./ui/ui":19,"./util":20,"blessed":"blessed","blessed-contrib":21,"events":205,"os":230,"urijs":348}]},{},[]);
