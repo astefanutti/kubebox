@@ -1425,13 +1425,14 @@ class Dashboard {
         ch    : ' ',
         style : { bg: 'white' },
         track : {
-          style : { bg: 'black' }
+          style : { bg: 'black' },
         }
       },
       style : {
+        label  : { bold: true },
         border : { fg: 'white' },
-        header : { fg: 'blue', bold: true },
-        cell   : { fg: 'white', selected: { bg: 'blue' } }
+        header : { fg: 'grey' },
+        cell   : { fg: 'white', selected: { bg: 'blue' } },
       }
     });
 
@@ -1445,6 +1446,7 @@ class Dashboard {
       tags   : true,
       border : 'line',
       style  : {
+        label  : { bold: true },
         border : { fg: 'white' },
         text   : 'white',
       },
@@ -1512,6 +1514,7 @@ class Dashboard {
       tags   : true,
       border : 'line',
       style  : {
+        label  : { bold: true },
         border : { fg: 'white' },
       },
       bufferLength: 50,
@@ -1860,9 +1863,10 @@ module.exports.debug = contrib.log({
   border : 'line',
   style  : {
     fg     : 'white',
-    border : { fg: 'white' }
+    label  : { bold: true },
+    border : { fg: 'white' },
   },
-  bufferLength : 100
+  bufferLength : 100,
 });
 
 module.exports.log = message => new Promise(resolve => {
@@ -2220,6 +2224,7 @@ function namespaces_list() {
     },
     style : {
       fg       : 'white',
+      label    : { bold: true },
       border   : { fg: 'white' },
       selected : { bg: 'blue' }
     }
