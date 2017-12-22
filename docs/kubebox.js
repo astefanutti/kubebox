@@ -855,12 +855,18 @@ function getStream(options, generator, async = true) {
 
         socket
           .on('data', frame => {
-            const res = gen.next(frame);
-            if (res.done) {
-              socket.end();
-              response.body = res.value;
-              // ignored for async as it's already been resolved
-              resolve(response);
+            // the server may still be sending some data as the socket
+            // is ended, not aborted, on cancel
+            if (!clientAbort) {
+              const res = gen.next(frame);
+              if (res.done) {
+                socket.end();
+                response.body = res.value;
+                // ignored for async as it's already been resolved
+                resolve(response);
+              }
+            } else {
+              gen.return();
             }
           })
           .on('end', () => {
