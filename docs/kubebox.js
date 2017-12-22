@@ -1614,6 +1614,7 @@ class Dashboard {
       cancellations.add('dashboard.pod.logs', cancellation);
       until(promise)
         .spin(s => pod_log.setLabel(`${s} Logs {grey-fg}[${container_selected}]{/grey-fg}`))
+        .cancel(c => cancellations.add('dashboard.pod.logs', c))
         .then(() => debug.log(`{grey-fg}Following log for ${pod_selected}/${container_selected} ...{/grey-fg}`))
         .then(() => pod_log.setLabel(`Logs {grey-fg}[${container_selected}]{/grey-fg}`))
         .then(() => screen.render())
@@ -1621,6 +1622,7 @@ class Dashboard {
 
       until(updateStatsFromCAdvisor(pod, container))
         .spin(s => resources.setLabel(`${s} Resources`))
+        .cancel(c => cancellations.add('dashboard.pod.stats', c))
         .then(() => {
           resources.setLabel(`Resources {grey-fg}[${container.name}]{/grey-fg}`);
           const id = setInterval(pod => updateStatsFromCAdvisor(pod, container)
@@ -1779,14 +1781,15 @@ class Dashboard {
 
     this.run = function (namespace) {
       current_namespace = namespace;
+      // TODO: should ideally be cancellable
       return until(get(client.get_pods(current_namespace)))
         .spin(s => pods_table.setLabel(`${s} Pods`))
+        .succeed(_ =>  pods_table.setLabel('Pods'))
         .then(response => {
           pods_list = JSON.parse(response.body.toString('utf8'));
           pods_list.items = pods_list.items || [];
         })
         .then(() => updatePodsTable(pods_list))
-        .then(() => pods_table.setLabel('Pods'))
         .then(() => debug.log(`{grey-fg}Watching for pods changes in namespace ${current_namespace} ...{/grey-fg}`))
         .then(() => screen.render())
         .then(() => {
@@ -2378,6 +2381,17 @@ function until(screen, promise) {
     fail = cb;
     return spinned;
   };
+
+  spinned.cancel = function (cancel, cb) {
+    cancel(() => {
+      spinner.stop();
+      if (cb) {
+        cb();
+        screen.render();
+      }
+    });
+    return spinned;
+  }
 
   spinner.start(frame => {
     if (spin) {
@@ -101414,6 +101428,7 @@ class Kubebox extends EventEmitter {
             .then(namespace => current_namespace = namespace))
         .then(dashboard.run))
         .spin(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}...`))
+          .cancel(c => cancellations.add('connect', c))
           .succeed(s => status.setContent(`${s} Connected to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
           .fail(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
         .catch(error => error.response && [401, 403].includes(error.response.statusCode)
@@ -101421,6 +101436,7 @@ class Kubebox extends EventEmitter {
             .then(() => login
               ? until(authenticate(login))
                   .spin(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}...`))
+                    .cancel(c => cancellations.add('connect', c))
                     .succeed(s => status.setContent(`${s} Authenticated to {bold}${client.url}{/bold}`))
                     .fail(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}`))
                   .then(user => log(`{green-fg}Authenticated as {bold}${user.metadata.name}{/bold}{/green-fg}`)
