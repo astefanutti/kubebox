@@ -1003,8 +1003,8 @@ class Cancellations {
   // TODO: we may want to support promises as return type for the cancellations
   // and return a promise that resolves when all cancellations resolve
   run(key) {
-    const node = key.split('.').reduce((node, k) => node[k], this.cancellations);
-    if (!node) return;
+    const node = key.split('.').reduce((node, k) => node[k] || {}, this.cancellations);
+    if (!Array.isArray(node)) return;
     // we may want to run the cancellations in reverse order
     node.forEach(cancellation => cancellation());
     node.length = 0;
@@ -1013,6 +1013,11 @@ class Cancellations {
         this.run(key + '.' + child);
       }
     }
+  }
+
+  set(key, cancellation) {
+    this.run(key);
+    this.add(key, cancellation);
   }
 
   // TODO: use a dedicated widget to dump current tasks
@@ -1025,6 +1030,7 @@ class Cancellations {
 }
 
 exports.Cancellations = Cancellations;
+
 },{}],11:[function(require,module,exports){
 const blessed = require('blessed');
 
@@ -1837,9 +1843,9 @@ class Dashboard {
           });
       };
 
-      const { promise, cancellation } = get(client.follow_log(namespace, name, { container: container_selected }), { stream: logger });
-      cancellations.add('dashboard.pod.logs', cancellation);
-      until(promise)
+      const logs = get(client.follow_log(namespace, name, { container: container_selected }), { stream: logger });
+      cancellations.add('dashboard.pod.logs', logs.cancellation);
+      until(logs.promise)
         .spin(s => pod_log.setLabel(`${s} Logs {grey-fg}[${container_selected}]{/grey-fg}`))
         .cancel(c => cancellations.add('dashboard.pod.logs', c))
         .then(() => debug.log(`{grey-fg}Following log for ${pod_selected}/${container_selected} ...{/grey-fg}`))
@@ -1847,19 +1853,24 @@ class Dashboard {
         .then(() => screen.render())
         .catch(error => console.error(error.stack));
 
-      until(updateStatsFromCAdvisor(pod, container))
+      const stats = updateStatsFromCAdvisor(pod, container);
+      cancellations.add('dashboard.pod.stats', stats.cancellation);
+      until(stats.promise)
         .spin(s => resources.setLabel(`${s} Resources`))
         .cancel(c => cancellations.add('dashboard.pod.stats', c))
         .then(() => {
           resources.setLabel(`Resources {grey-fg}[${container.name}]{/grey-fg}`);
-          const id = setInterval(pod => updateStatsFromCAdvisor(pod, container)
-            .catch(error => {
+          const id = setInterval(pod => {
+            const { promise, cancellation } = updateStatsFromCAdvisor(pod, container);
+            cancellations.set('dashboard.pod.stats.poll', cancellation);
+            promise.catch(error => {
               cancellations.run('dashboard.pod.stats');
               // the pod might have already been deleted?
               if (!error.response || error.response.statusCode !== 404) {
                 console.error(error.stack);
               }
-            }), 10000, pod);
+            });
+          }, 10000, pod);
           cancellations.add('dashboard.pod.stats', () => clearInterval(id));
         })
         .catch(error => {
@@ -1898,16 +1909,18 @@ class Dashboard {
     }
 
     function updateStatsFromCAdvisor(pod, container) {
-      let request;
+      let promise, request;
       if (client.openshift) {
-        request = get(client.container_stats(pod.spec.nodeName, pod.metadata.namespace, pod.metadata.name, pod.metadata.uid, container.name))
+        request = get(client.container_stats(pod.spec.nodeName, pod.metadata.namespace, pod.metadata.name, pod.metadata.uid, container.name), { cancellable: true });
+        promise = request.promise
           .then(response => response.body.toString('utf8'))
       } else {
-        request = get(client.cadvisor_container_stats(pod.spec.nodeName, pod.status.containerStatuses.find(c => c.name === container.name).containerID.slice(9)))
+        request = get(client.cadvisor_container_stats(pod.spec.nodeName, pod.status.containerStatuses.find(c => c.name === container.name).containerID.slice(9)), { cancellable: true });
+        promise = request.promise
           .then(response => response.body.toString('utf8'))
           .then(response => response.slice(response.indexOf(':') + 1, -1))
       }
-      return request
+      promise = promise
         .then(response => JSON.parse(response))
         .then(response => {
           const timestamps = response.stats.map(s => moment(s.timestamp).format('HH:mm:ss'));
@@ -1980,6 +1993,7 @@ class Dashboard {
             net_graph.message('Network usage unavailable', { bg: 'yellow' });
           }
         });
+      return { promise, cancellation: request.cancellation };
     }
 
     this.render = function () {
