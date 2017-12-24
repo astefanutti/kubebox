@@ -2602,36 +2602,41 @@ function until(screen, promise) {
     }
   );
 
-  spinned.begin = function (cb) {
+  const api = {
+    then  : spinned.then.bind(spinned),
+    catch : spinned.catch.bind(spinned),
+  };
+
+  api.begin = function (cb) {
     cb();
     screen.render();
-    return spinned;
+    return api;
   };
 
-  spinned.spin = function (cb) {
+  api.spin = function (cb) {
     spin = cb;
-    return spinned;
+    return api;
   };
 
-  spinned.succeed = function (cb) {
+  api.succeed = function (cb) {
     succeed = cb;
-    return spinned;
+    return api;
   };
 
-  spinned.fail = function (cb) {
+  api.fail = function (cb) {
     fail = cb;
-    return spinned;
+    return api;
   };
 
-  spinned.cancel = function (cancel, cb) {
-    cancel(() => {
+  api.cancel = function (supplier, cb) {
+    supplier(() => {
       spinner.stop();
       if (cb) {
         cb();
         screen.render();
       }
     });
-    return spinned;
+    return api;
   }
 
   spinner.start(frame => {
@@ -2641,7 +2646,7 @@ function until(screen, promise) {
     }
   });
 
-  return spinned;
+  return api;
 }
 
 module.exports = screen => ({
