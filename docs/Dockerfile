@@ -6,8 +6,8 @@ WORKDIR /kubebox
 
 # Client
 COPY xterm xterm/
+COPY fonts fonts/
 COPY kubebox.js ./
-COPY FiraCode-Regular.woff2 ./
 COPY index.html ./
 
 # Server
