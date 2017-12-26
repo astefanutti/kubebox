@@ -720,14 +720,17 @@ function getWebSocketStream(options, generator, async = true) {
     const socket = new WebSocket(url.toString(), ['binary.k8s.io']);
     socket.binaryType = 'arraybuffer';
 
-    let clientAbort;
+    let clientAbort, abortState;
     cancellation = () => {
+      abortState = socket.readyState;
       clientAbort = true;
       socket.close();
     };
 
     socket.addEventListener('error', event => {
-      reject(Error(`WebSocket connection failed to ${event.target.url}`));
+      if (!clientAbort || abortState > 0) {
+        reject(Error(`WebSocket connection failed to ${event.target.url}`));
+      }
     });
 
     socket.addEventListener('open', event => {
