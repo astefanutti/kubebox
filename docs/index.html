@@ -25,12 +25,6 @@
       font-style: normal;
     }
 
-    .terminal {
-      font-family: 'Fira Code', Courier New, Courier, monospace;
-      font-variant-ligatures: none;
-      font-size: 12px;
-    }
-
     .overlay {
       position: fixed;
       z-index: 1000;
@@ -124,8 +118,10 @@
 
     var term = new Terminal();
     term.open(document.getElementById('#terminal'), true);
-    term.fit();
+    term.setOption('fontSize', 12)
+    term.setOption('fontFamily', 'Fira Code' )
     term.isTTY = true;
+    term.focus();
 
     var program = blessed.program({ input: term, output: term, tput: false });
 

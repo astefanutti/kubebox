@@ -31,49 +31,36 @@
 })(function (Xterm) {
   var exports = {};
 
-  exports.proposeGeometry = function (term) {
+  function proposeGeometry(term) {
     if (!term.element.parentElement) {
       return null;
     }
-    var parentElementStyle = window.getComputedStyle(term.element.parentElement),
-        parentElementHeight = parseInt(parentElementStyle.getPropertyValue('height')),
-        // Remove reserved space for the scrollbar as Kubebox is full screen
-        parentElementWidth = Math.max(0, parseInt(parentElementStyle.getPropertyValue('width'))),
-        elementStyle = window.getComputedStyle(term.element),
-        elementPaddingVer = parseInt(elementStyle.getPropertyValue('padding-top')) + parseInt(elementStyle.getPropertyValue('padding-bottom')),
-        elementPaddingHor = parseInt(elementStyle.getPropertyValue('padding-right')) + parseInt(elementStyle.getPropertyValue('padding-left')),
-        availableHeight = parentElementHeight - elementPaddingVer,
-        availableWidth = parentElementWidth - elementPaddingHor,
-        container = term.rowContainer,
-        subjectRow = term.rowContainer.firstElementChild,
-        contentBuffer = subjectRow.innerHTML,
-        characterHeight,
-        rows,
-        characterWidth,
-        cols,
-        geometry;
-
-    subjectRow.style.display = 'inline';
-    subjectRow.innerHTML = 'W'; // Common character for measuring width, although on monospace
-    characterWidth = subjectRow.getBoundingClientRect().width;
-    subjectRow.style.display = ''; // Revert style before calculating height, since they differ.
-    characterHeight = subjectRow.getBoundingClientRect().height;
-    subjectRow.innerHTML = contentBuffer;
-
-    rows = parseInt(availableHeight / characterHeight);
-    cols = parseInt(availableWidth / characterWidth);
-
-    geometry = {cols: cols, rows: rows};
+    var parentElementStyle = window.getComputedStyle(term.element.parentElement);
+    var parentElementHeight = parseInt(parentElementStyle.getPropertyValue('height'));
+    var parentElementWidth = Math.max(0, parseInt(parentElementStyle.getPropertyValue('width')));
+    var elementStyle = window.getComputedStyle(term.element);
+    var elementPaddingVer = parseInt(elementStyle.getPropertyValue('padding-top')) + parseInt(elementStyle.getPropertyValue('padding-bottom'));
+    var elementPaddingHor = parseInt(elementStyle.getPropertyValue('padding-right')) + parseInt(elementStyle.getPropertyValue('padding-left'));
+    var availableHeight = parentElementHeight - elementPaddingVer;
+    var availableWidth = parentElementWidth - elementPaddingHor;
+    var geometry = {
+      cols: Math.floor(availableWidth / term.renderer.dimensions.actualCellWidth),
+      rows: Math.floor(availableHeight / term.renderer.dimensions.actualCellHeight)
+    };
     return geometry;
-  };
+  }
+  exports.proposeGeometry = proposeGeometry;
 
-  exports.fit = function (term) {
+  function fit(term) {
     var geometry = exports.proposeGeometry(term);
-
     if (geometry) {
+      if (term.rows !== geometry.rows || term.cols !== geometry.cols) {
+        term.renderer.clear();
       term.resize(geometry.cols, geometry.rows);
     }
-  };
+    }
+  }
+  exports.fit = fit;
 
   Xterm.prototype.proposeGeometry = function () {
     return exports.proposeGeometry(this);
