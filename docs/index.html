@@ -110,6 +110,7 @@
 
   <script>
   var blessed = require('blessed');
+  var get     = require('http-then').get;
   var Kubebox = require('kubebox');
 
   // Should ideally be inherited from require('events').EventEmitter
@@ -132,8 +133,16 @@
   Promise.all([
     new FontFaceObserver('Hack Braille', { weight: 'normal' }).load(),
     new FontFaceObserver('Hack Braille', { weight: 'bold' }).load(),
+    // checking the Master API environment variable
+    get('/env')
+      .then(response => JSON.parse(response.body.toString('utf8')).KUBEBOX_MASTER_API)
+      .catch(error => {
+        if (!error.response || error.response.statusCode !== 404) {
+          console.log('Error getting Kubebox environment');
+        }
+      })
   ])
-  .then(function () {
+  .then(([ , , server]) => {
     var term = new Terminal({
       fontFamily : 'Hack Braille, Courier New, Courier, monospace',
       fontSize   : 12,
@@ -159,79 +168,55 @@
       warnings      : true,
     });
 
-    // checking the Master API environment variable
-    // TODO: should ideally be parallelised during Web fonts loading
-    var env = new XMLHttpRequest();
-    env.onreadystatechange = function () {
-      if (this.readyState === 4) {
-        switch (this.status) {
-          case 200:
-            kubebox(JSON.parse(this.responseText).KUBEBOX_MASTER_API);
-            break;
-          case 404:
-            kubebox();
-            break;
-          default:
-            console.log('Error getting Kubebox environment');
-            kubebox();
-        }
-      }
-    };
-    env.open('GET', '/env');
-    env.setRequestHeader('Accept', 'application/json');
-    env.send();
+    var kubebox = new Kubebox(screen, server);
 
-    function kubebox(url) {
-      var kubebox = new Kubebox(screen, url);
-
-      // Kube config import modal popup
-      var popup  = document.getElementById('popup');
-      var file   = document.getElementById('file');
-      var cancel = document.getElementById('cancel');
-      var input  = document.querySelector('input');
-      popup.addEventListener('keydown', function (e) {
-        if (e.which === 27) {
-          e.preventDefault();
-          popup.style.visibility = 'hidden';
-          term.focus();
-        }
-      });
-      cancel.addEventListener('click', function () {
+    // Kube config import modal popup
+    var popup  = document.getElementById('popup');
+    var file   = document.getElementById('file');
+    var cancel = document.getElementById('cancel');
+    var input  = document.querySelector('input');
+    popup.addEventListener('keydown', function (e) {
+      if (e.which === 27) {
+        e.preventDefault();
         popup.style.visibility = 'hidden';
         term.focus();
-      });
-      // trap focus into the modal
-      cancel.addEventListener('keydown', function (e) {
-        if (e.which === 9) {
-          e.preventDefault();
-          file.focus();
-        } else if (e.which === 38) {
-          file.focus();
-        }
-      });
-      file.addEventListener('keydown', function (e) {
-        if (e.which === 9 && e.shiftKey) {
-          e.preventDefault();
-          cancel.focus();
-        } else if (e.which === 40) {
-          cancel.focus();
-        }
-      });
-      input.addEventListener('change', function () {
-        const file_reader = new FileReader();
-        file_reader.onload = function () {
-          kubebox.loadKubeConfig(file_reader.result);
-          popup.style.visibility = 'hidden';
-          term.focus();
-        }
-        // TODO: support file references in the kube config (certificates for example)
-        file_reader.readAsText(input.files[0], 'utf8');
-      });
-      kubebox.on('kubeConfigImport', function () {
-        popup.style.visibility = 'visible';
+      }
+    });
+    cancel.addEventListener('click', function () {
+      popup.style.visibility = 'hidden';
+      term.focus();
+    });
+    // trap focus into the modal
+    cancel.addEventListener('keydown', function (e) {
+      if (e.which === 9) {
+        e.preventDefault();
         file.focus();
-      });
-    }
+      } else if (e.which === 38) {
+        file.focus();
+      }
+    });
+    file.addEventListener('keydown', function (e) {
+      if (e.which === 9 && e.shiftKey) {
+        e.preventDefault();
+        cancel.focus();
+      } else if (e.which === 40) {
+        cancel.focus();
+      }
+    });
+    input.addEventListener('change', function () {
+      const file_reader = new FileReader();
+      file_reader.onload = function () {
+        kubebox.loadKubeConfig(file_reader.result);
+        popup.style.visibility = 'hidden';
+        term.focus();
+      }
+      // TODO: support file references in the kube config (certificates for example)
+      file_reader.readAsText(input.files[0], 'utf8');
+    });
+    kubebox.on('kubeConfigImport', function () {
+      popup.style.visibility = 'visible';
+      file.focus();
+    });
   });
   </script>
 </body>

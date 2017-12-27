@@ -11,8 +11,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "browserify": "browserify -r ./lib/kubebox.js:kubebox -r blessed -i pty.js -i term.js -i map-canvas -i marked-terminal -i picture-tube -o docs/kubebox.js",
-    "browserify-debug": "browserify --debug -r ./lib/kubebox.js:kubebox -r blessed -i pty.js -i term.js -i map-canvas -i marked-terminal -i picture-tube | exorcist docs/kubebox.js.map > docs/kubebox.js",
+    "browserify": "browserify -r ./lib/kubebox.js:kubebox -r ./lib/http-then.js:http-then -r blessed -i pty.js -i term.js -i map-canvas -i marked-terminal -i picture-tube -o docs/kubebox.js",
+    "browserify-debug": "browserify --debug -r ./lib/kubebox.js:kubebox -r ./lib/http-then.js:http-then -r blessed -i pty.js -i term.js -i map-canvas -i marked-terminal -i picture-tube | exorcist docs/kubebox.js.map > docs/kubebox.js",
     "bundle": "browserify index.js -o bundle.js -i pty.js -i term.js -i map-canvas -i marked-terminal -i picture-tube --bare",
     "executable": "nexe package.json",
     "server": "node ./docs/server.js"
