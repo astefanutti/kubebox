@@ -5,7 +5,7 @@ ENV NODE_ENV production
 WORKDIR /kubebox
 
 # Client
-COPY xterm xterm/
+COPY libs libs/
 COPY fonts fonts/
 COPY kubebox.js ./
 COPY index.html ./

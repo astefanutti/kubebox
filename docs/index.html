@@ -2,12 +2,27 @@
 <html>
 
 <head>
-  <link rel="stylesheet" href="xterm/xterm.css" />
-  <script src="xterm/xterm.js"></script>
-  <script src="xterm/fit.js"></script>
+  <link rel="stylesheet" href="libs/xterm.css" />
+  <script src="libs/fontfaceobserver.js"></script>
+  <script src="libs/xterm.js"></script>
+  <script src="libs/fit.js"></script>
   <script src="kubebox.js"></script>
 
   <style>
+    @font-face {
+      font-family: 'Hack Braille';
+      src: url('fonts/hack-regular-braille.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    @font-face {
+      font-family: 'Hack Braille';
+      src: url('fonts/hack-bold-braille.woff2') format('woff2');
+      font-weight: bold;
+      font-style: normal;
+    }
+
     html {
       height: 100%;
     }
@@ -18,18 +33,9 @@
       background-color: black;
     }
 
-    @font-face {
-      font-family: 'Hack';
-      src: url('fonts/hack-regular-braille.woff2') format('woff2');
-      font-weight: 400;
-      font-style: normal;
-    }
-
-    @font-face {
-      font-family: 'Hack';
-      src: url('fonts/hack-bold-braille.woff2') format('woff2');
-      font-weight: 700;
-      font-style: normal;
+    #terminal {
+      height: 100%;
+      width: 100%;
     }
 
     .overlay {
@@ -51,7 +57,7 @@
       padding: 10px;
       background: #000;
       border:1px solid #fff;
-      font-family: Hack, Courier New, Courier, monospace;
+      font-family: Hack Braille, Courier New, Courier, monospace;
       font-size: 12px;
       color: white;
       box-shadow: 3px 3px 0 0 #aaa;
@@ -85,7 +91,6 @@
     .popup .file + label:hover {
       background-color: grey;
     }
-
   </style>
 </head>
 
@@ -104,35 +109,46 @@
   </div>
 
   <script>
-    var blessed = require('blessed');
-    var Kubebox = require('kubebox');
+  var blessed = require('blessed');
+  var Kubebox = require('kubebox');
 
-    // Should ideally be inherited from require('events').EventEmitter
-    Terminal.prototype.listenerCount = function (type) {
-      return this.listeners(type).length;
-    };
-    Object.defineProperty(Terminal.prototype, 'columns', {
-      get: function () {
-        return this.cols;
-      }
-    });
-    // By-pass Xterm.js event queue as Blessed expect a single event to be sent
-    // to the data handler. This actually happens on iOS with the mouseover and
-    // mouseup events.
-    Terminal.prototype.send = function (data) {
-      this.handler(data);
+  // Should ideally be inherited from require('events').EventEmitter
+  Terminal.prototype.listenerCount = function (type) {
+    return this.listeners(type).length;
+  };
+  Object.defineProperty(Terminal.prototype, 'columns', {
+    get: function () {
+      return this.cols;
     }
+  });
+  // By-pass Xterm.js event queue as Blessed expect a single event to be sent
+  // to the data handler. This actually happens on iOS with the mouseover and
+  // mouseup events.
+  Terminal.prototype.send = function (data) {
+    this.handler(data);
+  }
 
-    var term = new Terminal();
-    term.open(document.getElementById('#terminal'), true);
-    term.setOption('fontSize', 12);
-    term.setOption('fontFamily', 'Hack, Courier New, Courier, monospace' );
+  // TODO: add a spinner while loading resources
+  Promise.all([
+    new FontFaceObserver('Hack Braille', { weight: 'normal' }).load(),
+    new FontFaceObserver('Hack Braille', { weight: 'bold' }).load(),
+  ])
+  .then(function () {
+    var term = new Terminal({
+      fontFamily : 'Hack Braille, Courier New, Courier, monospace',
+      fontSize   : 12,
+    });
     term.isTTY = true;
+    term.open(document.getElementById('terminal'));
     term.focus();
+    term.fit();
+
+    window.onresize = function () {
+      term.fit();
+    };
 
     var program = blessed.program({ input: term, output: term, tput: false });
-
-    var screen = blessed.screen({
+    var screen  = blessed.screen({
       program       : program,
       Terminal      : 'xterm-256color',
       resizeTimeout : 10,
@@ -140,20 +156,11 @@
       // smartCSR   : true,
       dockBorders   : true,
       autoPadding   : true,
-      warnings      : true
-    });
-
-    window.onresize = function () {
-      term.fit();
-    };
-    window.onload = function () {
-      term.fit();
-    }
-    screen.on('resize', function () {
-      term.fit();
+      warnings      : true,
     });
 
     // checking the Master API environment variable
+    // TODO: should ideally be parallelised during Web fonts loading
     var env = new XMLHttpRequest();
     env.onreadystatechange = function () {
       if (this.readyState === 4) {
@@ -225,6 +232,7 @@
         file.focus();
       });
     }
+  });
   </script>
 </body>
 
