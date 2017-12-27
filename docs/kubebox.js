@@ -2077,7 +2077,8 @@ function login_form(kube_config, kubebox, { closable, server } = { closable: fal
 }
 
 function prompt(screen, kube_config, kubebox, { closable, message, server }) {
-  return new Promise(function (fulfill, reject) {
+  let cancellation = Function.prototype;
+  const promise = new Promise(function (fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
 
@@ -2090,7 +2091,9 @@ function prompt(screen, kube_config, kubebox, { closable, message, server }) {
     };
     kube_config.on('kubeConfigChange', kubeConfigChange);
 
+    let closed = false;
     function close_login_form() {
+      closed = true;
       kube_config.removeListener('kubeConfigChange', kubeConfigChange);
       // work around form 'element keypress' event handler that focus the form on ESC
       form.focus = () => {};
@@ -2099,6 +2102,9 @@ function prompt(screen, kube_config, kubebox, { closable, message, server }) {
       screen.grabKeys = false;
       screen.render();
     }
+    cancellation = () => {
+      if (!closed) close_login_form();
+    };
 
     form.on('submit', data => {
       close_login_form();
@@ -2132,6 +2138,7 @@ function prompt(screen, kube_config, kubebox, { closable, message, server }) {
       screen.render();
     }
   });
+  return { promise, cancellation: () => cancellation() };
 }
 
 module.exports.prompt = prompt;
@@ -101519,14 +101526,17 @@ class Kubebox extends EventEmitter {
     }
 
     function logging(options = { closable: false }) {
-      return login.prompt(screen, kube_config, kubebox, options)
+      cancellations.run('logging');
+      const { promise, cancellation } = login.prompt(screen, kube_config, kubebox, options);
+      cancellations.add('logging', cancellation);
+      return promise
         .then(call(_ => {
           cancellations.run('connect');
           // it may be better to reset the dashboard when authentication has succeeded
           dashboard.reset();
         }))
         .then(updateSessionAfterLogin)
-        .then(login => connect(login, Object.assign(options, { closable: false })));
+        .then(login => connect(login, Object.assign({}, options, { closable: false })));
     }
 
     function authenticate(login) {
