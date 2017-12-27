@@ -101461,6 +101461,9 @@ class Kubebox extends EventEmitter {
       connect(kube_config.current_context.user, { server })
         .catch(error => console.error(error.stack));
     } else {
+      if (server) {
+        status.setContent(`{blue-fg}ℹ{/blue-fg} Log in to {bold}${server}{/bold}...`);
+      }
       logging({ closable: false, server })
         .catch(error => console.error(error.stack));
     }
