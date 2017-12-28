@@ -1343,9 +1343,9 @@ class Dashboard {
       label         : 'Pods',
       parent        : screen,
       left          : 0,
-      top           : 0,
+      top           : 1,
       width         : '50%',
-      height        : '50%',
+      height        : '50%-1',
       border        : 'line',
       align         : 'left',
       keys          : true,
@@ -1372,9 +1372,9 @@ class Dashboard {
       label  : 'Resources',
       parent : screen,
       left   : '50%',
-      top    : 0,
+      top    : 1,
       right  : 0,
-      height : '50%',
+      height : '50%-1',
       tags   : true,
       border : 'line',
       style  : {
@@ -1801,7 +1801,8 @@ const contrib = require('blessed-contrib');
 module.exports.debug = contrib.log({
   label  : 'Debug',
   tags   : true,
-  height : '100%-1',
+  top    : 1,
+  height : '100%-2',
   width  : '100%',
   border : 'line',
   style  : {
@@ -101430,6 +101431,53 @@ class Kubebox extends EventEmitter {
     screen.key(['l', 'C-l'], (ch, key) => logging({ closable: true, server })
       .catch(error => console.error(error.stack)));
 
+    const menu = blessed.text({
+      tags    : true,
+      width   : '100%',
+      height  : 1,
+      top     : 0,
+      padding : {
+        left  : 1,
+        right : 1,
+      },
+      style : {
+        bg : 'white',
+        fg : 'black',
+      },
+      // TODO: add click handler that display Kubebox about modal
+      content : '{|}⎈ ❏',
+    });
+
+    const tabs = blessed.listbar({
+      parent : menu,
+      top    : 0,
+      left   : 0,
+      right  : 4,
+      height : 1,
+      mouse  : true,
+      keys   : true,
+      autoCommandKeys : true,
+      style : {
+        bg     : 'white',
+        prefix : {
+          fg : '#888',
+        },
+        item : {
+          fg : 'black',
+          bg : 'white',
+          hover : {
+            fg   : 'white',
+            bg   : 'grey',
+            bold : true,
+          },
+        },
+        selected : {
+          fg : 'white',
+          bg : 'grey',
+        }
+      }
+    });
+
     const status = blessed.text({
       tags    : true,
       width   : '100%',
@@ -101440,17 +101488,22 @@ class Kubebox extends EventEmitter {
         right : 1,
       },
       style : {
-        bg : 'grey',
+        fg : 'grey',
+        bg : 'white',
       }
     });
 
     const carousel = new contrib.carousel(
       [
         screen => {
+          screen.append(menu);
+          tabs.select(0);
           dashboard.render();
           screen.append(status);
         },
         screen => {
+          screen.append(menu);
+          tabs.select(1);
           screen.append(debug);
           debug.setScrollPerc(100);
           screen.append(status);
@@ -101463,6 +101516,15 @@ class Kubebox extends EventEmitter {
       }
     );
     carousel.start();
+
+    tabs.add('Namespace', () => {
+      carousel.currPage = 0;
+      carousel.move();
+    });
+    tabs.add('Debug', () => {
+      carousel.currPage = 1;
+      carousel.move();
+    });
 
     if (typeof client.master_api !== 'undefined') {
       connect(kube_config.current_context.user, { server })
