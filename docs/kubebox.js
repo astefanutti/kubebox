@@ -952,15 +952,13 @@ const util    = require('util');
 
 const Log = blessed.log;
 
-const _setLine = blessed.log.prototype.setLine;
-blessed.log.prototype.setLine = function (i, line) {
-  if (!this._clines) {
-    this._clines = [];
-    this._clines.fake = [];
-    this._clines.ftor = [];
-  }
-  return _setLine.apply(this, arguments);
-};
+blessed.log.prototype.clear = function () {
+  delete this._clines;
+  this._clines = [];
+  this._clines.fake = [];
+  this._clines.ftor = [];
+  this.setContent('');
+}
 
 blessed.log.prototype.insertLine = function (i, line) {
   if (typeof line === 'string') line = line.split('\n');
@@ -1052,6 +1050,8 @@ blessed.scrollablebox.prototype.setScrollPerc = function (percent) {
 // See https://github.com/chjj/blessed/issues/284
 blessed.log = function (options) {
   const log = Log(options);
+  log.clear();
+
   log.scroll = function (offset, always) {
     if (offset === 0) return this._scroll(offset, always);
     this._userScrolled = true;
@@ -1437,7 +1437,6 @@ exports.arrayMax = function (array, iteratee) {
 
 const blessed  = require('blessed'),
       chart    = require('./chart'),
-      contrib  = require('blessed-contrib'),
       duration = require('moment-duration-format'),
       get      = require('../http-then').get,
       moment   = require('moment'),
@@ -1555,25 +1554,33 @@ class Dashboard {
     const graphs = [memory_graph, cpu_graph, net_graph];
     graphs.slice(1).forEach(g => g.toggle());
 
-    // TODO: enable user scrolling
-    const pod_log = contrib.log({
+    const pod_log = blessed.log({
       label  : 'Logs',
       top    : '50%',
       height : '50%-1',
       align  : 'left',
       tags   : true,
+      keys   : true,
+      mouse  : true,
       border : 'line',
       style  : {
         label  : { bold: true },
         border : { fg: 'white' },
       },
-      bufferLength: 50,
+      scrollable : true,
+      scrollbar  : {
+        ch    : ' ',
+        style : { bg: 'white' },
+        track : {
+          style : { bg: 'grey' },
+        }
+      },
     });
+    pod_log.setScrollPerc(100);
 
     pod_log.reset = function () {
       this.setLabel('Logs');
-      this.logLines = [];
-      this.setItems([]);
+      this.clear();
     }
 
     pods_table.on('select', (item, i) => {
@@ -1911,7 +1918,7 @@ class Dashboard {
 
 module.exports = Dashboard;
 
-},{"../http-then":"http-then","../promise":8,"../task":9,"../util":23,"./chart":14,"./spinner":21,"blessed":"blessed","blessed-contrib":24,"moment":345,"moment-duration-format":344}],18:[function(require,module,exports){
+},{"../http-then":"http-then","../promise":8,"../task":9,"../util":23,"./chart":14,"./spinner":21,"blessed":"blessed","moment":345,"moment-duration-format":344}],18:[function(require,module,exports){
 'use strict';
 
 const blessed = require('blessed');
