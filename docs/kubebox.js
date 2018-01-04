@@ -1646,8 +1646,9 @@ class Dashboard {
         label  : { bold: true },
         border : { fg: 'white' },
       },
-      scrollable : true,
-      scrollbar  : {
+      scrollable    : true,
+      scrollOnInput : true,
+      scrollbar     : {
         ch    : ' ',
         style : { bg: 'white' },
         track : {
@@ -2003,16 +2004,17 @@ module.exports = Dashboard;
 const blessed = require('blessed');
 
 module.exports.debug = blessed.log({
-  label      : 'Debug',
-  tags       : true,
-  top        : 1,
-  height     : '100%-2',
-  width      : '100%',
-  border     : 'line',
-  keys       : true,
-  mouse      : true,
-  scrollable : true,
-  scrollbar  : {
+  label  : 'Debug',
+  tags   : true,
+  top    : 1,
+  height : '100%-2',
+  width  : '100%',
+  border : 'line',
+  keys   : true,
+  mouse  : true,
+  scrollable    : true,
+  scrollOnInput : true,
+  scrollbar     : {
     ch    : ' ',
     style : { bg: 'white' },
     track : {
