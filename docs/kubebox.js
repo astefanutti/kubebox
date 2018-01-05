@@ -841,6 +841,38 @@ blessed.Element.prototype.setLabel = function (options) {
   });
 };
 
+blessed.Element.prototype._parseAttr = function (lines) {
+  var dattr = this.sattr(this.style)
+    , attr = dattr
+    , attrs = []
+    , line
+    , i
+    , j
+    , c;
+
+  // PATCH BEGIN
+  // See: https://github.com/chjj/blessed/pull/306/
+  if (Array.isArray(lines.attr) && lines.attr.length > 0 && lines.attr[0] === attr) {
+    return;
+  }
+  // PATCH END
+
+  for (j = 0; j < lines.length; j++) {
+    line = lines[j];
+    attrs[j] = attr;
+    for (i = 0; i < line.length; i++) {
+      if (line[i] === '\x1b') {
+        if (c = /^\x1b\[[\d;]*m/.exec(line.substring(i))) {
+          attr = this.screen.attrCode(c[0], attr, dattr);
+          i += c[0].length - 1;
+        }
+      }
+    }
+  }
+
+  return attrs;
+};
+
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"_process":260,"blessed":"blessed"}],11:[function(require,module,exports){
 const blessed = require('blessed');
