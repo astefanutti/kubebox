@@ -976,14 +976,13 @@ blessed.listbar.prototype.appendItem = function (item, callback) {
 const blessed = require('blessed');
 const util    = require('util');
 
-const Log = blessed.log;
-
 blessed.log.prototype.clear = function () {
   delete this._clines;
   this._clines = [];
   this._clines.fake = [];
   this._clines.ftor = [];
   this.setContent('');
+  this._userScrolled = false;
 }
 
 blessed.log.prototype.insertLine = function (i, line) {
@@ -1074,6 +1073,7 @@ blessed.scrollablebox.prototype.setScrollPerc = function (percent) {
 // https://github.com/chjj/blessed/blob/master/lib/widgets/element.js#L35
 // This method prevents auto-scrolling to bottom if user scrolled the view up.
 // See https://github.com/chjj/blessed/issues/284
+const Log = blessed.log;
 blessed.log = function (options) {
   const log = Log(options);
   log.clear();
@@ -1082,7 +1082,9 @@ blessed.log = function (options) {
     if (offset === 0) return this._scroll(offset, always);
     this._userScrolled = true;
     var ret = this._scroll(offset, always);
-    if (this.getScrollPerc() === 100) {
+    var perc = this.getScrollPerc(true);
+    // returns -1 when there is no scrollbar
+    if (perc === 100 || perc === -1) {
       this._userScrolled = false;
     }
     return ret;
@@ -1844,9 +1846,8 @@ class Dashboard {
         label  : { bold: true },
         border : { fg: 'white' },
       },
-      scrollable    : true,
-      scrollOnInput : true,
-      scrollbar     : {
+      scrollable : true,
+      scrollbar  : {
         ch    : ' ',
         style : { bg: 'white' },
         track : {
@@ -2210,9 +2211,8 @@ module.exports.debug = blessed.log({
   border : 'line',
   keys   : true,
   mouse  : true,
-  scrollable    : true,
-  scrollOnInput : true,
-  scrollbar     : {
+  scrollable : true,
+  scrollbar  : {
     ch    : ' ',
     style : { bg: 'white' },
     track : {
