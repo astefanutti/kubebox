@@ -46,7 +46,7 @@ image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
 * [x] Pods list watching
 * [x] Pod / container log watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires `cluster-admin` role on OpenShift.]
-* [ ] Container remote exec terminal
+* [x] Container remote exec terminal
 * [ ] CRUD configuration operations
 * [ ] Cluster and node views
 * [ ] Cluster monitoring
@@ -181,6 +181,9 @@ $ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/ope
 
 |kbd:[n]
 |Change current namespace
+
+|kbd:[r]
+|Remote shell into container
 
 |kbd:[m]
 |Memory usage
