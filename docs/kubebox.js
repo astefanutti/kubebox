@@ -142,11 +142,11 @@ class Client {
   }
 
   follow_log(namespace, name, { sinceTime, container } = {}) {
-    const path = URI(`/api/v1/namespaces/${namespace}/pods/${name}/log?follow=true&tailLines=25&timestamps=true`);
+    // TODO: limit the amount of data with the limitBytes parameter
+    const path = URI(`/api/v1/namespaces/${namespace}/pods/${name}/log?follow=true&tailLines=10000&timestamps=true`);
     if (container) path.addQuery('container', container);
     if (sinceTime) path.addQuery('sinceTime', sinceTime);
     return merge({
-      // we may want to adapt the amount of lines based on the widget height
       path    : path.toString(),
       method  : 'GET',
       headers : {
@@ -215,7 +215,7 @@ function merge(target, source) {
 
 module.exports = Client;
 
-},{"crypto":184,"urijs":354}],2:[function(require,module,exports){
+},{"crypto":184,"urijs":355}],2:[function(require,module,exports){
 'use strict';
 
 const URI = require('urijs');
@@ -251,7 +251,7 @@ class Cluster {
 Cluster.default = new Cluster({ server: undefined, name: '' });
 
 module.exports = Cluster;
-},{"urijs":354}],3:[function(require,module,exports){
+},{"urijs":355}],3:[function(require,module,exports){
 module.exports.Cluster    = require('./cluster');
 module.exports.Context    = require('./context');
 module.exports.KubeConfig = require('./manager');
@@ -370,7 +370,7 @@ Context.default = new Context({
 
 module.exports = Context;
 }).call(this,require("buffer").Buffer)
-},{"./cluster":2,"./namespace":6,"./user":7,"buffer":174,"fs":124,"urijs":354}],5:[function(require,module,exports){
+},{"./cluster":2,"./namespace":6,"./user":7,"buffer":174,"fs":124,"urijs":355}],5:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -615,7 +615,7 @@ function findContextsByClusterUrl(contexts, url) {
 
 module.exports = KubeConfigManager;
 }).call(this,require('_process'))
-},{"../util":26,"./cluster":2,"./context":4,"./namespace":6,"./user":7,"_process":260,"events":211,"fs":124,"js-yaml":313,"os":236,"path":253,"urijs":354}],6:[function(require,module,exports){
+},{"../util":26,"./cluster":2,"./context":4,"./namespace":6,"./user":7,"_process":260,"events":211,"fs":124,"js-yaml":313,"os":236,"path":253,"urijs":355}],6:[function(require,module,exports){
 'use strict';
 
 class Namespace {
@@ -798,7 +798,9 @@ blessed.Element.prototype.setLabel = function (options) {
     parent: this,
     content: options.text,
     top: -this.itop,
-    tags: this.parseTags,
+    // PATCH BEGIN
+    tags: true,
+    // PATCH END
     shrink: true,
     style: this.style.label
   });
@@ -872,6 +874,22 @@ blessed.Element.prototype._parseAttr = function (lines) {
 
   return attrs;
 };
+
+// PATCH BEGIN
+blessed.Element.prototype.setLine = function(i, line) {
+  if (typeof line === 'string') line = line.split('\n');
+
+  i = Math.max(i, 0);
+  while (this._clines.fake.length < i) {
+    this._clines.fake.push('');
+  }
+  for (var j = 0; j < line.length; j++) {
+    this._clines.fake[i + j] = line[j];
+  }
+
+  return this.setContent(this._clines.fake.join('\n'), true);
+};
+// PATCH END
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"_process":260,"blessed":"blessed"}],11:[function(require,module,exports){
@@ -1008,14 +1026,111 @@ blessed.listbar.prototype.appendItem = function (item, callback) {
 const blessed = require('blessed');
 const util    = require('util');
 
-blessed.log.prototype.clear = function () {
+blessed.log.prototype.init = function () {
   delete this._clines;
   this._clines = [];
   this._clines.fake = [];
   this._clines.ftor = [];
-  this.setContent('');
-  this._userScrolled = false;
+  this._clines.rtof = [];
 }
+
+blessed.log.prototype.clear = function () {
+  this.init();
+  this.content = '';
+  this._userScrolled = false;
+  this.setScrollPerc(0);
+}
+
+// PATCH BEGIN
+blessed.log.prototype.pushLine = function (line) {
+  const delta = Array.isArray(line) ? line.join('\n') : line;
+  if (!this.content) {
+    this.init();
+    this.content = delta;
+  } else {
+    this.content += '\n' + delta;
+  }
+
+  if (Array.isArray(line)) {
+    this._clines.fake.push(...line);
+  } else {
+    this._clines.fake.push(line);
+  }
+
+  if (this.detached) {
+    return;
+  }
+
+  var width = this.width - this.iwidth;
+
+  const lines = [];
+  for (let i = this._clines.ftor.length; i < this._clines.fake.length; i++) {
+    let line = this._clines.fake[i];
+    line = line
+      .replace(/[\x00-\x08\x0b-\x0c\x0e-\x1a\x1c-\x1f\x7f]/g, '')
+      .replace(/\x1b(?!\[[\d;]*m)/g, '')
+      .replace(/\r\n|\r/g, '\n')
+      .replace(/\t/g, this.screen.tabc);
+
+    if (this.screen.fullUnicode) {
+      // double-width chars will eat the next char after render. create a
+      // blank character after it so it doesn't eat the real next char.
+      line = line.replace(blessed.unicode.chars.all, '$1\x03');
+      // iTerm2 cannot render combining characters properly.
+      if (this.screen.program.isiTerm2) {
+        line = line.replace(blessed.unicode.chars.combining, '');
+      }
+    } else {
+      // no double-width: replace them with question-marks.
+      line = line.replace(blessed.unicode.chars.all, '??');
+      // delete combining characters since they're 0-width anyway.
+      // NOTE: We could drop this, the non-surrogates would get changed to ? by
+      // the unicode filter, and surrogates changed to ? by the surrogate
+      // regex. however, the user might expect them to be 0-width.
+      // NOTE: Might be better for performance to drop!
+      line = line.replace(blessed.unicode.chars.combining, '');
+      // no surrogate pairs: replace them with question-marks.
+      line = line.replace(blessed.unicode.chars.surrogate, '?');
+      // XXX Deduplicate code here:
+      // line = helpers.dropUnicode(line);
+    }
+    if (this.parseTags) {
+      line = this._parseTags(line);
+    }
+    lines.push(line);
+  }
+
+  const wrap = this._wrapContent(lines.join('\n'), width);
+
+  const ftor = this._clines.ftor.length;
+  for (let i = 0, length = wrap.ftor.length; i < length; i++) {
+    this._clines.ftor[ftor + i] = wrap.ftor[i].map(e => ftor + e);
+  }
+  for (let i = 0, length = wrap.rtof.length; i < length; i++) {
+    this._clines.rtof.push(ftor + wrap.rtof[i]);
+  }
+
+  if (wrap.mwidth > this._clines.mwidth) {
+    this._clines.mwidth = wrap.mwidth;
+  }
+
+  this._clines.push(...wrap);
+
+  this._clines.width = width;
+  this._clines.content = this.content;
+  this._clines.attr = this._parseAttr(this._clines);
+  this._clines.ci = [];
+  this._clines.reduce(function (total, line) {
+    this._clines.ci.push(total);
+    return total + line.length + 1;
+  }.bind(this), 0);
+
+  this._pcontent = this._clines.join('\n');
+  this.emit('parsed content');
+
+  this.emit('set content');
+};
+// PATCH END
 
 blessed.log.prototype.insertLine = function (i, line) {
   if (typeof line === 'string') line = line.split('\n');
@@ -1036,42 +1151,39 @@ blessed.log.prototype.insertLine = function (i, line) {
     this._clines.fake.splice(i + j, 0, line[j]);
   }
 
-  if (!this.detached) {
-    // NOTE: Could possibly compare the first and last ftor line numbers to see
-    // if they're the same, or if they fit in the visible region entirely.
-    var start = this._clines.length,
-        diff,
-        real;
-
-    if (i >= this._clines.ftor.length) {
-        real = this._clines.ftor[this._clines.ftor.length - 1];
-        real = real[real.length - 1] + 1;
-    } else {
-        real = this._clines.ftor[i][0];
-    }
-
+  // PATCH BEGIN
+  if (this.detached) {
     this.setContent(this._clines.fake.join('\n'), true);
+    return;
+  }
+  // PATCH END
 
-    diff = this._clines.length - start;
+  // NOTE: Could possibly compare the first and last ftor line numbers to see
+  // if they're the same, or if they fit in the visible region entirely.
+  var start = this._clines.length, diff, real;
 
-    if (diff > 0) {
-      var pos = this._getCoords();
-      if (!pos) return;
-
-      var height = pos.yl - pos.yi - this.iheight,
-      base = this.childBase || 0,
-      visible = real >= base && real - base < height;
-
-      if (pos && visible && this.screen.cleanSides(this)) {
-      this.screen.insertLine(
-        diff,
-        pos.yi + this.itop + real - base,
-        pos.yi,
-        pos.yl - this.ibottom - 1);
-      }
-    }
+  if (i >= this._clines.ftor.length) {
+    real = this._clines.ftor[this._clines.ftor.length - 1];
+    real = real[real.length - 1] + 1;
   } else {
-    this.setContent(this._clines.fake.join('\n'), true);
+    real = this._clines.ftor[i][0];
+  }
+
+  this.setContent(this._clines.fake.join('\n'), true);
+
+  diff = this._clines.length - start;
+
+  if (diff > 0) {
+    var pos = this._getCoords();
+    if (!pos) return;
+
+    var height = pos.yl - pos.yi - this.iheight,
+    base = this.childBase || 0,
+    visible = real >= base && real - base < height;
+
+    if (pos && visible && this.screen.cleanSides(this)) {
+      this.screen.insertLine(diff, pos.yi + this.itop + real - base, pos.yi, pos.yl - this.ibottom - 1);
+    }
   }
 };
 
@@ -1079,14 +1191,16 @@ blessed.log.prototype.insertLine = function (i, line) {
 // when it should call it with just one (num lines to shift out).
 // See https://github.com/chjj/blessed/issues/255
 blessed.log.prototype.log =
-blessed.log.prototype.add = function () {
-  var args = Array.prototype.slice.call(arguments);
+blessed.log.prototype.add = function (line) {
+  // PATCH BEGIN
+  /* var args = Array.prototype.slice.call(arguments);
   if (typeof args[0] === 'object') {
     args[0] = util.inspect(args[0], { showHidden: true, depth: MAX_OBJECT_LOG_DEPTH });
   }
-  var text = util.format.apply(util, args);
-  this.emit('log', text);
-  var ret = this.pushLine(text);
+  var text = util.format.apply(util, args); */
+  // PATCH END
+  this.emit('log', line);
+  var ret = this.pushLine(line);
   if (this.scrollback && this._clines.fake.length > this.scrollback) {
     this.shiftLine(this._clines.fake.length - this.scrollback);
   }
@@ -1744,11 +1858,12 @@ exports.arrayMax = function (array, iteratee) {
   return result;
 }
 
-},{"x256":357}],20:[function(require,module,exports){
+},{"x256":358}],20:[function(require,module,exports){
 'use strict';
 
 const blessed  = require('blessed'),
       chart    = require('./chart'),
+      debounce = require('lodash.debounce'),
       duration = require('moment-duration-format'),
       get      = require('../http-then').get,
       moment   = require('moment'),
@@ -1870,7 +1985,7 @@ class Dashboard {
       top    : '50%',
       height : '50%-1',
       align  : 'left',
-      tags   : true,
+      tags   : false,
       keys   : true,
       mouse  : true,
       border : 'line',
@@ -1926,19 +2041,26 @@ class Dashboard {
       screen.render();
 
       const logger = function*(sinceTime) {
-        let log, timestamp;
+        let data, timestamp;
+        const lines = [];
+        const log = debounce(() => {
+          pod_log.log(lines);
+          lines.length = 0;
+        }, 100, { trailing: true });
         try {
-          while (log = yield) {
+          while (data = yield) {
             // skip empty data frame payload on connect!
-            if (log.length === 0) continue;
-            log = log.toString('utf8');
-            log.split(/\r\n|\r|\n/).filter(isNotEmpty).forEach(line => {
+            if (data.length === 0) continue;
+            data = data.toString('utf8');
+            data.split(/\r\n|\r|\n/).filter(isNotEmpty).forEach(line => {
               const i = line.indexOf(' ');
               timestamp = line.substring(0, i);
-              const msg = line.substring(i + 1);
+              const l = line.substring(i + 1);
               // avoid scanning the whole buffer if the timestamp differs from the since time
-              if (!timestamp.startsWith(sinceTime) || !pod_log.logLines.includes(msg))
-                pod_log.log(msg);
+              if (!timestamp.startsWith(sinceTime) || !pod_log._clines.fake.includes(l)) {
+                lines.push(l);
+                log();
+              }
             });
           }
         } catch (e) {
@@ -2229,7 +2351,7 @@ class Dashboard {
 
 module.exports = Dashboard;
 
-},{"../http-then":"http-then","../promise":8,"../task":9,"../util":26,"./chart":17,"./spinner":24,"blessed":"blessed","moment":348,"moment-duration-format":347}],21:[function(require,module,exports){
+},{"../http-then":"http-then","../promise":8,"../task":9,"../util":26,"./chart":17,"./spinner":24,"blessed":"blessed","lodash.debounce":343,"moment":349,"moment-duration-format":348}],21:[function(require,module,exports){
 'use strict';
 
 const blessed = require('blessed');
@@ -68369,7 +68491,7 @@ exports.constants = {
   'POINT_CONVERSION_HYBRID': 6
 }
 
-},{"browserify-cipher":161,"browserify-sign":168,"browserify-sign/algos":165,"create-ecdh":178,"create-hash":179,"create-hmac":182,"diffie-hellman":191,"pbkdf2":254,"public-encrypt":261,"randombytes":271,"randomfill":349}],185:[function(require,module,exports){
+},{"browserify-cipher":161,"browserify-sign":168,"browserify-sign/algos":165,"create-ecdh":178,"create-hash":179,"create-hmac":182,"diffie-hellman":191,"pbkdf2":254,"public-encrypt":261,"randombytes":271,"randomfill":350}],185:[function(require,module,exports){
 'use strict';
 
 exports.utils = require('./des/utils');
@@ -73704,7 +73826,7 @@ function EVP_BytesToKey (password, salt, keyBits, ivLen) {
 
 module.exports = EVP_BytesToKey
 
-},{"md5.js":343,"safe-buffer":286}],213:[function(require,module,exports){
+},{"md5.js":344,"safe-buffer":286}],213:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 var Transform = require('stream').Transform
@@ -89221,7 +89343,7 @@ function extend() {
 arguments[4][53][0].apply(exports,arguments)
 },{"buffer":174,"dup":53}],311:[function(require,module,exports){
 arguments[4][54][0].apply(exports,arguments)
-},{"bresenham":123,"drawille-blessed-contrib":310,"dup":54,"gl-matrix":312,"x256":357}],312:[function(require,module,exports){
+},{"bresenham":123,"drawille-blessed-contrib":310,"dup":54,"gl-matrix":312,"x256":358}],312:[function(require,module,exports){
 arguments[4][56][0].apply(exports,arguments)
 },{"dup":56}],313:[function(require,module,exports){
 'use strict';
@@ -93077,6 +93199,387 @@ module.exports = new Type('tag:yaml.org,2002:timestamp', {
 });
 
 },{"../type":326}],343:[function(require,module,exports){
+(function (global){
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as the `TypeError` message for "Functions" methods. */
+var FUNC_ERROR_TEXT = 'Expected a function';
+
+/** Used as references for various `Number` constants. */
+var NAN = 0 / 0;
+
+/** `Object#toString` result references. */
+var symbolTag = '[object Symbol]';
+
+/** Used to match leading and trailing whitespace. */
+var reTrim = /^\s+|\s+$/g;
+
+/** Used to detect bad signed hexadecimal string values. */
+var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
+
+/** Used to detect binary string values. */
+var reIsBinary = /^0b[01]+$/i;
+
+/** Used to detect octal string values. */
+var reIsOctal = /^0o[0-7]+$/i;
+
+/** Built-in method references without a dependency on `root`. */
+var freeParseInt = parseInt;
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString = objectProto.toString;
+
+/* Built-in method references for those with the same name as other `lodash` methods. */
+var nativeMax = Math.max,
+    nativeMin = Math.min;
+
+/**
+ * Gets the timestamp of the number of milliseconds that have elapsed since
+ * the Unix epoch (1 January 1970 00:00:00 UTC).
+ *
+ * @static
+ * @memberOf _
+ * @since 2.4.0
+ * @category Date
+ * @returns {number} Returns the timestamp.
+ * @example
+ *
+ * _.defer(function(stamp) {
+ *   console.log(_.now() - stamp);
+ * }, _.now());
+ * // => Logs the number of milliseconds it took for the deferred invocation.
+ */
+var now = function() {
+  return root.Date.now();
+};
+
+/**
+ * Creates a debounced function that delays invoking `func` until after `wait`
+ * milliseconds have elapsed since the last time the debounced function was
+ * invoked. The debounced function comes with a `cancel` method to cancel
+ * delayed `func` invocations and a `flush` method to immediately invoke them.
+ * Provide `options` to indicate whether `func` should be invoked on the
+ * leading and/or trailing edge of the `wait` timeout. The `func` is invoked
+ * with the last arguments provided to the debounced function. Subsequent
+ * calls to the debounced function return the result of the last `func`
+ * invocation.
+ *
+ * **Note:** If `leading` and `trailing` options are `true`, `func` is
+ * invoked on the trailing edge of the timeout only if the debounced function
+ * is invoked more than once during the `wait` timeout.
+ *
+ * If `wait` is `0` and `leading` is `false`, `func` invocation is deferred
+ * until to the next tick, similar to `setTimeout` with a timeout of `0`.
+ *
+ * See [David Corbacho's article](https://css-tricks.com/debouncing-throttling-explained-examples/)
+ * for details over the differences between `_.debounce` and `_.throttle`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Function
+ * @param {Function} func The function to debounce.
+ * @param {number} [wait=0] The number of milliseconds to delay.
+ * @param {Object} [options={}] The options object.
+ * @param {boolean} [options.leading=false]
+ *  Specify invoking on the leading edge of the timeout.
+ * @param {number} [options.maxWait]
+ *  The maximum time `func` is allowed to be delayed before it's invoked.
+ * @param {boolean} [options.trailing=true]
+ *  Specify invoking on the trailing edge of the timeout.
+ * @returns {Function} Returns the new debounced function.
+ * @example
+ *
+ * // Avoid costly calculations while the window size is in flux.
+ * jQuery(window).on('resize', _.debounce(calculateLayout, 150));
+ *
+ * // Invoke `sendMail` when clicked, debouncing subsequent calls.
+ * jQuery(element).on('click', _.debounce(sendMail, 300, {
+ *   'leading': true,
+ *   'trailing': false
+ * }));
+ *
+ * // Ensure `batchLog` is invoked once after 1 second of debounced calls.
+ * var debounced = _.debounce(batchLog, 250, { 'maxWait': 1000 });
+ * var source = new EventSource('/stream');
+ * jQuery(source).on('message', debounced);
+ *
+ * // Cancel the trailing debounced invocation.
+ * jQuery(window).on('popstate', debounced.cancel);
+ */
+function debounce(func, wait, options) {
+  var lastArgs,
+      lastThis,
+      maxWait,
+      result,
+      timerId,
+      lastCallTime,
+      lastInvokeTime = 0,
+      leading = false,
+      maxing = false,
+      trailing = true;
+
+  if (typeof func != 'function') {
+    throw new TypeError(FUNC_ERROR_TEXT);
+  }
+  wait = toNumber(wait) || 0;
+  if (isObject(options)) {
+    leading = !!options.leading;
+    maxing = 'maxWait' in options;
+    maxWait = maxing ? nativeMax(toNumber(options.maxWait) || 0, wait) : maxWait;
+    trailing = 'trailing' in options ? !!options.trailing : trailing;
+  }
+
+  function invokeFunc(time) {
+    var args = lastArgs,
+        thisArg = lastThis;
+
+    lastArgs = lastThis = undefined;
+    lastInvokeTime = time;
+    result = func.apply(thisArg, args);
+    return result;
+  }
+
+  function leadingEdge(time) {
+    // Reset any `maxWait` timer.
+    lastInvokeTime = time;
+    // Start the timer for the trailing edge.
+    timerId = setTimeout(timerExpired, wait);
+    // Invoke the leading edge.
+    return leading ? invokeFunc(time) : result;
+  }
+
+  function remainingWait(time) {
+    var timeSinceLastCall = time - lastCallTime,
+        timeSinceLastInvoke = time - lastInvokeTime,
+        result = wait - timeSinceLastCall;
+
+    return maxing ? nativeMin(result, maxWait - timeSinceLastInvoke) : result;
+  }
+
+  function shouldInvoke(time) {
+    var timeSinceLastCall = time - lastCallTime,
+        timeSinceLastInvoke = time - lastInvokeTime;
+
+    // Either this is the first call, activity has stopped and we're at the
+    // trailing edge, the system time has gone backwards and we're treating
+    // it as the trailing edge, or we've hit the `maxWait` limit.
+    return (lastCallTime === undefined || (timeSinceLastCall >= wait) ||
+      (timeSinceLastCall < 0) || (maxing && timeSinceLastInvoke >= maxWait));
+  }
+
+  function timerExpired() {
+    var time = now();
+    if (shouldInvoke(time)) {
+      return trailingEdge(time);
+    }
+    // Restart the timer.
+    timerId = setTimeout(timerExpired, remainingWait(time));
+  }
+
+  function trailingEdge(time) {
+    timerId = undefined;
+
+    // Only invoke if we have `lastArgs` which means `func` has been
+    // debounced at least once.
+    if (trailing && lastArgs) {
+      return invokeFunc(time);
+    }
+    lastArgs = lastThis = undefined;
+    return result;
+  }
+
+  function cancel() {
+    if (timerId !== undefined) {
+      clearTimeout(timerId);
+    }
+    lastInvokeTime = 0;
+    lastArgs = lastCallTime = lastThis = timerId = undefined;
+  }
+
+  function flush() {
+    return timerId === undefined ? result : trailingEdge(now());
+  }
+
+  function debounced() {
+    var time = now(),
+        isInvoking = shouldInvoke(time);
+
+    lastArgs = arguments;
+    lastThis = this;
+    lastCallTime = time;
+
+    if (isInvoking) {
+      if (timerId === undefined) {
+        return leadingEdge(lastCallTime);
+      }
+      if (maxing) {
+        // Handle invocations in a tight loop.
+        timerId = setTimeout(timerExpired, wait);
+        return invokeFunc(lastCallTime);
+      }
+    }
+    if (timerId === undefined) {
+      timerId = setTimeout(timerExpired, wait);
+    }
+    return result;
+  }
+  debounced.cancel = cancel;
+  debounced.flush = flush;
+  return debounced;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/**
+ * Checks if `value` is classified as a `Symbol` primitive or object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
+ * @example
+ *
+ * _.isSymbol(Symbol.iterator);
+ * // => true
+ *
+ * _.isSymbol('abc');
+ * // => false
+ */
+function isSymbol(value) {
+  return typeof value == 'symbol' ||
+    (isObjectLike(value) && objectToString.call(value) == symbolTag);
+}
+
+/**
+ * Converts `value` to a number.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to process.
+ * @returns {number} Returns the number.
+ * @example
+ *
+ * _.toNumber(3.2);
+ * // => 3.2
+ *
+ * _.toNumber(Number.MIN_VALUE);
+ * // => 5e-324
+ *
+ * _.toNumber(Infinity);
+ * // => Infinity
+ *
+ * _.toNumber('3.2');
+ * // => 3.2
+ */
+function toNumber(value) {
+  if (typeof value == 'number') {
+    return value;
+  }
+  if (isSymbol(value)) {
+    return NAN;
+  }
+  if (isObject(value)) {
+    var other = typeof value.valueOf == 'function' ? value.valueOf() : value;
+    value = isObject(other) ? (other + '') : other;
+  }
+  if (typeof value != 'string') {
+    return value === 0 ? value : +value;
+  }
+  value = value.replace(reTrim, '');
+  var isBinary = reIsBinary.test(value);
+  return (isBinary || reIsOctal.test(value))
+    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
+    : (reIsBadHex.test(value) ? NAN : +value);
+}
+
+module.exports = debounce;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],344:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 var inherits = require('inherits')
@@ -93225,7 +93728,7 @@ function fnI (a, b, c, d, m, k, s) {
 module.exports = MD5
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":174,"hash-base":344,"inherits":345}],344:[function(require,module,exports){
+},{"buffer":174,"hash-base":345,"inherits":346}],345:[function(require,module,exports){
 'use strict'
 var Buffer = require('safe-buffer').Buffer
 var Transform = require('stream').Transform
@@ -93322,11 +93825,11 @@ HashBase.prototype._digest = function () {
 
 module.exports = HashBase
 
-},{"inherits":345,"safe-buffer":346,"stream":295}],345:[function(require,module,exports){
+},{"inherits":346,"safe-buffer":347,"stream":295}],346:[function(require,module,exports){
 arguments[4][58][0].apply(exports,arguments)
-},{"dup":58}],346:[function(require,module,exports){
+},{"dup":58}],347:[function(require,module,exports){
 arguments[4][286][0].apply(exports,arguments)
-},{"buffer":174,"dup":286}],347:[function(require,module,exports){
+},{"buffer":174,"dup":286}],348:[function(require,module,exports){
 /*! Moment Duration Format v1.3.0
  *  https://github.com/jsmreese/moment-duration-format 
  *  Date: 2014-07-15
@@ -93810,7 +94313,7 @@ arguments[4][286][0].apply(exports,arguments)
 
 })(this);
 
-},{"moment":348}],348:[function(require,module,exports){
+},{"moment":349}],349:[function(require,module,exports){
 //! moment.js
 //! version : 2.16.0
 //! authors : Tim Wood, Iskren Chernev, Moment.js contributors
@@ -98110,7 +98613,7 @@ return hooks;
 
 })));
 
-},{}],349:[function(require,module,exports){
+},{}],350:[function(require,module,exports){
 (function (process,global){
 'use strict'
 
@@ -98222,11 +98725,11 @@ function randomFillSync (buf, offset, size) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":260,"randombytes":350,"safe-buffer":351}],350:[function(require,module,exports){
+},{"_process":260,"randombytes":351,"safe-buffer":352}],351:[function(require,module,exports){
 arguments[4][271][0].apply(exports,arguments)
-},{"_process":260,"dup":271,"safe-buffer":351}],351:[function(require,module,exports){
+},{"_process":260,"dup":271,"safe-buffer":352}],352:[function(require,module,exports){
 arguments[4][286][0].apply(exports,arguments)
-},{"buffer":174,"dup":286}],352:[function(require,module,exports){
+},{"buffer":174,"dup":286}],353:[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  * IPv6 Support
@@ -98413,7 +98916,7 @@ arguments[4][286][0].apply(exports,arguments)
   };
 }));
 
-},{}],353:[function(require,module,exports){
+},{}],354:[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  * Second Level Domain (SLD) Support
@@ -98660,7 +99163,7 @@ arguments[4][286][0].apply(exports,arguments)
   return SLD;
 }));
 
-},{}],354:[function(require,module,exports){
+},{}],355:[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  *
@@ -100916,7 +101419,7 @@ arguments[4][286][0].apply(exports,arguments)
   return URI;
 }));
 
-},{"./IPv6":352,"./SecondLevelDomains":353,"./punycode":355}],355:[function(require,module,exports){
+},{"./IPv6":353,"./SecondLevelDomains":354,"./punycode":356}],356:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.0 by @mathias */
 ;(function(root) {
@@ -101453,11 +101956,11 @@ arguments[4][286][0].apply(exports,arguments)
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],356:[function(require,module,exports){
+},{}],357:[function(require,module,exports){
 arguments[4][76][0].apply(exports,arguments)
-},{"dup":76}],357:[function(require,module,exports){
+},{"dup":76}],358:[function(require,module,exports){
 arguments[4][77][0].apply(exports,arguments)
-},{"./colors.json":356,"dup":77}],"blessed":[function(require,module,exports){
+},{"./colors.json":357,"dup":77}],"blessed":[function(require,module,exports){
 /**
  * blessed - a high-level terminal interface library for node.js
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -101819,7 +102322,7 @@ function decodeFrame(frame) {
   return { FIN, opcode, length, payload };
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":174,"http":296,"https":227,"os":236,"urijs":354}],"kubebox":[function(require,module,exports){
+},{"buffer":174,"http":296,"https":227,"os":236,"urijs":355}],"kubebox":[function(require,module,exports){
 'use strict';
 
 // TODO: display uncaught exception in a popup
@@ -102094,4 +102597,4 @@ class Kubebox extends EventEmitter {
 
 module.exports = Kubebox;
 
-},{"./client":1,"./config/config":3,"./http-then":"http-then","./promise":8,"./task":9,"./ui/blessed/patches":14,"./ui/debug":21,"./ui/spinner":24,"./ui/ui":25,"./util":26,"blessed":"blessed","blessed-contrib":27,"events":211,"os":236,"urijs":354}]},{},[]);
+},{"./client":1,"./config/config":3,"./http-then":"http-then","./promise":8,"./task":9,"./ui/blessed/patches":14,"./ui/debug":21,"./ui/spinner":24,"./ui/ui":25,"./util":26,"blessed":"blessed","blessed-contrib":27,"events":211,"os":236,"urijs":355}]},{},[]);
