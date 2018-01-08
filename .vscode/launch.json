@@ -19,7 +19,7 @@
             "name": "Node (attach)",
             "type": "node",
             "request": "attach",
-            "port": 5858
+            "port": 9229
         },
         {
             // Serve the 'docs' directory to http://localhost:8080
