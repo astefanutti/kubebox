@@ -2,7 +2,7 @@
   "name": "kubebox",
   "description": "Terminal console for Kubernetes clusters",
   "author": "Antonin Stefanutti",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "license": "MIT",
   "homepage": "https://github.com/astefanutti/kubebox",
   "main": "index.js",
