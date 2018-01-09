@@ -170,6 +170,10 @@ class Client {
   //
   // Design documentation can be found at the following locations:
   // https://github.com/kubernetes/community/tree/master/contributors/design-proposals/instrumentation
+  //
+  // In the meantime, metrics are either retrieved from the Kubelet /stats endpoint
+  // or directly from the cAdvisor port. Another source to consider is the
+  // /metrics/cadvisor endpoint on the secure handler of the kubelet.
 
   // Gets the stats from the Summary API exposed by Kubelet on the specified node
   summary_stats(node) {
@@ -1001,12 +1005,14 @@ blessed.listbar.prototype.appendItem = function (item, callback) {
 
   if (cmd.callback) {
     if (cmd.keys) {
+      // PATCH BEGIN
       this.on('detach', function () {
         this.screen.unkey(cmd.keys, handler);
       });
       this.on('attach', function () {
         this.screen.key(cmd.keys, handler);
       });
+      // PATCH END
     }
   }
 
@@ -1987,6 +1993,7 @@ class Dashboard {
       align  : 'left',
       tags   : false,
       keys   : true,
+      vi     : true,
       mouse  : true,
       border : 'line',
       style  : {
@@ -2047,6 +2054,7 @@ class Dashboard {
           pod_log.log(lines);
           lines.length = 0;
         }, 100, { trailing: true });
+        cancellations.add('dashboard.pod.logs', () => log.cancel());
         try {
           while (data = yield) {
             // skip empty data frame payload on connect!
@@ -2364,6 +2372,7 @@ module.exports.debug = blessed.log({
   width  : '100%',
   border : 'line',
   keys   : true,
+  vi     : true,
   mouse  : true,
   scrollable : true,
   scrollbar  : {
