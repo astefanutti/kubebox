@@ -47,7 +47,9 @@ image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
 * [x] Pod / container log watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires `cluster-admin` role on OpenShift.]
 * [ ] Container remote exec terminal
+* [ ] CRUD configuration operations
 * [ ] Cluster and node views
+* [ ] Cluster monitoring
 
 == Run
 
@@ -156,13 +158,16 @@ $ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/ope
 |Login
 
 |kbd:[←], kbd:[→]
-|Navigate screen
+|Navigate screens
 
 |kbd:[↑], kbd:[↓]
-|Navigate list / form
+|Navigate list / form / log
+
+|kbd:[Enter]
+|Select item / submit form
 
 |kbd:[ESC]
-|Close modal window / cancel form
+|Close modal window / cancel form / rewind focus
 
 |kbd:[q], kbd:[CTRL+c]
 |Exit footnoteref:[online keys, Not available in online version.]
@@ -172,7 +177,7 @@ $ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/ope
 |kbd:[←], kbd:[→]
 |Navigate Kube configurations
 
-2+^.e|Dashboard
+2+^.e|Namespace
 
 |kbd:[n]
 |Change current namespace
@@ -185,6 +190,14 @@ $ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/ope
 
 |kbd:[t]
 |Network usage
+
+2+^.e|Log
+
+|kbd:[g], kbd:[SHIFT+g]
+|Move to top / bottom
+
+|kbd:[CTRL+u], kbd:[CTRL+d]
+|Move one page up / down
 
 |===
 
