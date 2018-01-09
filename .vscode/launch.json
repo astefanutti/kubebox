@@ -32,7 +32,7 @@
         },
         {
             // Launch Chrome in debug mode
-            // google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
+            // google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug --ignore-certificate-errors
             "name": "Chrome (attach)",
             "type": "chrome",
             "request": "attach",
