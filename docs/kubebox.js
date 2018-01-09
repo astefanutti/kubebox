@@ -1935,7 +1935,7 @@ class Dashboard {
 
     const tabs = blessed.listbar({
       parent : resources,
-      top    : 1,
+      top    : 0,
       left   : 1,
       right  : 1,
       height : 'shrink',
@@ -1957,22 +1957,22 @@ class Dashboard {
       },
       commands: {
         'Memory': {
-          keys: ['M', 'm'],
-          callback: function() {
+          keys     : ['M', 'm'],
+          callback : function () {
             graphs.find(g => g.visible).toggle();
             memory_graph.toggle();
           }
         },
         'CPU': {
-          keys: ['C', 'c'],
-          callback: function() {
+          keys     : ['C', 'c'],
+          callback : function () {
             graphs.find(g => g.visible).toggle();
             cpu_graph.toggle();
           } 
         },
         'Net': {
-          keys: ['T', 't'],
-          callback: function() {
+          keys     : ['T', 't'],
+          callback : function () {
             graphs.find(g => g.visible).toggle();
             net_graph.toggle();
           }
@@ -1980,9 +1980,9 @@ class Dashboard {
       }
     });
 
-    const memory_graph = new chart(resources, { top: 3, abbreviate: humanBytes });
-    const cpu_graph = new chart(resources, { top: 3 });
-    const net_graph = new chart(resources, { top: 3 });
+    const memory_graph = new chart(resources, { top: 1, abbreviate: humanBytes });
+    const cpu_graph = new chart(resources, { top: 1 });
+    const net_graph = new chart(resources, { top: 1 });
     const graphs = [memory_graph, cpu_graph, net_graph];
     graphs.slice(1).forEach(g => g.toggle());
 
@@ -2285,9 +2285,10 @@ class Dashboard {
       screen.render();
     }
 
+    // FIXME: handle current namespace deletion nicely
     this.run = function (namespace) {
       current_namespace = namespace;
-      // TODO: should ideally be cancellable
+      // FIXME: should be cancellable
       return until(get(client.get_pods(current_namespace)))
         .spin(s => pods_table.setLabel(`${s} Pods`))
         .succeed(_ =>  pods_table.setLabel('Pods'))
