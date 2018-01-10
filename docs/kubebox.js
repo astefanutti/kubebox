@@ -160,9 +160,9 @@ class Client {
     }, this.master_api);
   }
 
-  exec(namespace, pod, container) {
+  exec(namespace, pod, container, termName) {
     const path    = URI(`/api/v1/namespaces/${namespace}/pods/${pod}/exec`);
-    const command = [ "/bin/sh", "-i" ];
+    const command = [ "/bin/sh", "-c", `TERM=${termName} sh` ];
     path.addQuery('stdout', 1);
     path.addQuery('stdin', 1);
     path.addQuery('stderr', 1);
@@ -2501,6 +2501,10 @@ class Exec {
     });
     term = terminal.term;
     term.on('resize', self.sendResize.bind(self));
+
+    this.termName = function () {
+      return terminal.termName;
+    }
 
     this.blur = function () {
       screen.grabKeys = false;
@@ -108790,7 +108794,7 @@ class Kubebox extends EventEmitter {
       
       // connect
       const exec = new Exec(screen, namespace, pod, container, user);
-      const { promise, cancellation, sendData, getSocket} = get(client.exec(namespace, pod, container), { stream: () => exec.print() });
+      const { promise, cancellation, sendData, getSocket} = get(client.exec(namespace, pod, container, exec.termName()), { stream: () => exec.print() });
       promise
         .then(() => debug.log(`{grey-fg}Remote shell in container: '${container}', pod: '${pod}' and namespace: '${namespace}' with user '${user}'{/grey-fg}...`))
         .then(() => {
