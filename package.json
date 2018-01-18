@@ -52,7 +52,6 @@
       "requires": [],
       "excludes": [
         "pty.js",
-        "term.js",
         "map-canvas",
         "marked-terminal",
         "picture-tube"
@@ -64,7 +63,7 @@
         "--fully-static"
       ],
       "framework": "node",
-      "version": "7.0.0",
+      "version": "9.4.0",
       "ignoreFlags": true
     }
   }
