@@ -52,10 +52,7 @@
     "browserify": {
       "requires": [],
       "excludes": [
-        "pty.js",
-        "map-canvas",
-        "marked-terminal",
-        "picture-tube"
+        "pty.js"
       ],
       "paths": []
     },
