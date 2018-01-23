@@ -2477,7 +2477,7 @@ var SelectionManager = (function (_super) {
     SelectionManager.prototype.selectAll = function () {
         this._model.isSelectAllActive = true;
         this.refresh();
-        this.emit('selection');
+        this._terminal.emit('selection');
     };
     SelectionManager.prototype._onTrim = function (amount) {
         var needsRefresh = this._model.onTrim(amount);
@@ -2648,7 +2648,7 @@ var SelectionManager = (function (_super) {
     SelectionManager.prototype._onMouseUp = function (event) {
         this._removeMouseDownListeners();
         if (this.hasSelection)
-            this.emit('selection');
+            this._terminal.emit('selection');
     };
     SelectionManager.prototype._convertViewportColToCharacterIndex = function (bufferLine, coords) {
         var charIndex = coords[0];
@@ -3194,7 +3194,6 @@ var Terminal = (function (_super) {
         this.viewportScrollArea = document.createElement('div');
         this.viewportScrollArea.classList.add('xterm-scroll-area');
         this.viewportElement.appendChild(this.viewportScrollArea);
-        this.syncBellSound();
         this._mouseZoneManager = new MouseZoneManager_1.MouseZoneManager(this);
         this.on('scroll', function () { return _this._mouseZoneManager.clearAll(); });
         this.linkifier.attachToDom(this._mouseZoneManager);
@@ -3217,6 +3216,7 @@ var Terminal = (function (_super) {
         this.charSizeStyleElement = document.createElement('style');
         this.helperContainer.appendChild(this.charSizeStyleElement);
         this.charMeasure = new CharMeasure_1.CharMeasure(document, this.helperContainer);
+        this.syncBellSound();
         this.element.appendChild(fragment);
         this.renderer = new Renderer_1.Renderer(this, this.options.theme);
         this.options.theme = null;
@@ -4249,6 +4249,9 @@ var Terminal = (function (_super) {
             this.options.bellStyle === 'both';
     };
     Terminal.prototype.syncBellSound = function () {
+        if (!this.element) {
+            return;
+        }
         if (this.soundBell() && this.bellAudioElement) {
             this.bellAudioElement.setAttribute('src', this.options.bellSound);
         }
@@ -5539,6 +5542,7 @@ var Renderer = (function (_super) {
         };
         _this._devicePixelRatio = window.devicePixelRatio;
         _this._updateDimensions();
+        _this.onOptionsChanged();
         return _this;
     }
     Renderer.prototype.onWindowResize = function (devicePixelRatio) {

@@ -29,7 +29,7 @@
 
     body {
       height: 100%;
-      margin: 2px;
+      margin: 0px;
       background-color: black;
     }
 
@@ -143,6 +143,7 @@
       })
   ])
   .then(([ , , server]) => {
+    Terminal.applyAddon(fit);
     var term = new Terminal({
       fontFamily : 'Hack Braille, Courier New, Courier, monospace',
       fontSize   : 12,
