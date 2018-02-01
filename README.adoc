@@ -19,7 +19,7 @@ endif::[]
 :uri-badge-npm: https://img.shields.io/npm/v/kubebox.svg
 :uri-badge-node: https://img.shields.io/node/v/kubebox.svg
 :uri-kubebox-npm: https://www.npmjs.com/package/kubebox
-:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.1.0
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.1.1
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
 :uri-minikube: https://github.com/kubernetes/minikube
