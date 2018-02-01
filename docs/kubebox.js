@@ -85435,9 +85435,8 @@ class Kubebox extends EventEmitter {
         if (cancellation()) debug.log(`{grey-fg}Cancelled connection to ${client.url}{/grey-fg}`);
       });
       return until(promise
-        // update the master URL based on federation information
-        // TODO: select the server whose client CIDR matches the client IP
-        .then(response => client.url = `${client.master_api.protocol}//${JSON.parse(response.body.toString('utf8')).serverAddressByClientCIDRs[0].serverAddress}`)
+        // We may want to update the master URL based on federation information
+        // by selecting the server whose client CIDR matches the client IP (serverAddressByClientCIDRs)
         .then(() => login ? log(`{green-fg}Connected to {bold}${client.url}{/bold}{/green-fg}`) : '')
         .then(() => get(client.get_apis()))
         .then(response => client.apis = JSON.parse(response.body.toString('utf8')).paths)
