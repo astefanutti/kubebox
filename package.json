@@ -18,7 +18,8 @@
     "server": "node ./docs/server.js"
   },
   "pkg": {
-    "scripts": "node_modules/blessed/lib/widgets/*.js"
+    "scripts": "node_modules/blessed/lib/widgets/*.js",
+    "assets": "node_modules/blessed/usr/*"
   },
   "repository": {
     "type": "git",
