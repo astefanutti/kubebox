@@ -63,10 +63,9 @@ Download the Kubebox standalone executable for your OS:
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
 # Linux
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
+# Windows
+$ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 --
-
-Note that, at this time, Windows binary is not functional.
-You can use the other alternatives documented below.
 
 === NPM
 
