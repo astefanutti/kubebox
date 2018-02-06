@@ -27,8 +27,6 @@ endif::[]
 :uri-minishift: https://github.com/minishift/minishift
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 
-image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
-
 {description}
 
 //image::https://astefanutti.github.io/kubebox/kubebox.gif[align="center"]
@@ -68,6 +66,8 @@ $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 --
 
 === NPM
+
+image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
 
 Install Kubebox globally and run it:
 
