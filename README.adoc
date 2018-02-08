@@ -91,10 +91,10 @@ You can run Kubebox using Docker, e.g.:
 $ docker run -it --rm astefanutti/kubebox
 ```
 
-You may want to mount your home directory so that Kubebox can rely on the `~./kube/config` file, e.g.:
+You may want to mount your home directory so that Kubebox can rely on the `~/.kube/config` file, e.g.:
 
 ```sh
-$ docker run -it --rm -v ~/.kube/:/root/.kube/:ro astefanutti/kubebox
+$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
 ```
 
 === Online
