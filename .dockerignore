@@ -1,4 +1,4 @@
 *
 !lib
 !index.js
-!package.json
+!package*.json
