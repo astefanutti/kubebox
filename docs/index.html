@@ -179,9 +179,9 @@
     };
 
     var program = blessed.program({ input: term, output: term, tput: false });
-    var screen  = blessed.screen({
+    var screen = blessed.screen({
       program       : program,
-      Terminal      : 'xterm-256color',
+      terminal      : 'xterm-256color',
       resizeTimeout : 10,
       forceUnicode  : true,
       // smartCSR   : true,
