@@ -2553,7 +2553,8 @@ module.exports = Dashboard;
 
 const blessed = require('blessed');
 
-module.exports.debug = blessed.log({
+const debug = screen => blessed.log({
+  screen : screen,
   label  : 'Debug',
   tags   : true,
   top    : 1,
@@ -2578,10 +2579,16 @@ module.exports.debug = blessed.log({
   }
 });
 
-module.exports.log = message => new Promise(resolve => {
-  module.exports.debug.log(message);
-  resolve();
-});
+module.exports = screen => {
+  const d = debug(screen);
+  return {
+    debug : d,
+    log   : message => new Promise(resolve => {
+      d.log(message);
+      resolve();
+    }),
+  }
+};
 
 },{"blessed":"blessed"}],24:[function(require,module,exports){
 (function (Buffer){
@@ -2737,9 +2744,10 @@ module.exports = Exec;
 const blessed = require('blessed'),
       os      = require('os');
 
-function login_form(kube_config, kubebox, { closable, server } = { closable: false }) {
+function login_form(screen, kube_config, kubebox, { closable, server } = { closable: false }) {
   const form = blessed.form({
     name      : 'form',
+    screen    : screen,
     keys      : true,
     clickable : true,
     left      : 'center',
@@ -2993,7 +3001,7 @@ function prompt(screen, kube_config, kubebox, { closable, message, server }) {
     screen.grabKeys = true;
     screen.grabMouse = true;
 
-    const { form, refresh, username, password, token, url } = login_form(kube_config, kubebox, { closable, server });
+    const { form, refresh, username, password, token, url } = login_form(screen, kube_config, kubebox, { closable, server });
 
     function kubeConfigChange() {
       form.resetSelected();
@@ -3066,9 +3074,10 @@ const blessed = require('blessed'),
       os      = require('os'),
       spinner = require('./spinner');
 
-function namespaces_list() {
+function namespaces_list(screen) {
   // TODO: display a list table with some high level info about the namespaces
   const namespaces_list = blessed.list({
+    screen    : screen,
     top       : 'center',
     left      : 'center',
     width     : '50%',
@@ -3098,7 +3107,7 @@ function namespaces_list() {
 
 function prompt(screen, client, { current_namespace, promptAfterRequest } = { promptAfterRequest : false }) {
   return new Promise(function(fulfill, reject) {
-    const list = namespaces_list();
+    const list = namespaces_list(screen);
     const { until } = spinner(screen);
     let namespaces = [];
 
@@ -85352,7 +85361,7 @@ class Kubebox extends EventEmitter {
     super();
     const kubebox = this;
     const cancellations = new task.Cancellations();
-    const { debug, log } = require('./ui/debug');
+    const { debug, log } = require('./ui/debug')(screen);
     const { until } = spinner(screen);
     const kube_config = new KubeConfig({ debug, server });
     this.loadKubeConfig = config => kube_config.loadFromConfig(config);
