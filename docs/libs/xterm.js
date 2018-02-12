@@ -4483,9 +4483,13 @@ var Terminal = (function (_super) {
             return;
         }
         if (x === this.cols && y === this.rows) {
-            if (!this.charMeasure.width || !this.charMeasure.height) {
-                this.charMeasure.measure(this.options);
+            // PATCH BEGIN https://github.com/xtermjs/xterm.js/issues/1278
+            if (this.charMeasure) {
+                if (!this.charMeasure.width || !this.charMeasure.height) {
+                    this.charMeasure.measure(this.options);
+                }
             }
+            // PATCH END
             return;
         }
         if (x < 1)
@@ -4496,9 +4500,11 @@ var Terminal = (function (_super) {
         this.cols = x;
         this.rows = y;
         this.buffers.setupTabStops(this.cols);
+        // PATCH BEGIN https://github.com/xtermjs/xterm.js/issues/1278
         if (this.charMeasure) {
-        this.charMeasure.measure(this.options);
+            this.charMeasure.measure(this.options);
         }
+        // PATCH END
         this.refresh(0, this.rows - 1);
         this.emit('resize', { cols: x, rows: y });
     };
