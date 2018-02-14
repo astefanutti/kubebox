@@ -11,9 +11,9 @@
   },
   "scripts": {
     "start": "node index.js",
-    "browserify": "browserify -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -i pty.js -i node-pty.js -i jsdom.js -i xterm.js -o docs/kubebox.js",
-    "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -i pty.js -i node-pty.js -i jsdom.js -i xterm.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
-    "bundle": "browserify index.js -o bundle.js -i pty.js -i node-pty.js -i jsdom.js -i xterm.js --bare",
+    "browserify": "browserify -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -u pty.js -u xterm -u term.js -o docs/kubebox.js",
+    "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
+    "bundle": "browserify index.js -o bundle.js -u pty.js -u term.js --bare",
     "executable": "nexe package.json",
     "server": "node ./docs/server.js"
   },
