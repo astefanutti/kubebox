@@ -3775,6 +3775,7 @@ class Exec extends Duplex {
       self.focus();
       terminal.once('render', function() {
         terminal.term.resize(terminal.width - terminal.iwidth, terminal.height - terminal.iheight);
+        self.sendResize();
       });
     };
 
