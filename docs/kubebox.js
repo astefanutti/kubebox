@@ -3158,6 +3158,7 @@ class Exec extends Duplex {
       self.focus();
       terminal.once('render', function() {
         terminal.term.resize(terminal.width - terminal.iwidth, terminal.height - terminal.iheight);
+        self.sendResize();
       });
     };
 
@@ -25037,7 +25038,7 @@ Terminal.prototype.kill = function() {
 module.exports = Terminal;
 
 }).call(this,{"isBuffer":require("../../../browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../../../browserify/node_modules/is-buffer/index.js":186,"./box":45,"./node":61,"_process":215,"pty.js":79,"term.js":undefined}],73:[function(require,module,exports){
+},{"../../../browserify/node_modules/is-buffer/index.js":186,"./box":45,"./node":61,"_process":215,"pty.js":undefined,"term.js":undefined}],73:[function(require,module,exports){
 /**
  * text.js - text element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
