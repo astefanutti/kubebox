@@ -29,10 +29,10 @@ endif::[]
 
 {description}
 
-//image::https://astefanutti.github.io/kubebox/kubebox.gif[align="center"]
+//image::https://astefanutti.github.io/kubebox/kubebox.png[align="center"]
 ++++
 <p align="center">
-  <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.gif">
+  <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.png">
 </p>
 ++++
 
