@@ -1,9 +1,8 @@
 /*
 
-!libs
-!fonts
-!kubebox.js
+!libs/
+!fonts/
 !index.html
+!kubebox.js
 
-!package.json
-!server.js
+!nginx.conf

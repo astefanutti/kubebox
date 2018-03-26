@@ -110,8 +110,10 @@
 
   <script>
   var blessed = require('blessed');
+  var Context = require('context');
   var get     = require('http-then').get;
   var Kubebox = require('kubebox');
+  var URI     = require('urijs');
 
   // Should ideally be inherited from require('events').EventEmitter
   Terminal.prototype.listenerCount = function (type) {
@@ -133,12 +135,12 @@
   Promise.all([
     new FontFaceObserver('Hack Braille', { weight: 'normal' }).load(null, 30000),
     new FontFaceObserver('Hack Braille', { weight: 'bold' }).load(null, 30000),
-    // checking the Master API environment variable
-    get('/env')
-      .then(response => JSON.parse(response.body.toString('utf8')).KUBEBOX_MASTER_API)
+    // Checking server mode
+    get('/server')
+      .then(response => new URI().query('').path('/master').toString())
       .catch(error => {
         if (!error.response || error.response.statusCode !== 404) {
-          console.log('Error getting Kubebox environment');
+          console.log('Error checking Kubebox mode');
         }
       })
   ])
@@ -190,7 +192,7 @@
       warnings      : true,
     });
 
-    var kubebox = new Kubebox(screen, server);
+    var kubebox = new Kubebox(screen, server ? Context.getBaseMasterApi(server) : null);
 
     // Kube config import modal popup
     var popup  = document.getElementById('popup');
