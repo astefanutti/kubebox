@@ -131,8 +131,8 @@
 
   // TODO: add a spinner while loading resources
   Promise.all([
-    new FontFaceObserver('Hack Braille', { weight: 'normal' }).load(),
-    new FontFaceObserver('Hack Braille', { weight: 'bold' }).load(),
+    new FontFaceObserver('Hack Braille', { weight: 'normal' }).load(null, 30000),
+    new FontFaceObserver('Hack Braille', { weight: 'bold' }).load(null, 30000),
     // checking the Master API environment variable
     get('/env')
       .then(response => JSON.parse(response.body.toString('utf8')).KUBEBOX_MASTER_API)
