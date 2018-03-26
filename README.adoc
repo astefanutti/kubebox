@@ -26,6 +26,7 @@ endif::[]
 :uri-minikube-kubernetes: https://github.com/kubernetes/minikube/blob/master/docs/configuring_kubernetes.md
 :uri-minishift: https://github.com/minishift/minishift
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
+:uri-xterm-js: https://github.com/xtermjs/xterm.js
 
 {description}
 
@@ -97,6 +98,31 @@ You may want to mount your home directory so that Kubebox can rely on the `~/.ku
 $ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
 ```
 
+=== Server
+
+Kubebox can be served from a service deployed in the target Kubernetes cluster.
+Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication with the Kubernetes master API is proxied by the server.
+
+==== Kubernetes
+
+```sh
+# Replace the ROUTE_HOSTNAME variable
+$ kubectl create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/kubernetes.yaml
+```
+
+In order for the Ingress resource to work, the cluster must have an Ingress controller running. See {uri-ingress-controllers}[Ingress controllers] for more information.
+In case you use Minikube, this can be achieved with:
+
+```
+$ minikube addons enable ingress
+```
+
+==== OpenShift
+
+```sh
+$ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/openshift.yaml
+```
+
 === Online
 
 Kubebox is available online at http://kube.sh. Note that this requires this address to match the allowed origins for CORS by the API server.
@@ -117,33 +143,6 @@ Or if you use {uri-minishift}[Minishift]:
 
 ```sh
 $ minishift openshift config set --patch '{"corsAllowedOrigins": [".*"]}'
-```
-
-=== On Premises
-
-Kubebox can be served from a container deployed in a Kubernetes cluster whose address to connect to is pre-configured during the deployment.
-Note that the externally-reachable host name that routes to the Kubebox service is required to match the allowed origins for CORS by the API server.
-
-==== Kubernetes
-
-```sh
-# Replace the ROUTE_HOSTNAME and the KUBERNETES_MASTER variables
-$ kubectl create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/kubernetes.yaml
-```
-
-In order for the Ingress resource to work, the cluster must have an Ingress controller running. See {uri-ingress-controllers}[Ingress controllers] for more information.
-In case you use Minikube, this can be achieved with:
-
-```
-$ minikube addons enable ingress
-```
-
-==== OpenShift
-
-```sh
-$ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/openshift.yaml \
-  -p ROUTE_HOSTNAME=<HOST> \
-  -p OPENSHIFT_MASTER=<URL>
 ```
 
 == Commands
