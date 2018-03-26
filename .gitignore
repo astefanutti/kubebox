@@ -1,8 +1,11 @@
-.*/
-!.vscode/
+*/
+!/.vscode/
 
-# Dependency directories
-node_modules/
+!/docs/
+!/docs/**/*
+
+!/lib/
+!/lib/**/*
 
 # Logs
 *.log
