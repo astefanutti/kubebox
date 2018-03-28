@@ -1951,7 +1951,7 @@ class Dashboard {
         ch    : ' ',
         style : { bg: 'white' },
         track : {
-          style : { bg: 'black' },
+          style : { bg: 'grey' },
         }
       },
       style : {
