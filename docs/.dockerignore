@@ -6,3 +6,5 @@
 !kubebox.js
 
 !nginx.conf
+!nginx.js
+!nginx.sh
