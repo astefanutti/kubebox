@@ -49,6 +49,7 @@ spec:
     spec:
       containers:
       - image: astefanutti/kubebox:server
+        imagePullPolicy: Always
         name: kubebox
         ports:
         - containerPort: 8080
