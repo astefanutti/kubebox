@@ -19,7 +19,7 @@ objects:
     tags:
     - from:
         kind: DockerImage
-        name: docker.io/astefanutti/kubebox:server
+        name: docker.io/astefanutti/kubebox
       importPolicy:
         scheduled: true
       name: server
@@ -67,9 +67,11 @@ objects:
           app: kubebox
       spec:
         containers:
-        - image: astefanutti/kubebox:server
+        - image: astefanutti/kubebox
           imagePullPolicy: Always
           name: kubebox
+          command: ["node", "server.js"]
+          tty: true
           ports:
           - containerPort: 8080
             protocol: TCP

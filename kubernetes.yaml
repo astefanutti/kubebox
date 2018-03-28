@@ -48,8 +48,10 @@ spec:
         name: kubebox
     spec:
       containers:
-      - image: astefanutti/kubebox:server
+      - image: astefanutti/kubebox
         name: kubebox
+        command: ["node", "server.js"]
+        tty: true
         ports:
         - containerPort: 8080
           protocol: TCP

@@ -1,4 +1,10 @@
 *
-!lib
+
+!docs/
+!lib/
+
 !index.js
-!package*.json
+!package.json
+!package-lock.json
+!index.html
+!server.js

@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+
+<head>
+  <link rel="stylesheet" href="docs/libs/xterm.css" />
+  <script src="docs/libs/fontfaceobserver.js"></script>
+  <script src="docs/libs/xterm.js"></script>
+  <script src="docs/libs/fit.js"></script>
+
+  <style>
+    @font-face {
+      font-family: 'Hack Braille';
+      src: url('docs/fonts/hack-regular-braille.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    @font-face {
+      font-family: 'Hack Braille';
+      src: url('docs/fonts/hack-bold-braille.woff2') format('woff2');
+      font-weight: bold;
+      font-style: normal;
+    }
+
+    html {
+      height: 100%;
+    }
+
+    body {
+      height: 100%;
+      margin: 0px;
+      background-color: #2b2b2b;
+    }
+
+    #terminal {
+      height: 100%;
+      width: 100%;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="terminal"></div>
+
+  <script>
+
+  // Should ideally be inherited from require('events').EventEmitter
+  Terminal.prototype.listenerCount = function (type) {
+    return this.listeners(type).length;
+  };
+  Object.defineProperty(Terminal.prototype, 'columns', {
+    get: function () {
+      return this.cols;
+    }
+  });
+  // By-pass Xterm.js event queue as Blessed expect a single event to be sent
+  // to the data handler. This actually happens on iOS with the mouseover and
+  // mouseup events.
+  Terminal.prototype.send = function (data) {
+    this.handler(data);
+  }
+
+  // TODO: add a spinner while loading resources
+  Promise.all([
+    new FontFaceObserver('Hack Braille', { weight: 'normal' }).load(),
+    new FontFaceObserver('Hack Braille', { weight: 'bold' }).load(),
+  ])
+  .then(([ , ]) => {
+    Terminal.applyAddon(fit);
+    var term = new Terminal({
+      fontFamily : 'Hack Braille, Courier New, Courier, monospace',
+      fontSize   : 13,
+      theme      : {
+        foreground    : '#d2d2d2',
+        background    : '#2b2b2b',
+        cursor        : '#adadad',
+        black         : '#000000',
+        red           : '#d81e00',
+        green         : '#5ea702',
+        yellow        : '#cfae00',
+        blue          : '#427ab3',
+        magenta       : '#89658e',
+        cyan          : '#00a7aa',
+        white         : '#dbded8',
+        brightBlack   : '#686a66',
+        brightRed     : '#f54235',
+        brightGreen   : '#99e343',
+        brightYellow  : '#fdeb61',
+        brightBlue    : '#84b0d8',
+        brightMagenta : '#bc94b7',
+        brightCyan    : '#37e6e8',
+        brightWhite   : '#f1f1f0',
+      },
+    });
+
+    var httpsEnabled = window.location.protocol === 'https:';
+    var url = (httpsEnabled ? 'wss://' : 'ws://') + window.location.host + window.location.pathname + 'ws';
+    textDecoder = new TextDecoder();
+    textEncoder = new TextEncoder();
+
+    var ws = new WebSocket(url, ['tty']);
+    var sendMessage = function (cmd, data) {
+        if (ws.readyState === WebSocket.OPEN) {
+            const payload = textEncoder.encode(data);
+            const message = new Uint8Array(payload.length + 1);
+            message.set([cmd]);
+            message.set(payload, 1);
+            ws.send(message);
+        }
+    };
+    var sendData = function (data) {
+        sendMessage(0, data);
+    };
+
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = function(event) {
+        console.log('Websocket connection opened');
+        wsError = false;
+
+        term.on('resize', function (size) {
+            // console.log('resize')
+            sendMessage(1, JSON.stringify({columns: size.cols, rows: size.rows}));
+        });
+
+        term.on('title', function (data) {
+            if (data && data !== '') {
+                document.title = (data + ' | ' + title);
+            }
+        });
+
+        term.on('data', sendData);
+
+        window.onresize = function () {
+            term.fit();
+        };
+
+        // term.isTTY = true;
+        term.open(document.getElementById('terminal'));
+        term.focus();
+        term.fit();
+    };
+
+    ws.onmessage = function(event) {
+        var rawData = new Uint8Array(event.data),
+            cmd = rawData[0],
+            data = textDecoder.decode(rawData.slice(1));
+
+        // var rawData = event.data,
+        //     cmd = rawData[0],
+        //     data = rawData.slice(1);
+
+        switch(cmd) {
+            case 0:
+                // term.write(textDecoder.decode(data));
+                term.write(data);
+                break;
+            case 1:
+                // title = textDecoder.decode(data);
+                title = data;
+                document.title = title;
+                break;
+            // case 2:
+                // var preferences = JSON.parse(textDecoder.decode(data));
+                // Object.keys(preferences).forEach(function(key) {
+                //     console.log('Setting ' + key + ': ' +  preferences[key]);
+                //     term.setOption(key, preferences[key]);
+                // });
+                // break;
+            // case 3:
+                // autoReconnect = JSON.parse(textDecoder.decode(data));
+                // console.log('Enabling reconnect: ' + autoReconnect + ' seconds');
+                // break;
+            default:
+                console.log('Unknown command: ' + event.data);
+                break;
+        }
+    };
+
+    ws.onclose = function(event) {
+        console.log('Websocket connection closed with code: ' + event.code);
+        if (term) {
+            term.off('data');
+            term.off('resize');
+        }
+    };
+
+  });
+  </script>
+</body>
+
+</html>

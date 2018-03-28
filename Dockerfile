@@ -1,16 +1,16 @@
 FROM node:9.5.0-alpine as builder
 
-ENV NODE_ENV production
-
 WORKDIR /kubebox
 
-COPY package*.json ./
+COPY package.json package-lock.json ./
 COPY lib lib/
 COPY index.js ./
+COPY server.js ./
 
 RUN npm install
 RUN npm install -g browserify
-RUN npm run bundle
+RUN browserify index.js -o client.bundle.js -i pty.js --bare
+RUN browserify server.js -o server.bundle.js -i pty.js -u bufferutil -u utf-8-validate --bare
 
 FROM node:9.5.0-alpine
 
@@ -19,10 +19,19 @@ ENV LANG C.UTF-8
 
 WORKDIR /kubebox
 
-COPY --from=builder /kubebox/bundle.js /kubebox/bundle.js
+#TODO: should ideally be factorized
+COPY --from=builder /kubebox/client.bundle.js /kubebox/client.js
+COPY --from=builder /kubebox/server.bundle.js /kubebox/server.js
 
-RUN chown -R node:node /kubebox
+COPY docs/fonts docs/fonts
+COPY docs/libs docs/libs
+COPY index.html ./
+
+# RUN echo -e '#!/bin/sh\nnode /kubebox/server.js $*' > /usr/bin/kubebox && \
+#     chmod a+x /usr/bin/kubebox
+
+RUN chown node:node /kubebox
 
 USER node
 
-ENTRYPOINT ["node", "bundle.js"]
+ENTRYPOINT ["node", "client.js"]
