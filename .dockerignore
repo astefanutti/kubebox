@@ -1,4 +1,5 @@
 *
 !lib
 !index.js
-!package*.json
+!package.json
+!package-lock.json
