@@ -6,9 +6,6 @@ parameters:
 - name: ROUTE_HOSTNAME
   description: The externally-reachable host name that routes to the Kubebox service
   required: false
-- name: OPENSHIFT_MASTER
-  description: The cluster Master API address
-  required: true
 message: |-
   Kubebox is deployed at ${ROUTE_HOSTNAME}.
 objects:
@@ -40,8 +37,6 @@ objects:
         targetPort: 8080
     selector:
       app: kubebox
-    type: ClusterIP
-    sessionAffinity: None
 - apiVersion: v1
   kind: Route
   metadata:
@@ -79,8 +74,8 @@ objects:
           - containerPort: 8080
             protocol: TCP
           env:
-          - name: KUBEBOX_MASTER_API
-            value: ${OPENSHIFT_MASTER}
+          - name: KUBEBOX_USE_SA_TOKEN
+            value: false
     triggers:
     - imageChangeParams:
         automatic: true

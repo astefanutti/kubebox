@@ -12,8 +12,6 @@ spec:
       targetPort: 8080
   selector:
     name: kubebox
-  type: ClusterIP
-  sessionAffinity: None
 ---
 apiVersion: extensions/v1beta1
 kind: Ingress
@@ -25,13 +23,13 @@ metadata:
     ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
-  - host: ${ROUTE_HOSTNAME}
-    http:
+  - http:
       paths:
       - path: /
         backend:
           serviceName: kubebox
           servicePort: 8080
+    # host: ${ROUTE_HOSTNAME}
 ---
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -55,6 +53,3 @@ spec:
         ports:
         - containerPort: 8080
           protocol: TCP
-        env:
-        - name: KUBEBOX_MASTER_API
-          value: ${KUBERNETES_MASTER}
