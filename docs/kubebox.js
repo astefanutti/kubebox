@@ -83389,15 +83389,27 @@ class Kubebox extends EventEmitter {
         .catch(error => console.error(error.stack));
     });
 
+    function error(message) {
+      const err = Error(message);
+      err.name = 'Kubebox';
+      return err;
+    }
+
+    function fail(options = {}) {
+      return error => {
+        debug.log(`{red-fg}${error.name === 'Kubebox' ? error.message : error.stack}{/red-fg}`);
+        return logging(Object.assign({}, options, { message: `{red-fg}${error.message}{/red-fg}` }))
+          .catch(fail(options));
+      }
+    }
+
     screen.key(['l', 'C-l'], (ch, key) => logging({ closable: true })
-      .catch(error => console.error(error.stack)));
+      .catch(fail({ closable: true })));
 
     if (typeof client.master_api !== 'undefined') {
-      connect(kube_config ? kube_config.current_context.user : null)
-        .catch(error => console.error(error.stack));
+      connect(kube_config ? kube_config.current_context.user : null).catch(fail());
     } else {
-      logging({ closable: false })
-        .catch(error => console.error(error.stack));
+      logging().catch(fail());
     }
 
     function connect(login, options = {}) {
@@ -83466,7 +83478,7 @@ class Kubebox extends EventEmitter {
 
     function authenticate(login) {
       if (!client.openshift)
-        return Promise.reject(Error(`Authentication failed for ${client.url}`));
+        return Promise.reject(error(`Authentication failed for ${client.url}`));
       // password takes precedence over token
       return (isNotEmpty(login.token) && isEmpty(login.password) ? Promise.resolve(login.token)
         // try retrieving an OAuth access token from the OpenShift OAuth server
@@ -83477,13 +83489,13 @@ class Kubebox extends EventEmitter {
               if (response.statusCode === 200 && path === '/oauth/token/display') {
                 return response.body.toString('utf8').match(/<code>(.*)<\/code>/)[1];
               } else if (path === '/login') {
-                const error = Error('Authentication failed!');
+                const error = error('Authentication failed!');
                 // fake authentication error to emulate the implicit grant flow
                 response.statusCode = 401;
                 error.response = response;
                 throw error;
               } else {
-                throw Error('Unsupported authentication!');
+                throw error('Unsupported authentication!');
               }
             })
           : get(client.oauth_authorize(login))
