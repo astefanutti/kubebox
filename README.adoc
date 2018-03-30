@@ -16,9 +16,6 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
-:uri-badge-npm: https://img.shields.io/npm/v/kubebox.svg
-:uri-badge-node: https://img.shields.io/node/v/kubebox.svg
-:uri-kubebox-npm: https://www.npmjs.com/package/kubebox
 :uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.1.1
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
@@ -37,6 +34,30 @@ endif::[]
 </p>
 ++++
 
+=== Try
+
+++++
+<p align="center"/>
+  <i>Standalone Client Executable<a href="#executable">⇲</a></i><br>
+</p>
+<p align="center">
+  <i>In-cluster Client</i><br>
+  <code>$ kubectl run kubebox -it --rm --image=astefanutti/kubebox --restart=Never</code>
+<p/>
+<p align="center">
+  <i>Docker Client <a href="#docker">⇲</a></i><br>
+  <code>$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox</code>
+<p align="center"/>
+  <i>Web Server <a href="#server">⇲</a></i><br>
+  <code>$ kubectl create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/kubernetes.yaml</code>
+</p>
+<p align="center"/>
+  <i>Web Client <a href="#online">⇲</a></i><br>
+  <a href="http://kube.sh">http://kube.sh</a>
+</p>
+++++
+
+
 === Features
 
 * [x] Connections configuration sourcing from Kube config (`$HOME/.kube`)
@@ -52,6 +73,8 @@ endif::[]
 
 == Run
 
+The following alternatives are available for you to use Kubebox, depending on your preferences and constraints.
+
 === Executable
 
 Download the Kubebox standalone executable for your OS:
@@ -65,38 +88,6 @@ $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
 # Windows
 $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 --
-
-=== NPM
-
-image:{uri-badge-npm}[link="{uri-kubebox-npm}"] image:{uri-badge-node}[]
-
-Install Kubebox globally and run it:
-
-```sh
-$ npm install -g kubebox
-$ kubebox
-```
-
-Or locally:
-
-```sh
-$ npm install kubebox
-$ `npm bin`/kubebox
-```
-
-=== Docker
-
-You can run Kubebox using Docker, e.g.:
-
-```sh
-$ docker run -it --rm astefanutti/kubebox
-```
-
-You may want to mount your home directory so that Kubebox can rely on the `~/.kube/config` file, e.g.:
-
-```sh
-$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
-```
 
 === Server
 
@@ -123,6 +114,20 @@ $ minikube addons enable ingress
 $ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/openshift.yaml
 ```
 
+=== Docker
+
+You can run Kubebox using Docker, e.g.:
+
+```sh
+$ docker run -it --rm astefanutti/kubebox
+```
+
+You may want to mount your home directory so that Kubebox can rely on the `~/.kube/config` file, e.g.:
+
+```sh
+$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
+```
+
 === Online
 
 Kubebox is available online at http://kube.sh. Note that this requires this address to match the allowed origins for CORS by the API server.
@@ -143,6 +148,22 @@ Or if you use {uri-minishift}[Minishift]:
 
 ```sh
 $ minishift openshift config set --patch '{"corsAllowedOrigins": [".*"]}'
+```
+
+=== NPM
+
+Install Kubebox globally and run it:
+
+```sh
+$ npm install -g kubebox
+$ kubebox
+```
+
+Or locally:
+
+```sh
+$ npm install kubebox
+$ `npm bin`/kubebox
 ```
 
 == Commands
