@@ -65,7 +65,6 @@ endif::[]
 |Done |Plan
 
 |
-[disk]
 * Connections configuration sourcing from Kube config (`$HOME/.kube`)
 * Login and OAuth authentication support
 * Namespace selection
@@ -74,7 +73,6 @@ endif::[]
 * Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
 * Container remote exec terminal
 |
-[circle]
 * CRUD configuration operations
 * Cluster and node views
 * Cluster monitoring
@@ -200,7 +198,7 @@ $ `npm bin`/kubebox
 |Close modal window / cancel form / rewind focus
 
 |kbd:[q], kbd:[CTRL+c]
-|Exit footnoteref:[online keys, Not available in online version.]
+|Exit footnoteref:[online keys, Not available in Web versions.]
 
 2+^.e|Login
 
