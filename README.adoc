@@ -60,16 +60,26 @@ endif::[]
 
 === Features
 
-* [x] Connections configuration sourcing from Kube config (`$HOME/.kube`)
-* [x] Login and OAuth authentication support
-* [x] Namespace selection
-* [x] Pods list watching
-* [x] Pod / container log watching
-* [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires `cluster-admin` role on OpenShift.]
-* [x] Container remote exec terminal
-* [ ] CRUD configuration operations
-* [ ] Cluster and node views
-* [ ] Cluster monitoring
+[cols="2*.<a"]
+|===
+|Done |Plan
+
+|
+[disk]
+* Connections configuration sourcing from Kube config (`$HOME/.kube`)
+* Login and OAuth authentication support
+* Namespace selection
+* Pods list watching
+* Pod / container log watching
+* Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
+* Container remote exec terminal
+|
+[circle]
+* CRUD configuration operations
+* Cluster and node views
+* Cluster monitoring
+
+|===
 
 == Run
 
