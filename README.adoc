@@ -65,7 +65,7 @@ endif::[]
 |Done |Plan
 
 |
-* Connections configuration sourcing from Kube config (`$HOME/.kube`)
+* Configuration sourcing from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
 * Login and OAuth authentication support
 * Namespace selection
 * Pods list watching
