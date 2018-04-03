@@ -49,7 +49,7 @@ endif::[]
   <code>$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox</code>
 <p align="center"/>
   <i>Web Server <a href="#server">⇲</a></i><br>
-  <code>$ kubectl create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/kubernetes.yaml</code>
+  <code>$ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml</code>
 </p>
 <p align="center"/>
   <i>Web Client <a href="#online">⇲</a></i><br>
@@ -106,7 +106,7 @@ Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication
 
 ```sh
 # Replace the ROUTE_HOSTNAME variable
-$ kubectl create -f https://raw.githubusercontent.com/astefanutti/kubebox/master/kubernetes.yaml
+$ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
 In order for the Ingress resource to work, the cluster must have an Ingress controller running. See {uri-ingress-controllers}[Ingress controllers] for more information.
@@ -119,7 +119,7 @@ $ minikube addons enable ingress
 ==== OpenShift
 
 ```sh
-$ oc new-app -f https://raw.githubusercontent.com/astefanutti/kubebox/master/openshift.yaml
+$ oc new-app -f https://raw.github.com/astefanutti/kubebox/master/openshift.yaml
 ```
 
 === Docker
