@@ -75,7 +75,7 @@ objects:
             protocol: TCP
           env:
           - name: KUBEBOX_USE_SA_TOKEN
-            value: false
+            value: 'false'
     triggers:
     - imageChangeParams:
         automatic: true
