@@ -16,7 +16,7 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
-:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.1.1
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.2.0
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
 :uri-minikube: https://github.com/kubernetes/minikube
@@ -53,7 +53,7 @@ endif::[]
 </p>
 <p align="center"/>
   <i>Web Client <a href="#online">⇲</a></i><br>
-  <a href="http://kube.sh">http://kube.sh</a>
+  <a href="https://astefanutti.github.com/kubebox">https://astefanutti.github.com/kubebox</a>
 </p>
 ++++
 
@@ -138,7 +138,7 @@ $ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
 
 === Online
 
-Kubebox is available online at http://kube.sh. Note that this requires this address to match the allowed origins for CORS by the API server.
+Kubebox is available online at https://astefanutti.github.com/kubebox. Note that this requires this address to match the allowed origins for CORS by the API server.
 This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.g.:
 
 ```sh
