@@ -16,7 +16,7 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
-:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.2.0
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.2.1
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
 :uri-minikube: https://github.com/kubernetes/minikube
