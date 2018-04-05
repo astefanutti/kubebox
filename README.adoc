@@ -38,7 +38,10 @@ endif::[]
 
 ++++
 <p align="center"/>
-  <i>Standalone Client Executable<a href="#executable">⇲</a></i><br>
+  <a href="#run">Choose one of the following alternatives</a> (follow the links for detailed instructions):
+</p>
+<p align="center"/>
+  <i>Standalone Client Executable<a href="#executable">⇲</a></i>
 </p>
 <p align="center">
   <i>In-cluster Client</i><br>
