@@ -1,6 +1,219 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Terminal = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var Strings = require("./Strings");
+var Browser_1 = require("./shared/utils/Browser");
+var RenderDebouncer_1 = require("./utils/RenderDebouncer");
+var Dom_1 = require("./utils/Dom");
+var MAX_ROWS_TO_READ = 20;
+var ACTIVE_ITEM_ID_PREFIX = 'xterm-active-item-';
+var BoundaryPosition;
+(function (BoundaryPosition) {
+    BoundaryPosition[BoundaryPosition["Top"] = 0] = "Top";
+    BoundaryPosition[BoundaryPosition["Bottom"] = 1] = "Bottom";
+})(BoundaryPosition || (BoundaryPosition = {}));
+var AccessibilityManager = (function () {
+    function AccessibilityManager(_terminal) {
+        var _this = this;
+        this._terminal = _terminal;
+        this._rowElements = [];
+        this._liveRegionLineCount = 0;
+        this._disposables = [];
+        this._charsToConsume = [];
+        this._accessibilityTreeRoot = document.createElement('div');
+        this._accessibilityTreeRoot.classList.add('xterm-accessibility');
+        this._rowContainer = document.createElement('div');
+        this._rowContainer.classList.add('xterm-accessibility-tree');
+        for (var i = 0; i < this._terminal.rows; i++) {
+            this._rowElements[i] = this._createAccessibilityTreeNode();
+            this._rowContainer.appendChild(this._rowElements[i]);
+        }
+        this._topBoundaryFocusListener = function (e) { return _this._onBoundaryFocus(e, BoundaryPosition.Top); };
+        this._bottomBoundaryFocusListener = function (e) { return _this._onBoundaryFocus(e, BoundaryPosition.Bottom); };
+        this._rowElements[0].addEventListener('focus', this._topBoundaryFocusListener);
+        this._rowElements[this._rowElements.length - 1].addEventListener('focus', this._bottomBoundaryFocusListener);
+        this._refreshRowsDimensions();
+        this._accessibilityTreeRoot.appendChild(this._rowContainer);
+        this._renderRowsDebouncer = new RenderDebouncer_1.RenderDebouncer(this._terminal, this._renderRows.bind(this));
+        this._refreshRows();
+        this._liveRegion = document.createElement('div');
+        this._liveRegion.classList.add('live-region');
+        this._liveRegion.setAttribute('aria-live', 'assertive');
+        this._accessibilityTreeRoot.appendChild(this._liveRegion);
+        this._terminal.element.insertAdjacentElement('afterbegin', this._accessibilityTreeRoot);
+        this._disposables.push(this._renderRowsDebouncer);
+        this._disposables.push(this._terminal.addDisposableListener('resize', function (data) { return _this._onResize(data.cols, data.rows); }));
+        this._disposables.push(this._terminal.addDisposableListener('refresh', function (data) { return _this._refreshRows(data.start, data.end); }));
+        this._disposables.push(this._terminal.addDisposableListener('scroll', function (data) { return _this._refreshRows(); }));
+        this._disposables.push(this._terminal.addDisposableListener('a11y.char', function (char) { return _this._onChar(char); }));
+        this._disposables.push(this._terminal.addDisposableListener('linefeed', function () { return _this._onChar('\n'); }));
+        this._disposables.push(this._terminal.addDisposableListener('a11y.tab', function (spaceCount) { return _this._onTab(spaceCount); }));
+        this._disposables.push(this._terminal.addDisposableListener('key', function (keyChar) { return _this._onKey(keyChar); }));
+        this._disposables.push(this._terminal.addDisposableListener('blur', function () { return _this._clearLiveRegion(); }));
+        this._disposables.push(this._terminal.addDisposableListener('dprchange', function () { return _this._refreshRowsDimensions(); }));
+        this._disposables.push(this._terminal.renderer.addDisposableListener('resize', function () { return _this._refreshRowsDimensions(); }));
+        this._disposables.push(Dom_1.addDisposableListener(window, 'resize', function () { return _this._refreshRowsDimensions(); }));
+    }
+    AccessibilityManager.prototype.dispose = function () {
+        this._terminal.element.removeChild(this._accessibilityTreeRoot);
+        this._disposables.forEach(function (d) { return d.dispose(); });
+        this._disposables = null;
+        this._accessibilityTreeRoot = null;
+        this._rowContainer = null;
+        this._liveRegion = null;
+        this._rowContainer = null;
+        this._rowElements = null;
+    };
+    AccessibilityManager.prototype._onBoundaryFocus = function (e, position) {
+        var boundaryElement = e.target;
+        var beforeBoundaryElement = this._rowElements[position === BoundaryPosition.Top ? 1 : this._rowElements.length - 2];
+        var posInSet = boundaryElement.getAttribute('aria-posinset');
+        var lastRowPos = position === BoundaryPosition.Top ? '1' : "" + this._terminal.buffer.lines.length;
+        if (posInSet === lastRowPos) {
+            return;
+        }
+        if (e.relatedTarget !== beforeBoundaryElement) {
+            return;
+        }
+        var topBoundaryElement;
+        var bottomBoundaryElement;
+        if (position === BoundaryPosition.Top) {
+            topBoundaryElement = boundaryElement;
+            bottomBoundaryElement = this._rowElements.pop();
+            this._rowContainer.removeChild(bottomBoundaryElement);
+        }
+        else {
+            topBoundaryElement = this._rowElements.shift();
+            bottomBoundaryElement = boundaryElement;
+            this._rowContainer.removeChild(topBoundaryElement);
+        }
+        topBoundaryElement.removeEventListener('focus', this._topBoundaryFocusListener);
+        bottomBoundaryElement.removeEventListener('focus', this._bottomBoundaryFocusListener);
+        if (position === BoundaryPosition.Top) {
+            var newElement = this._createAccessibilityTreeNode();
+            this._rowElements.unshift(newElement);
+            this._rowContainer.insertAdjacentElement('afterbegin', newElement);
+        }
+        else {
+            var newElement = this._createAccessibilityTreeNode();
+            this._rowElements.push(newElement);
+            this._rowContainer.appendChild(newElement);
+        }
+        this._rowElements[0].addEventListener('focus', this._topBoundaryFocusListener);
+        this._rowElements[this._rowElements.length - 1].addEventListener('focus', this._bottomBoundaryFocusListener);
+        this._terminal.scrollLines(position === BoundaryPosition.Top ? -1 : 1);
+        this._rowElements[position === BoundaryPosition.Top ? 1 : this._rowElements.length - 2].focus();
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    };
+    AccessibilityManager.prototype._onResize = function (cols, rows) {
+        this._rowElements[this._rowElements.length - 1].removeEventListener('focus', this._bottomBoundaryFocusListener);
+        for (var i = this._rowContainer.children.length; i < this._terminal.rows; i++) {
+            this._rowElements[i] = this._createAccessibilityTreeNode();
+            this._rowContainer.appendChild(this._rowElements[i]);
+        }
+        while (this._rowElements.length > rows) {
+            this._rowContainer.removeChild(this._rowElements.pop());
+        }
+        this._rowElements[this._rowElements.length - 1].addEventListener('focus', this._bottomBoundaryFocusListener);
+        this._refreshRowsDimensions();
+    };
+    AccessibilityManager.prototype._createAccessibilityTreeNode = function () {
+        var element = document.createElement('div');
+        element.setAttribute('role', 'listitem');
+        element.tabIndex = -1;
+        this._refreshRowDimensions(element);
+        return element;
+    };
+    AccessibilityManager.prototype._onTab = function (spaceCount) {
+        for (var i = 0; i < spaceCount; i++) {
+            this._onChar(' ');
+        }
+    };
+    AccessibilityManager.prototype._onChar = function (char) {
+        var _this = this;
+        if (this._liveRegionLineCount < MAX_ROWS_TO_READ + 1) {
+            if (this._charsToConsume.length > 0) {
+                var shiftedChar = this._charsToConsume.shift();
+                if (shiftedChar !== char) {
+                    this._announceCharacter(char);
+                }
+            }
+            else {
+                this._announceCharacter(char);
+            }
+            if (char === '\n') {
+                this._liveRegionLineCount++;
+                if (this._liveRegionLineCount === MAX_ROWS_TO_READ + 1) {
+                    this._liveRegion.textContent += Strings.tooMuchOutput;
+                }
+            }
+            if (Browser_1.isMac) {
+                if (this._liveRegion.textContent.length > 0 && !this._liveRegion.parentNode) {
+                    setTimeout(function () {
+                        _this._accessibilityTreeRoot.appendChild(_this._liveRegion);
+                    }, 0);
+                }
+            }
+        }
+    };
+    AccessibilityManager.prototype._clearLiveRegion = function () {
+        this._liveRegion.textContent = '';
+        this._liveRegionLineCount = 0;
+        if (Browser_1.isMac) {
+            if (this._liveRegion.parentNode) {
+                this._accessibilityTreeRoot.removeChild(this._liveRegion);
+            }
+        }
+    };
+    AccessibilityManager.prototype._onKey = function (keyChar) {
+        this._clearLiveRegion();
+        this._charsToConsume.push(keyChar);
+    };
+    AccessibilityManager.prototype._refreshRows = function (start, end) {
+        this._renderRowsDebouncer.refresh(start, end);
+    };
+    AccessibilityManager.prototype._renderRows = function (start, end) {
+        var buffer = this._terminal.buffer;
+        var setSize = buffer.lines.length.toString();
+        for (var i = start; i <= end; i++) {
+            var lineData = buffer.translateBufferLineToString(buffer.ydisp + i, true);
+            var posInSet = (buffer.ydisp + i + 1).toString();
+            var element = this._rowElements[i];
+            element.textContent = lineData.length === 0 ? Strings.blankLine : lineData;
+            element.setAttribute('aria-posinset', posInSet);
+            element.setAttribute('aria-setsize', setSize);
+        }
+    };
+    AccessibilityManager.prototype._refreshRowsDimensions = function () {
+        if (!this._terminal.renderer.dimensions.actualCellHeight) {
+            return;
+        }
+        var buffer = this._terminal.buffer;
+        for (var i = 0; i < this._terminal.rows; i++) {
+            this._refreshRowDimensions(this._rowElements[i]);
+        }
+    };
+    AccessibilityManager.prototype._refreshRowDimensions = function (element) {
+        element.style.height = this._terminal.renderer.dimensions.actualCellHeight + "px";
+    };
+    AccessibilityManager.prototype._announceCharacter = function (char) {
+        if (char === ' ') {
+            this._liveRegion.innerHTML += '&nbsp;';
+        }
+        else {
+            this._liveRegion.textContent += char;
+        }
+    };
+    return AccessibilityManager;
+}());
+exports.AccessibilityManager = AccessibilityManager;
+
+
+
+},{"./Strings":15,"./shared/utils/Browser":33,"./utils/Dom":36,"./utils/RenderDebouncer":38}],2:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var CircularList_1 = require("./utils/CircularList");
 exports.CHAR_DATA_ATTR_INDEX = 0;
 exports.CHAR_DATA_CHAR_INDEX = 1;
@@ -70,9 +283,6 @@ var Buffer = (function () {
             if (this._terminal.cols < newCols) {
                 var ch = [this._terminal.defAttr, ' ', 1, 32];
                 for (var i = 0; i < this._lines.length; i++) {
-                    if (this._lines.get(i) === undefined) {
-                        this._lines.set(i, this._terminal.blankLine(undefined, undefined, newCols));
-                    }
                     while (this._lines.get(i).length < newCols) {
                         this._lines.get(i).push(ch);
                     }
@@ -117,15 +327,13 @@ var Buffer = (function () {
                 }
                 this._lines.maxLength = newMaxLength;
             }
-            if (this.y >= newRows) {
-                this.y = newRows - 1;
-            }
+            this.x = Math.min(this.x, newCols - 1);
+            this.y = Math.min(this.y, newRows - 1);
             if (addToY) {
                 this.y += addToY;
             }
-            if (this.x >= newCols) {
-                this.x = newCols - 1;
-            }
+            this.savedY = Math.min(this.savedY, newRows - 1);
+            this.savedX = Math.min(this.savedX, newCols - 1);
             this.scrollTop = 0;
         }
         this.scrollBottom = newRows - 1;
@@ -139,7 +347,9 @@ var Buffer = (function () {
             return '';
         }
         var startIndex = startCol;
-        endCol = endCol || line.length;
+        if (endCol === null) {
+            endCol = line.length;
+        }
         var endIndex = endCol;
         for (var i = 0; i < line.length; i++) {
             var char = line[i];
@@ -210,7 +420,7 @@ exports.Buffer = Buffer;
 
 
 
-},{"./utils/CircularList":30}],2:[function(require,module,exports){
+},{"./utils/CircularList":35}],3:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -259,14 +469,26 @@ var BufferSet = (function (_super) {
         configurable: true
     });
     BufferSet.prototype.activateNormalBuffer = function () {
+        if (this._activeBuffer === this._normal) {
+            return;
+        }
         this._alt.clear();
         this._activeBuffer = this._normal;
-        this.emit('activate', this._normal);
+        this.emit('activate', {
+            activeBuffer: this._normal,
+            inactiveBuffer: this._alt
+        });
     };
     BufferSet.prototype.activateAltBuffer = function () {
+        if (this._activeBuffer === this._alt) {
+            return;
+        }
         this._alt.fillViewportRows();
         this._activeBuffer = this._alt;
-        this.emit('activate', this._alt);
+        this.emit('activate', {
+            activeBuffer: this._alt,
+            inactiveBuffer: this._normal
+        });
     };
     BufferSet.prototype.resize = function (newCols, newRows) {
         this._normal.resize(newCols, newRows);
@@ -282,7 +504,7 @@ exports.BufferSet = BufferSet;
 
 
 
-},{"./Buffer":1,"./EventEmitter":7}],3:[function(require,module,exports){
+},{"./Buffer":2,"./EventEmitter":8}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.wcwidth = (function (opts) {
@@ -342,26 +564,33 @@ exports.wcwidth = (function (opts) {
         var min = 0;
         var max = data.length - 1;
         var mid;
-        if (ucs < data[0][0] || ucs > data[max][1])
+        if (ucs < data[0][0] || ucs > data[max][1]) {
             return false;
+        }
         while (max >= min) {
             mid = (min + max) >> 1;
-            if (ucs > data[mid][1])
+            if (ucs > data[mid][1]) {
                 min = mid + 1;
-            else if (ucs < data[mid][0])
+            }
+            else if (ucs < data[mid][0]) {
                 max = mid - 1;
-            else
+            }
+            else {
                 return true;
+        }
         }
         return false;
     }
     function wcwidthBMP(ucs) {
-        if (ucs === 0)
+        if (ucs === 0) {
             return opts.nul;
-        if (ucs < 32 || (ucs >= 0x7f && ucs < 0xa0))
+        }
+        if (ucs < 32 || (ucs >= 0x7f && ucs < 0xa0)) {
             return opts.control;
-        if (bisearch(ucs, COMBINING_BMP))
+        }
+        if (bisearch(ucs, COMBINING_BMP)) {
             return 0;
+        }
         if (isWideBMP(ucs)) {
             return 2;
         }
@@ -380,8 +609,9 @@ exports.wcwidth = (function (opts) {
             (ucs >= 0xffe0 && ucs <= 0xffe6)));
     }
     function wcwidthHigh(ucs) {
-        if (bisearch(ucs, COMBINING_HIGH))
+        if (bisearch(ucs, COMBINING_HIGH)) {
             return 0;
+        }
         if ((ucs >= 0x20000 && ucs <= 0x2fffd) || (ucs >= 0x30000 && ucs <= 0x3fffd)) {
             return 2;
         }
@@ -401,28 +631,32 @@ exports.wcwidth = (function (opts) {
         for (var i = 0; i < CONTAINERSIZE; ++i) {
             var num = 0;
             var pos = CODEPOINTS_PER_ITEM;
-            while (pos--)
+            while (pos--) {
                 num = (num << 2) | wcwidthBMP(CODEPOINTS_PER_ITEM * i + pos);
+            }
             table[i] = num;
         }
         return table;
     }
     return function (num) {
         num = num | 0;
-        if (num < 32)
+        if (num < 32) {
             return control | 0;
-        if (num < 127)
+        }
+        if (num < 127) {
             return 1;
+        }
         var t = table || init_table();
-        if (num < 65536)
+        if (num < 65536) {
             return t[num >> 4] >> ((num & 15) << 1) & 3;
+        }
         return wcwidthHigh(num);
     };
 })({ nul: 0, control: 0 });
 
 
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHARSETS = {};
@@ -585,7 +819,7 @@ exports.CHARSETS['='] = {
 
 
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CompositionHelper = (function () {
@@ -700,19 +934,17 @@ var CompositionHelper = (function () {
             setTimeout(function () { return _this.updateCompositionElements(true); }, 0);
         }
     };
-    ;
     CompositionHelper.prototype.clearTextareaPosition = function () {
         this.textarea.style.left = '';
         this.textarea.style.top = '';
     };
-    ;
     return CompositionHelper;
 }());
 exports.CompositionHelper = CompositionHelper;
 
 
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var C0;
@@ -752,11 +984,10 @@ var C0;
     C0.SP = '\x20';
     C0.DEL = '\x7f';
 })(C0 = exports.C0 || (exports.C0 = {}));
-;
 
 
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EventEmitter = (function () {
@@ -767,6 +998,19 @@ var EventEmitter = (function () {
         this._events[type] = this._events[type] || [];
         this._events[type].push(listener);
     };
+    EventEmitter.prototype.addDisposableListener = function (type, handler) {
+        var _this = this;
+        this.on(type, handler);
+        return {
+            dispose: function () {
+                if (!handler) {
+                    return;
+                }
+                _this.off(type, handler);
+                handler = null;
+            }
+        };
+    };
     EventEmitter.prototype.off = function (type, listener) {
         if (!this._events[type]) {
             return;
@@ -774,7 +1018,7 @@ var EventEmitter = (function () {
         var obj = this._events[type];
         var i = obj.length;
         while (i--) {
-            if (obj[i] === listener || obj[i].listener === listener) {
+            if (obj[i] === listener) {
                 obj.splice(i, 1);
                 return;
             }
@@ -784,15 +1028,6 @@ var EventEmitter = (function () {
         if (this._events[type]) {
             delete this._events[type];
         }
-    };
-    EventEmitter.prototype.once = function (type, listener) {
-        function on() {
-            var args = Array.prototype.slice.call(arguments);
-            this.off(type, on);
-            listener.apply(this, args);
-        }
-        on.listener = listener;
-        this.on(type, on);
     };
     EventEmitter.prototype.emit = function (type) {
         var args = [];
@@ -819,7 +1054,7 @@ exports.EventEmitter = EventEmitter;
 
 
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("./EscapeSequences");
@@ -833,12 +1068,15 @@ var InputHandler = (function () {
     }
     InputHandler.prototype.addChar = function (char, code) {
         if (char >= ' ') {
-            var ch_width = CharWidth_1.wcwidth(code);
+            var chWidth = CharWidth_1.wcwidth(code);
             if (this._terminal.charset && this._terminal.charset[char]) {
                 char = this._terminal.charset[char];
             }
+            if (this._terminal.options.screenReaderMode) {
+                this._terminal.emit('a11y.char', char);
+            }
             var row = this._terminal.buffer.y + this._terminal.buffer.ybase;
-            if (!ch_width && this._terminal.buffer.x) {
+            if (!chWidth && this._terminal.buffer.x) {
                 if (this._terminal.buffer.lines.get(row)[this._terminal.buffer.x - 1]) {
                     if (!this._terminal.buffer.lines.get(row)[this._terminal.buffer.x - 1][Buffer_1.CHAR_DATA_WIDTH_INDEX]) {
                         if (this._terminal.buffer.lines.get(row)[this._terminal.buffer.x - 2]) {
@@ -854,7 +1092,7 @@ var InputHandler = (function () {
                 }
                 return;
             }
-            if (this._terminal.buffer.x + ch_width - 1 >= this._terminal.cols) {
+            if (this._terminal.buffer.x + chWidth - 1 >= this._terminal.cols) {
                 if (this._terminal.wraparoundMode) {
                     this._terminal.buffer.x = 0;
                     this._terminal.buffer.y++;
@@ -867,13 +1105,14 @@ var InputHandler = (function () {
                     }
                 }
                 else {
-                    if (ch_width === 2)
+                    if (chWidth === 2) {
                         return;
                 }
             }
+            }
             row = this._terminal.buffer.y + this._terminal.buffer.ybase;
             if (this._terminal.insertMode) {
-                for (var moves = 0; moves < ch_width; ++moves) {
+                for (var moves = 0; moves < chWidth; ++moves) {
                     var removed = this._terminal.buffer.lines.get(this._terminal.buffer.y + this._terminal.buffer.ybase).pop();
                     if (removed[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0
                         && this._terminal.buffer.lines.get(row)[this._terminal.cols - 2]
@@ -883,10 +1122,10 @@ var InputHandler = (function () {
                     this._terminal.buffer.lines.get(row).splice(this._terminal.buffer.x, 0, [this._terminal.curAttr, ' ', 1, ' '.charCodeAt(0)]);
                 }
             }
-            this._terminal.buffer.lines.get(row)[this._terminal.buffer.x] = [this._terminal.curAttr, char, ch_width, char.charCodeAt(0)];
+            this._terminal.buffer.lines.get(row)[this._terminal.buffer.x] = [this._terminal.curAttr, char, chWidth, char.charCodeAt(0)];
             this._terminal.buffer.x++;
             this._terminal.updateRange(this._terminal.buffer.y);
-            if (ch_width === 2) {
+            if (chWidth === 2) {
                 this._terminal.buffer.lines.get(row)[this._terminal.buffer.x] = [this._terminal.curAttr, '', 0, undefined];
                 this._terminal.buffer.x++;
             }
@@ -918,7 +1157,11 @@ var InputHandler = (function () {
         }
     };
     InputHandler.prototype.tab = function () {
+        var originalX = this._terminal.buffer.x;
         this._terminal.buffer.x = this._terminal.buffer.nextStop();
+        if (this._terminal.options.screenReaderMode) {
+            this._terminal.emit('a11y.tab', this._terminal.buffer.x - originalX);
+        }
     };
     InputHandler.prototype.shiftOut = function () {
         this._terminal.setgLevel(1);
@@ -1345,7 +1588,6 @@ var InputHandler = (function () {
                 case 47:
                 case 1047:
                     this._terminal.buffers.activateAltBuffer();
-                    this._terminal.selectionManager.setBuffer(this._terminal.buffer);
                     this._terminal.viewport.syncScrollArea();
                     this._terminal.showCursor();
                     break;
@@ -1425,7 +1667,6 @@ var InputHandler = (function () {
                 case 47:
                 case 1047:
                     this._terminal.buffers.activateNormalBuffer();
-                    this._terminal.selectionManager.setBuffer(this._terminal.buffer);
                     this._terminal.refresh(0, this._terminal.rows - 1);
                     this._terminal.viewport.syncScrollArea();
                     this._terminal.showCursor();
@@ -1637,7 +1878,7 @@ exports.InputHandler = InputHandler;
 
 
 
-},{"./Buffer":1,"./CharWidth":3,"./Charsets":4,"./EscapeSequences":6,"./renderer/Types":27}],9:[function(require,module,exports){
+},{"./Buffer":2,"./CharWidth":4,"./Charsets":5,"./EscapeSequences":7,"./renderer/Types":31}],10:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -1653,37 +1894,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./Types");
 var MouseZoneManager_1 = require("./input/MouseZoneManager");
 var EventEmitter_1 = require("./EventEmitter");
-var protocolClause = '(https?:\\/\\/)';
-var domainCharacterSet = '[\\da-z\\.-]+';
-var negatedDomainCharacterSet = '[^\\da-z\\.-]+';
-var domainBodyClause = '(' + domainCharacterSet + ')';
-var tldClause = '([a-z\\.]{2,6})';
-var ipClause = '((\\d{1,3}\\.){3}\\d{1,3})';
-var localHostClause = '(localhost)';
-var portClause = '(:\\d{1,5})';
-var hostClause = '((' + domainBodyClause + '\\.' + tldClause + ')|' + ipClause + '|' + localHostClause + ')' + portClause + '?';
-var pathClause = '(\\/[\\/\\w\\.\\-%~]*)*';
-var queryStringHashFragmentCharacterSet = '[0-9\\w\\[\\]\\(\\)\\/\\?\\!#@$%&\'*+,:;~\\=\\.\\-]*';
-var queryStringClause = '(\\?' + queryStringHashFragmentCharacterSet + ')?';
-var hashFragmentClause = '(#' + queryStringHashFragmentCharacterSet + ')?';
-var negatedPathCharacterSet = '[^\\/\\w\\.\\-%]+';
-var bodyClause = hostClause + pathClause + queryStringClause + hashFragmentClause;
-var start = '(?:^|' + negatedDomainCharacterSet + ')(';
-var end = ')($|' + negatedPathCharacterSet + ')';
-var strictUrlRegex = new RegExp(start + protocolClause + bodyClause + end);
-var HYPERTEXT_LINK_MATCHER_ID = 0;
 var Linkifier = (function (_super) {
     __extends(Linkifier, _super);
     function Linkifier(_terminal) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
         _this._linkMatchers = [];
-        _this._nextLinkMatcherId = HYPERTEXT_LINK_MATCHER_ID;
+        _this._nextLinkMatcherId = 0;
         _this._rowsToLinkify = {
             start: null,
             end: null
         };
-        _this.registerLinkMatcher(strictUrlRegex, null, { matchIndex: 1 });
         return _this;
     }
     Linkifier.prototype.attachToDom = function (mouseZoneManager) {
@@ -1694,13 +1915,13 @@ var Linkifier = (function (_super) {
         if (!this._mouseZoneManager) {
             return;
         }
-        if (!this._rowsToLinkify.start) {
+        if (this._rowsToLinkify.start === null) {
             this._rowsToLinkify.start = start;
             this._rowsToLinkify.end = end;
         }
         else {
-            this._rowsToLinkify.start = this._rowsToLinkify.start < start ? this._rowsToLinkify.start : start;
-            this._rowsToLinkify.end = this._rowsToLinkify.end > end ? this._rowsToLinkify.end : end;
+            this._rowsToLinkify.start = Math.min(this._rowsToLinkify.start, start);
+            this._rowsToLinkify.end = Math.max(this._rowsToLinkify.end, end);
         }
         this._mouseZoneManager.clearAll(start, end);
         if (this._rowsTimeoutId) {
@@ -1716,15 +1937,9 @@ var Linkifier = (function (_super) {
         this._rowsToLinkify.start = null;
         this._rowsToLinkify.end = null;
     };
-    Linkifier.prototype.setHypertextLinkHandler = function (handler) {
-        this._linkMatchers[HYPERTEXT_LINK_MATCHER_ID].handler = handler;
-    };
-    Linkifier.prototype.setHypertextValidationCallback = function (callback) {
-        this._linkMatchers[HYPERTEXT_LINK_MATCHER_ID].validationCallback = callback;
-    };
     Linkifier.prototype.registerLinkMatcher = function (regex, handler, options) {
         if (options === void 0) { options = {}; }
-        if (this._nextLinkMatcherId !== HYPERTEXT_LINK_MATCHER_ID && !handler) {
+        if (!handler) {
             throw new Error('handler must be defined');
         }
         var matcher = {
@@ -1735,6 +1950,7 @@ var Linkifier = (function (_super) {
             validationCallback: options.validationCallback,
             hoverTooltipCallback: options.tooltipCallback,
             hoverLeaveCallback: options.leaveCallback,
+            willLinkActivate: options.willLinkActivate,
             priority: options.priority || 0
         };
         this._addLinkMatcherToList(matcher);
@@ -1754,7 +1970,7 @@ var Linkifier = (function (_super) {
         this._linkMatchers.splice(0, 0, matcher);
     };
     Linkifier.prototype.deregisterLinkMatcher = function (matcherId) {
-        for (var i = 1; i < this._linkMatchers.length; i++) {
+        for (var i = 0; i < this._linkMatchers.length; i++) {
             if (this._linkMatchers[i].id === matcherId) {
                 this._linkMatchers.splice(i, 1);
                 return true;
@@ -1776,7 +1992,6 @@ var Linkifier = (function (_super) {
         var _this = this;
         if (offset === void 0) { offset = 0; }
         var result = [];
-        var isHttpLinkMatcher = matcher.id === HYPERTEXT_LINK_MATCHER_ID;
         var match = text.match(matcher.regex);
         if (!match || match.length === 0) {
             return;
@@ -1823,6 +2038,11 @@ var Linkifier = (function (_super) {
             if (matcher.hoverLeaveCallback) {
                 matcher.hoverLeaveCallback();
             }
+        }, function (e) {
+            if (matcher.willLinkActivate) {
+                return matcher.willLinkActivate(e, uri);
+            }
+            return true;
         }));
     };
     Linkifier.TIME_BEFORE_LINKIFY = 200;
@@ -1832,7 +2052,7 @@ exports.Linkifier = Linkifier;
 
 
 
-},{"./EventEmitter":7,"./Types":14,"./input/MouseZoneManager":17}],10:[function(require,module,exports){
+},{"./EventEmitter":8,"./Types":17,"./input/MouseZoneManager":21}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("./EscapeSequences");
@@ -2011,8 +2231,9 @@ var Parser = (function () {
                 code = ((code - 0xD800) * 0x400) + (low - 0xDC00) + 0x10000;
                 ch += data.charAt(this._position + 1);
             }
-            if (0xDC00 <= code && code <= 0xDFFF)
+            if (0xDC00 <= code && code <= 0xDFFF) {
                 continue;
+            }
             switch (this._state) {
                 case ParserState.NORMAL:
                     if (ch in normalStateHandler) {
@@ -2062,23 +2283,30 @@ var Parser = (function () {
                             this._position--;
                             break;
                         case 'N':
+                            this._state = ParserState.NORMAL;
                             break;
                         case 'O':
+                            this._state = ParserState.NORMAL;
                             break;
                         case 'n':
                             this._terminal.setgLevel(2);
+                            this._state = ParserState.NORMAL;
                             break;
                         case 'o':
                             this._terminal.setgLevel(3);
+                            this._state = ParserState.NORMAL;
                             break;
                         case '|':
                             this._terminal.setgLevel(3);
+                            this._state = ParserState.NORMAL;
                             break;
                         case '}':
                             this._terminal.setgLevel(2);
+                            this._state = ParserState.NORMAL;
                             break;
                         case '~':
                             this._terminal.setgLevel(1);
+                            this._state = ParserState.NORMAL;
                             break;
                         case '7':
                             this._inputHandler.saveCursor();
@@ -2332,7 +2560,7 @@ exports.Parser = Parser;
 
 
 
-},{"./Charsets":4,"./EscapeSequences":6}],11:[function(require,module,exports){
+},{"./Charsets":5,"./EscapeSequences":7}],12:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -2346,13 +2574,15 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var MouseHelper_1 = require("./utils/MouseHelper");
-var Browser = require("./utils/Browser");
+var Browser = require("./shared/utils/Browser");
 var EventEmitter_1 = require("./EventEmitter");
 var SelectionModel_1 = require("./SelectionModel");
 var Buffer_1 = require("./Buffer");
+var AltClickHandler_1 = require("./handlers/AltClickHandler");
 var DRAG_SCROLL_MAX_THRESHOLD = 50;
 var DRAG_SCROLL_MAX_SPEED = 15;
 var DRAG_SCROLL_INTERVAL = 50;
+var ALT_CLICK_MOVE_CURSOR_TIME = 500;
 var WORD_SEPARATORS = ' ()[]{}\'"';
 var NON_BREAKING_SPACE_CHAR = String.fromCharCode(160);
 var ALL_NON_BREAKING_SPACE_REGEX = new RegExp(NON_BREAKING_SPACE_CHAR, 'g');
@@ -2364,10 +2594,9 @@ var SelectionMode;
 })(SelectionMode || (SelectionMode = {}));
 var SelectionManager = (function (_super) {
     __extends(SelectionManager, _super);
-    function SelectionManager(_terminal, _buffer, _charMeasure) {
+    function SelectionManager(_terminal, _charMeasure) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
-        _this._buffer = _buffer;
         _this._charMeasure = _charMeasure;
         _this._enabled = true;
         _this._initListeners();
@@ -2376,11 +2605,24 @@ var SelectionManager = (function (_super) {
         _this._activeSelectionMode = SelectionMode.NORMAL;
         return _this;
     }
+    Object.defineProperty(SelectionManager.prototype, "_buffer", {
+        get: function () {
+            return this._terminal.buffers.active;
+        },
+        enumerable: true,
+        configurable: true
+    });
     SelectionManager.prototype._initListeners = function () {
         var _this = this;
         this._mouseMoveListener = function (event) { return _this._onMouseMove(event); };
         this._mouseUpListener = function (event) { return _this._onMouseUp(event); };
-        this._buffer.lines.on('trim', function (amount) { return _this._onTrim(amount); });
+        this._trimListener = function (amount) { return _this._onTrim(amount); };
+        this.initBuffersListeners();
+    };
+    SelectionManager.prototype.initBuffersListeners = function () {
+        var _this = this;
+        this._terminal.buffer.lines.on('trim', this._trimListener);
+        this._terminal.buffers.on('activate', function (e) { return _this._onBufferActivate(e); });
     };
     SelectionManager.prototype.disable = function () {
         this.clearSelection();
@@ -2388,10 +2630,6 @@ var SelectionManager = (function (_super) {
     };
     SelectionManager.prototype.enable = function () {
         this._enabled = true;
-    };
-    SelectionManager.prototype.setBuffer = function (buffer) {
-        this._buffer = buffer;
-        this.clearSelection();
     };
     Object.defineProperty(SelectionManager.prototype, "selectionStart", {
         get: function () { return this._model.finalSelectionStart; },
@@ -2474,6 +2712,25 @@ var SelectionManager = (function (_super) {
         this._refreshAnimationFrame = null;
         this.emit('refresh', { start: this._model.finalSelectionStart, end: this._model.finalSelectionEnd });
     };
+    SelectionManager.prototype.isClickInSelection = function (event) {
+        var coords = this._getMouseBufferCoords(event);
+        var start = this._model.finalSelectionStart;
+        var end = this._model.finalSelectionEnd;
+        if (!start || !end) {
+            return false;
+        }
+        return (coords[1] > start[1] && coords[1] < end[1]) ||
+            (start[1] === end[1] && coords[1] === start[1] && coords[0] > start[0] && coords[0] < end[0]) ||
+            (start[1] < end[1] && coords[1] === end[1] && coords[0] < end[0]);
+    };
+    SelectionManager.prototype.selectWordAtCursor = function (event) {
+        var coords = this._getMouseBufferCoords(event);
+        if (coords) {
+            this._selectWordAt(coords, false);
+            this._model.selectionEnd = null;
+            this.refresh(true);
+        }
+    };
     SelectionManager.prototype.selectAll = function () {
         this._model.isSelectAllActive = true;
         this.refresh();
@@ -2486,7 +2743,7 @@ var SelectionManager = (function (_super) {
         }
     };
     SelectionManager.prototype._getMouseBufferCoords = function (event) {
-        var coords = this._terminal.mouseHelper.getCoords(event, this._terminal.element, this._charMeasure, this._terminal.options.lineHeight, this._terminal.cols, this._terminal.rows, true);
+        var coords = this._terminal.mouseHelper.getCoords(event, this._terminal.screenElement, this._charMeasure, this._terminal.options.lineHeight, this._terminal.cols, this._terminal.rows, true);
         if (!coords) {
             return null;
         }
@@ -2496,7 +2753,7 @@ var SelectionManager = (function (_super) {
         return coords;
     };
     SelectionManager.prototype._getMouseEventScrollAmount = function (event) {
-        var offset = MouseHelper_1.MouseHelper.getCoordsRelativeToElement(event, this._terminal.element)[1];
+        var offset = MouseHelper_1.MouseHelper.getCoordsRelativeToElement(event, this._terminal.screenElement)[1];
         var terminalHeight = this._terminal.rows * Math.ceil(this._charMeasure.height * this._terminal.options.lineHeight);
         if (offset >= 0 && offset <= terminalHeight) {
             return 0;
@@ -2512,6 +2769,7 @@ var SelectionManager = (function (_super) {
         return Browser.isMac ? event.altKey : event.shiftKey;
     };
     SelectionManager.prototype.onMouseDown = function (event) {
+        this._mouseDownTimeStamp = event.timeStamp;
         if (event.button === 2 && this.hasSelection) {
             return;
         }
@@ -2585,7 +2843,7 @@ var SelectionManager = (function (_super) {
         var coords = this._getMouseBufferCoords(event);
         if (coords) {
             this._activeSelectionMode = SelectionMode.WORD;
-            this._selectWordAt(coords);
+            this._selectWordAt(coords, true);
         }
     };
     SelectionManager.prototype._onTripleClick = function (event) {
@@ -2637,7 +2895,7 @@ var SelectionManager = (function (_super) {
         if (this._dragScrollAmount) {
             this._terminal.scrollLines(this._dragScrollAmount, false);
             if (this._dragScrollAmount > 0) {
-                this._model.selectionEnd = [this._terminal.cols - 1, this._terminal.buffer.ydisp + this._terminal.rows];
+                this._model.selectionEnd = [this._terminal.cols - 1, Math.min(this._terminal.buffer.ydisp + this._terminal.rows, this._terminal.buffer.lines.length - 1)];
             }
             else {
                 this._model.selectionEnd = [0, this._terminal.buffer.ydisp];
@@ -2646,9 +2904,19 @@ var SelectionManager = (function (_super) {
         }
     };
     SelectionManager.prototype._onMouseUp = function (event) {
+        var timeElapsed = event.timeStamp - this._mouseDownTimeStamp;
         this._removeMouseDownListeners();
-        if (this.hasSelection)
+        if (this.selectionText.length <= 1 && timeElapsed < ALT_CLICK_MOVE_CURSOR_TIME) {
+            (new AltClickHandler_1.AltClickHandler(event, this._terminal)).move();
+        }
+        else if (this.hasSelection) {
             this._terminal.emit('selection');
+        }
+    };
+    SelectionManager.prototype._onBufferActivate = function (e) {
+        this.clearSelection();
+        e.inactiveBuffer.lines.off('trim', this._trimListener);
+        e.activeBuffer.lines.on('trim', this._trimListener);
     };
     SelectionManager.prototype._convertViewportColToCharacterIndex = function (bufferLine, coords) {
         var charIndex = coords[0];
@@ -2670,7 +2938,10 @@ var SelectionManager = (function (_super) {
         this._model.selectionStartLength = length;
         this.refresh();
     };
-    SelectionManager.prototype._getWordAt = function (coords) {
+    SelectionManager.prototype._getWordAt = function (coords, allowWhitespaceOnlySelection) {
+        if (coords[0] >= this._terminal.cols) {
+            return null;
+        }
         var bufferLine = this._buffer.lines.get(coords[1]);
         if (!bufferLine) {
             return null;
@@ -2744,17 +3015,20 @@ var SelectionManager = (function (_super) {
             + rightWideCharCount
             - leftLongCharOffset
             - rightLongCharOffset);
+        if (!allowWhitespaceOnlySelection && line.slice(startIndex, endIndex).trim() === '') {
+            return null;
+        }
         return { start: start, length: length };
     };
-    SelectionManager.prototype._selectWordAt = function (coords) {
-        var wordPosition = this._getWordAt(coords);
+    SelectionManager.prototype._selectWordAt = function (coords, allowWhitespaceOnlySelection) {
+        var wordPosition = this._getWordAt(coords, allowWhitespaceOnlySelection);
         if (wordPosition) {
             this._model.selectionStart = [wordPosition.start, coords[1]];
             this._model.selectionStartLength = wordPosition.length;
         }
     };
     SelectionManager.prototype._selectToWordAt = function (coords) {
-        var wordPosition = this._getWordAt(coords);
+        var wordPosition = this._getWordAt(coords, true);
         if (wordPosition) {
             this._model.selectionEnd = [this._model.areSelectionValuesReversed() ? wordPosition.start : (wordPosition.start + wordPosition.length), coords[1]];
         }
@@ -2775,7 +3049,7 @@ exports.SelectionManager = SelectionManager;
 
 
 
-},{"./Buffer":1,"./EventEmitter":7,"./SelectionModel":12,"./utils/Browser":28,"./utils/MouseHelper":32}],12:[function(require,module,exports){
+},{"./Buffer":2,"./EventEmitter":8,"./SelectionModel":13,"./handlers/AltClickHandler":19,"./shared/utils/Browser":33,"./utils/MouseHelper":37}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var SelectionModel = (function () {
@@ -2853,7 +3127,61 @@ exports.SelectionModel = SelectionModel;
 
 
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_BELL_SOUND = 'data:audio/wav;base64,UklGRigBAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQBAADpAFgCwAMlBZoG/wdmCcoKRAypDQ8PbRDBEQQTOxRtFYcWlBePGIUZXhoiG88bcBz7HHIdzh0WHlMeZx51HmkeUx4WHs8dah0AHXwc3hs9G4saxRnyGBIYGBcQFv8U4RPAEoYRQBACD70NWwwHC6gJOwjWBloF7gOBAhABkf8b/qv8R/ve+Xf4Ife79W/0JfPZ8Z/wde9N7ijtE+wU6xvqM+lb6H7nw+YX5mrlxuQz5Mzje+Ma49fioeKD4nXiYeJy4pHitOL04j/jn+MN5IPkFOWs5U3mDefM55/ogOl36m7rdOyE7abuyu8D8Unyj/Pg9D/2qfcb+Yn6/vuK/Qj/lAAlAg==';
+var SoundManager = (function () {
+    function SoundManager(_terminal) {
+        this._terminal = _terminal;
+    }
+    SoundManager.prototype.playBellSound = function () {
+        var audioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (!this._audioContext && audioContextCtor) {
+            this._audioContext = new audioContextCtor();
+        }
+        if (this._audioContext) {
+            var bellAudioSource_1 = this._audioContext.createBufferSource();
+            var context_1 = this._audioContext;
+            this._audioContext.decodeAudioData(this.base64ToArrayBuffer(this.removeMimeType(this._terminal.options.bellSound)), function (buffer) {
+                bellAudioSource_1.buffer = buffer;
+                bellAudioSource_1.connect(context_1.destination);
+                bellAudioSource_1.start(0);
+            });
+        }
+        else {
+            console.warn('Sorry, but the Web Audio API is not supported by your browser. Please, consider upgrading to the latest version');
+        }
+    };
+    SoundManager.prototype.base64ToArrayBuffer = function (base64) {
+        var binaryString = window.atob(base64);
+        var len = binaryString.length;
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    };
+    SoundManager.prototype.removeMimeType = function (dataURI) {
+        var splitUri = dataURI.split(',');
+        return splitUri[1];
+    };
+    return SoundManager;
+}());
+exports.SoundManager = SoundManager;
+
+
+
+},{}],15:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.blankLine = 'Blank line';
+exports.promptLabel = 'Terminal input';
+exports.tooMuchOutput = 'Too much output to announce, navigate to rows manually to read';
+
+
+
+},{}],16:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -2879,12 +3207,37 @@ var Renderer_1 = require("./renderer/Renderer");
 var Linkifier_1 = require("./Linkifier");
 var SelectionManager_1 = require("./SelectionManager");
 var CharMeasure_1 = require("./utils/CharMeasure");
-var Browser = require("./utils/Browser");
+var Browser = require("./shared/utils/Browser");
+var Strings = require("./Strings");
 var MouseHelper_1 = require("./utils/MouseHelper");
-var Sounds_1 = require("./utils/Sounds");
+var SoundManager_1 = require("./SoundManager");
 var ColorManager_1 = require("./renderer/ColorManager");
 var MouseZoneManager_1 = require("./input/MouseZoneManager");
-var CharAtlas_1 = require("./renderer/CharAtlas");
+var AccessibilityManager_1 = require("./AccessibilityManager");
+var ScreenDprMonitor_1 = require("./utils/ScreenDprMonitor");
+var KEYCODE_KEY_MAPPINGS = {
+    48: ['0', ')'],
+    49: ['1', '!'],
+    50: ['2', '@'],
+    51: ['3', '#'],
+    52: ['4', '$'],
+    53: ['5', '%'],
+    54: ['6', '^'],
+    55: ['7', '&'],
+    56: ['8', '*'],
+    57: ['9', '('],
+    186: [';', ':'],
+    187: ['=', '+'],
+    188: [',', '<'],
+    189: ['-', '_'],
+    190: ['.', '>'],
+    191: ['/', '?'],
+    192: ['`', '~'],
+    219: ['[', '{'],
+    220: ['\\', '|'],
+    221: [']', '}'],
+    222: ['\'', '"']
+};
 var document = (typeof window !== 'undefined') ? window.document : null;
 var WRITE_BUFFER_PAUSE_THRESHOLD = 5;
 var WRITE_BATCH_SIZE = 300;
@@ -2895,21 +3248,27 @@ var DEFAULT_OPTIONS = {
     termName: 'xterm',
     cursorBlink: false,
     cursorStyle: 'block',
-    bellSound: Sounds_1.BellSound,
+    bellSound: SoundManager_1.DEFAULT_BELL_SOUND,
     bellStyle: 'none',
     enableBold: true,
     fontFamily: 'courier-new, courier, monospace',
     fontSize: 15,
+    fontWeight: 'normal',
+    fontWeightBold: 'bold',
     lineHeight: 1.0,
     letterSpacing: 0,
     scrollback: 1000,
     screenKeys: false,
+    screenReaderMode: false,
     debug: false,
+    macOptionIsMeta: false,
     cancelEvents: false,
     disableStdin: false,
     useFlowControl: false,
+    allowTransparency: false,
     tabStopWidth: 8,
-    theme: null
+    theme: null,
+    rightClickSelectsWord: Browser.isMac
 };
 var Terminal = (function (_super) {
     __extends(Terminal, _super);
@@ -2961,7 +3320,7 @@ var Terminal = (function (_super) {
         this.writeInProgress = false;
         this.xoffSentToCatchUp = false;
         this.writeStopped = false;
-        this.surrogate_high = '';
+        this.surrogateHigh = '';
         this.userScrolling = false;
         this.inputHandler = new InputHandler_1.InputHandler(this);
         this.parser = new Parser_1.Parser(this.inputHandler, this);
@@ -2969,15 +3328,27 @@ var Terminal = (function (_super) {
         this.selectionManager = this.selectionManager || null;
         this.linkifier = this.linkifier || new Linkifier_1.Linkifier(this);
         this._mouseZoneManager = this._mouseZoneManager || null;
+        this.soundManager = this.soundManager || new SoundManager_1.SoundManager(this);
         this.buffers = new BufferSet_1.BufferSet(this);
-        this.buffer = this.buffers.active;
-        this.buffers.on('activate', function (buffer) {
-            _this.buffer = buffer;
-        });
         if (this.selectionManager) {
-            this.selectionManager.setBuffer(this.buffer);
+            this.selectionManager.clearSelection();
+            this.selectionManager.initBuffersListeners();
         }
     };
+    Object.defineProperty(Terminal.prototype, "buffer", {
+        get: function () {
+            return this.buffers.active;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal, "strings", {
+        get: function () {
+            return Strings;
+        },
+        enumerable: true,
+        configurable: true
+    });
     Terminal.prototype.eraseAttr = function () {
         return (this.defAttr & ~0x1ff) | (this.curAttr & 0x1ff);
     };
@@ -3015,6 +3386,16 @@ var Terminal = (function (_super) {
             case 'cursorStyle':
                 if (!value) {
                     value = 'block';
+                }
+                break;
+            case 'fontWeight':
+                if (!value) {
+                    value = 'normal';
+                }
+                break;
+            case 'fontWeightBold':
+                if (!value) {
+                    value = 'bold';
                 }
                 break;
             case 'lineHeight':
@@ -3066,19 +3447,31 @@ var Terminal = (function (_super) {
             case 'enableBold':
             case 'letterSpacing':
             case 'lineHeight':
+            case 'fontWeight':
+            case 'fontWeightBold':
+                var didCharSizeChange = (key === 'fontWeight' || key === 'fontWeightBold' || key === 'enableBold');
                 this.renderer.clear();
-                this.renderer.onResize(this.cols, this.rows, false);
+                this.renderer.onResize(this.cols, this.rows, didCharSizeChange);
                 this.refresh(0, this.rows - 1);
             case 'scrollback':
                 this.buffers.resize(this.cols, this.rows);
                 this.viewport.syncScrollArea();
                 break;
+            case 'screenReaderMode':
+                if (value) {
+                    if (!this._accessibilityManager) {
+                        this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this);
+                    }
+                }
+                else {
+                    if (this._accessibilityManager) {
+                        this._accessibilityManager.dispose();
+                        this._accessibilityManager = null;
+                    }
+                }
+                break;
             case 'tabStopWidth':
                 this.buffers.setupTabStops();
-                break;
-            case 'bellSound':
-            case 'bellStyle':
-                this.syncBellSound();
                 break;
         }
         if (this.renderer) {
@@ -3093,11 +3486,11 @@ var Terminal = (function (_super) {
         this.showCursor();
         this.emit('focus');
     };
-    ;
     Terminal.prototype.blur = function () {
         return this.textarea.blur();
     };
     Terminal.prototype._onTextAreaBlur = function () {
+        this.textarea.value = '';
         this.refresh(this.buffer.y, this.buffer.y);
         if (this.sendFocus) {
             this.send(EscapeSequences_1.C0.ESC + '[O');
@@ -3120,13 +3513,13 @@ var Terminal = (function (_super) {
         if (Browser.isFirefox) {
             on(this.element, 'mousedown', function (event) {
                 if (event.button === 2) {
-                    Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager);
+                    Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager, _this.options.rightClickSelectsWord);
                 }
             });
         }
         else {
             on(this.element, 'contextmenu', function (event) {
-                Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager);
+                Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager, _this.options.rightClickSelectsWord);
             });
         }
         if (Browser.isLinux) {
@@ -3157,13 +3550,8 @@ var Terminal = (function (_super) {
                 _this.focus();
             }
         }, true);
-        on(this.textarea, 'keydown', function (ev) {
-            _this._keyDown(ev);
-        }, true);
-        on(this.textarea, 'keypress', function (ev) {
-            _this._keyPress(ev);
-            _this.textarea.value = '';
-        }, true);
+        on(this.textarea, 'keydown', function (ev) { return _this._keyDown(ev); }, true);
+        on(this.textarea, 'keypress', function (ev) { return _this._keyPress(ev); }, true);
         on(this.textarea, 'compositionstart', function () { return _this.compositionHelper.compositionstart(); });
         on(this.textarea, 'compositionupdate', function (e) { return _this.compositionHelper.compositionupdate(e); });
         on(this.textarea, 'compositionend', function () { return _this.compositionHelper.compositionend(); });
@@ -3181,7 +3569,8 @@ var Terminal = (function (_super) {
         this.context = this.parent.ownerDocument.defaultView;
         this.document = this.parent.ownerDocument;
         this.body = this.document.body;
-        CharAtlas_1.initialize(this.document);
+        this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
+        this._screenDprMonitor.setListener(function () { return _this.emit('dprchange', window.devicePixelRatio); });
         this.element = this.document.createElement('div');
         this.element.classList.add('terminal');
         this.element.classList.add('xterm');
@@ -3194,14 +3583,19 @@ var Terminal = (function (_super) {
         this.viewportScrollArea = document.createElement('div');
         this.viewportScrollArea.classList.add('xterm-scroll-area');
         this.viewportElement.appendChild(this.viewportScrollArea);
+        this.screenElement = document.createElement('div');
+        this.screenElement.classList.add('xterm-screen');
+        this.helperContainer = document.createElement('div');
+        this.helperContainer.classList.add('xterm-helpers');
+        this.screenElement.appendChild(this.helperContainer);
+        fragment.appendChild(this.screenElement);
         this._mouseZoneManager = new MouseZoneManager_1.MouseZoneManager(this);
         this.on('scroll', function () { return _this._mouseZoneManager.clearAll(); });
         this.linkifier.attachToDom(this._mouseZoneManager);
-        this.helperContainer = document.createElement('div');
-        this.helperContainer.classList.add('xterm-helpers');
-        fragment.appendChild(this.helperContainer);
         this.textarea = document.createElement('textarea');
         this.textarea.classList.add('xterm-helper-textarea');
+        this.textarea.setAttribute('aria-label', Strings.promptLabel);
+        this.textarea.setAttribute('aria-multiline', 'false');
         this.textarea.setAttribute('autocorrect', 'off');
         this.textarea.setAttribute('autocapitalize', 'off');
         this.textarea.setAttribute('spellcheck', 'false');
@@ -3216,7 +3610,6 @@ var Terminal = (function (_super) {
         this.charSizeStyleElement = document.createElement('style');
         this.helperContainer.appendChild(this.charSizeStyleElement);
         this.charMeasure = new CharMeasure_1.CharMeasure(document, this.helperContainer);
-        this.syncBellSound();
         this.element.appendChild(fragment);
         this.renderer = new Renderer_1.Renderer(this, this.options.theme);
         this.options.theme = null;
@@ -3226,10 +3619,11 @@ var Terminal = (function (_super) {
         this.on('resize', function () { return _this.renderer.onResize(_this.cols, _this.rows, false); });
         this.on('blur', function () { return _this.renderer.onBlur(); });
         this.on('focus', function () { return _this.renderer.onFocus(); });
+        this.on('dprchange', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); });
         window.addEventListener('resize', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); });
         this.charMeasure.on('charsizechanged', function () { return _this.renderer.onResize(_this.cols, _this.rows, true); });
         this.renderer.on('resize', function (dimensions) { return _this.viewport.syncScrollArea(); });
-        this.selectionManager = new SelectionManager_1.SelectionManager(this, this.buffer, this.charMeasure);
+        this.selectionManager = new SelectionManager_1.SelectionManager(this, this.charMeasure);
         this.element.addEventListener('mousedown', function (e) { return _this.selectionManager.onMouseDown(e); });
         this.selectionManager.on('refresh', function (data) { return _this.renderer.onSelectionChanged(data.start, data.end); });
         this.selectionManager.on('newselection', function (text) {
@@ -3243,6 +3637,9 @@ var Terminal = (function (_super) {
         });
         this.viewportElement.addEventListener('scroll', function () { return _this.selectionManager.refresh(); });
         this.mouseHelper = new MouseHelper_1.MouseHelper(this.renderer);
+        if (this.options.screenReaderMode) {
+            this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this);
+        }
         this.charMeasure.measure(this.options);
         this.refresh(0, this.rows - 1);
         this.initGlobal();
@@ -3266,7 +3663,7 @@ var Terminal = (function (_super) {
             var button;
             var pos;
             button = getButton(ev);
-            pos = self.mouseHelper.getRawByteCoords(ev, self.element, self.charMeasure, self.options.lineHeight, self.cols, self.rows);
+            pos = self.mouseHelper.getRawByteCoords(ev, self.screenElement, self.charMeasure, self.options.lineHeight, self.cols, self.rows);
             if (!pos)
                 return;
             sendEvent(button, pos);
@@ -3283,7 +3680,7 @@ var Terminal = (function (_super) {
         }
         function sendMove(ev) {
             var button = pressed;
-            var pos = self.mouseHelper.getRawByteCoords(ev, self.element, self.charMeasure, self.options.lineHeight, self.cols, self.rows);
+            var pos = self.mouseHelper.getRawByteCoords(ev, self.screenElement, self.charMeasure, self.options.lineHeight, self.cols, self.rows);
             if (!pos)
                 return;
             button += 32;
@@ -3495,7 +3892,7 @@ var Terminal = (function (_super) {
     };
     Terminal.prototype.refresh = function (start, end) {
         if (this.renderer) {
-            this.renderer.queueRefresh(start, end);
+            this.renderer.refreshRows(start, end);
         }
     };
     Terminal.prototype.queueLinkification = function (start, end) {
@@ -3617,34 +4014,15 @@ var Terminal = (function (_super) {
     Terminal.prototype.attachCustomKeyEventHandler = function (customKeyEventHandler) {
         this.customKeyEventHandler = customKeyEventHandler;
     };
-    Terminal.prototype.setHypertextLinkHandler = function (handler) {
-        if (!this.linkifier) {
-            throw new Error('Cannot attach a hypertext link handler before Terminal.open is called');
-        }
-        this.linkifier.setHypertextLinkHandler(handler);
-        this.refresh(0, this.rows - 1);
-    };
-    Terminal.prototype.setHypertextValidationCallback = function (callback) {
-        if (!this.linkifier) {
-            throw new Error('Cannot attach a hypertext validation callback before Terminal.open is called');
-        }
-        this.linkifier.setHypertextValidationCallback(callback);
-        this.refresh(0, this.rows - 1);
-    };
     Terminal.prototype.registerLinkMatcher = function (regex, handler, options) {
-        if (this.linkifier) {
             var matcherId = this.linkifier.registerLinkMatcher(regex, handler, options);
             this.refresh(0, this.rows - 1);
             return matcherId;
-        }
-        return 0;
     };
     Terminal.prototype.deregisterLinkMatcher = function (matcherId) {
-        if (this.linkifier) {
             if (this.linkifier.deregisterLinkMatcher(matcherId)) {
                 this.refresh(0, this.rows - 1);
             }
-        }
     };
     Terminal.prototype.hasSelection = function () {
         return this.selectionManager ? this.selectionManager.hasSelection : false;
@@ -3683,7 +4061,7 @@ var Terminal = (function (_super) {
             this.scrollLines(result.scrollLines);
             return this.cancel(ev, true);
         }
-        if (isThirdLevelShift(this.browser, ev)) {
+        if (this._isThirdLevelShift(this.browser, ev)) {
             return true;
         }
         if (result.cancel) {
@@ -3697,6 +4075,14 @@ var Terminal = (function (_super) {
         this.showCursor();
         this.handler(result.key);
         return this.cancel(ev, true);
+    };
+    Terminal.prototype._isThirdLevelShift = function (browser, ev) {
+        var thirdLevelKey = (browser.isMac && !this.options.macOptionIsMeta && ev.altKey && !ev.ctrlKey && !ev.metaKey) ||
+            (browser.isMSWindows && ev.altKey && ev.ctrlKey && !ev.metaKey);
+        if (ev.type === 'keypress') {
+            return thirdLevelKey;
+        }
+        return thirdLevelKey && (!ev.keyCode || ev.keyCode > 47);
     };
     Terminal.prototype._evaluateKeyEscapeSequence = function (ev) {
         var result = {
@@ -3743,6 +4129,10 @@ var Terminal = (function (_super) {
             case 8:
                 if (ev.shiftKey) {
                     result.key = EscapeSequences_1.C0.BS;
+                    break;
+                }
+                else if (ev.altKey) {
+                    result.key = EscapeSequences_1.C0.ESC + EscapeSequences_1.C0.DEL;
                     break;
                 }
                 result.key = EscapeSequences_1.C0.DEL;
@@ -3833,20 +4223,26 @@ var Terminal = (function (_super) {
                 }
                 break;
             case 36:
-                if (modifiers)
+                if (modifiers) {
                     result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'H';
-                else if (this.applicationCursor)
+                }
+                else if (this.applicationCursor) {
                     result.key = EscapeSequences_1.C0.ESC + 'OH';
-                else
+                }
+                else {
                     result.key = EscapeSequences_1.C0.ESC + '[H';
+                }
                 break;
             case 35:
-                if (modifiers)
+                if (modifiers) {
                     result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'F';
-                else if (this.applicationCursor)
+                }
+                else if (this.applicationCursor) {
                     result.key = EscapeSequences_1.C0.ESC + 'OF';
-                else
+                }
+                else {
                     result.key = EscapeSequences_1.C0.ESC + '[F';
+                }
                 break;
             case 33:
                 if (ev.shiftKey) {
@@ -3984,15 +4380,15 @@ var Terminal = (function (_super) {
                         result.key = String.fromCharCode(29);
                     }
                 }
-                else if (!this.browser.isMac && ev.altKey && !ev.ctrlKey && !ev.metaKey) {
-                    if (ev.keyCode >= 65 && ev.keyCode <= 90) {
-                        result.key = EscapeSequences_1.C0.ESC + String.fromCharCode(ev.keyCode + 32);
+                else if ((!this.browser.isMac || this.options.macOptionIsMeta) && ev.altKey && !ev.metaKey) {
+                    var keyMapping = KEYCODE_KEY_MAPPINGS[ev.keyCode];
+                    var key = keyMapping && keyMapping[!ev.shiftKey ? 0 : 1];
+                    if (key) {
+                        result.key = EscapeSequences_1.C0.ESC + key;
                     }
-                    else if (ev.keyCode === 192) {
-                        result.key = EscapeSequences_1.C0.ESC + '`';
-                    }
-                    else if (ev.keyCode >= 48 && ev.keyCode <= 57) {
-                        result.key = EscapeSequences_1.C0.ESC + (ev.keyCode - 48);
+                    else if (ev.keyCode >= 65 && ev.keyCode <= 90) {
+                        var keyCode = ev.ctrlKey ? ev.keyCode - 64 : ev.keyCode + 32;
+                        result.key = EscapeSequences_1.C0.ESC + String.fromCharCode(keyCode);
                     }
                 }
                 else if (this.browser.isMac && !ev.altKey && !ev.ctrlKey && ev.metaKey) {
@@ -4032,7 +4428,7 @@ var Terminal = (function (_super) {
         else {
             return false;
         }
-        if (!key || ((ev.altKey || ev.ctrlKey || ev.metaKey) && !isThirdLevelShift(this.browser, ev))) {
+        if (!key || ((ev.altKey || ev.ctrlKey || ev.metaKey) && !this._isThirdLevelShift(this.browser, ev))) {
             return false;
         }
         key = String.fromCharCode(key);
@@ -4057,8 +4453,9 @@ var Terminal = (function (_super) {
     Terminal.prototype.bell = function () {
         var _this = this;
         this.emit('bell');
-        if (this.soundBell())
-            this.bellAudioElement.play();
+        if (this.soundBell()) {
+            this.soundManager.playBellSound();
+        }
         if (this.visualBell()) {
             this.element.classList.add('visual-bell-active');
             clearTimeout(this.visualBellTimer);
@@ -4099,7 +4496,9 @@ var Terminal = (function (_super) {
         this.cols = x;
         this.rows = y;
         this.buffers.setupTabStops(this.cols);
+        if (this.charMeasure) {
         this.charMeasure.measure(this.options);
+        }
         this.refresh(0, this.rows - 1);
         this.emit('resize', { cols: x, rows: y });
     };
@@ -4218,11 +4617,9 @@ var Terminal = (function (_super) {
         this.options.cols = this.cols;
         var customKeyEventHandler = this.customKeyEventHandler;
         var inputHandler = this.inputHandler;
-        var buffers = this.buffers;
         this.setup();
         this.customKeyEventHandler = customKeyEventHandler;
         this.inputHandler = inputHandler;
-        this.buffers = buffers;
         this.refresh(0, this.rows - 1);
         this.viewport.syncScrollArea();
     };
@@ -4241,29 +4638,10 @@ var Terminal = (function (_super) {
         return matchColor_(r1, g1, b1);
     };
     Terminal.prototype.visualBell = function () {
-        return this.options.bellStyle === 'visual' ||
-            this.options.bellStyle === 'both';
+        return false;
     };
     Terminal.prototype.soundBell = function () {
-        return this.options.bellStyle === 'sound' ||
-            this.options.bellStyle === 'both';
-    };
-    Terminal.prototype.syncBellSound = function () {
-        if (!this.element) {
-            return;
-        }
-        if (this.soundBell() && this.bellAudioElement) {
-            this.bellAudioElement.setAttribute('src', this.options.bellSound);
-        }
-        else if (this.soundBell()) {
-            this.bellAudioElement = document.createElement('audio');
-            this.bellAudioElement.setAttribute('preload', 'auto');
-            this.bellAudioElement.setAttribute('src', this.options.bellSound);
-            this.helperContainer.appendChild(this.bellAudioElement);
-        }
-        else if (this.bellAudioElement) {
-            this.helperContainer.removeChild(this.bellAudioElement);
-        }
+        return this.options.bellStyle === 'sound';
     };
     return Terminal;
 }(EventEmitter_1.EventEmitter));
@@ -4280,14 +4658,6 @@ var on = globalOn;
 function off(el, type, handler, capture) {
     if (capture === void 0) { capture = false; }
     el.removeEventListener(type, handler, capture);
-}
-function isThirdLevelShift(browser, ev) {
-    var thirdLevelKey = (browser.isMac && ev.altKey && !ev.ctrlKey && !ev.metaKey) ||
-        (browser.isMSWindows && ev.altKey && ev.ctrlKey && !ev.metaKey);
-    if (ev.type === 'keypress') {
-        return thirdLevelKey;
-    }
-    return thirdLevelKey && (!ev.keyCode || ev.keyCode > 47);
 }
 function wasMondifierKeyOnlyEvent(ev) {
     return ev.keyCode === 16 ||
@@ -4324,7 +4694,6 @@ function matchColorDistance(r1, g1, b1, r2, g2, b2) {
         + Math.pow(59 * (g1 - g2), 2)
         + Math.pow(11 * (b1 - b2), 2);
 }
-;
 function matchColor_(r1, g1, b1) {
     var hash = (r1 << 16) | (g1 << 8) | b1;
     if (matchColorCache[hash] != null) {
@@ -4358,7 +4727,7 @@ function matchColor_(r1, g1, b1) {
 
 
 
-},{"./Buffer":1,"./BufferSet":2,"./CompositionHelper":5,"./EscapeSequences":6,"./EventEmitter":7,"./InputHandler":8,"./Linkifier":9,"./Parser":10,"./SelectionManager":11,"./Viewport":15,"./handlers/Clipboard":16,"./input/MouseZoneManager":17,"./renderer/CharAtlas":19,"./renderer/ColorManager":20,"./renderer/Renderer":24,"./utils/Browser":28,"./utils/CharMeasure":29,"./utils/MouseHelper":32,"./utils/Sounds":33}],14:[function(require,module,exports){
+},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":3,"./CompositionHelper":6,"./EscapeSequences":7,"./EventEmitter":8,"./InputHandler":9,"./Linkifier":10,"./Parser":11,"./SelectionManager":12,"./SoundManager":14,"./Strings":15,"./Viewport":18,"./handlers/Clipboard":20,"./input/MouseZoneManager":21,"./renderer/ColorManager":24,"./renderer/Renderer":28,"./shared/utils/Browser":33,"./utils/CharMeasure":34,"./utils/MouseHelper":37,"./utils/ScreenDprMonitor":39}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var LinkHoverEventTypes;
@@ -4367,13 +4736,13 @@ var LinkHoverEventTypes;
     LinkHoverEventTypes["TOOLTIP"] = "linktooltip";
     LinkHoverEventTypes["LEAVE"] = "linkleave";
 })(LinkHoverEventTypes = exports.LinkHoverEventTypes || (exports.LinkHoverEventTypes = {}));
-;
 
 
 
-},{}],15:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var FALLBACK_SCROLL_BAR_WIDTH = 15;
 var Viewport = (function () {
     function Viewport(terminal, viewportElement, scrollArea, charMeasure) {
         var _this = this;
@@ -4381,10 +4750,12 @@ var Viewport = (function () {
         this.viewportElement = viewportElement;
         this.scrollArea = scrollArea;
         this.charMeasure = charMeasure;
+        this.scrollBarWidth = 0;
         this.currentRowHeight = 0;
         this.lastRecordedBufferLength = 0;
         this.lastRecordedViewportHeight = 0;
         this.lastRecordedBufferHeight = 0;
+        this.scrollBarWidth = (this.viewportElement.offsetWidth - this.scrollArea.offsetWidth) || FALLBACK_SCROLL_BAR_WIDTH;
         this.viewportElement.addEventListener('scroll', this.onScroll.bind(this));
         setTimeout(function () { return _this.syncScrollArea(); }, 0);
     }
@@ -4394,11 +4765,8 @@ var Viewport = (function () {
     Viewport.prototype.refresh = function () {
         if (this.charMeasure.height > 0) {
             this.currentRowHeight = this.terminal.renderer.dimensions.scaledCellHeight / window.devicePixelRatio;
-            if (this.lastRecordedViewportHeight !== this.terminal.renderer.dimensions.canvasHeight) {
-                this.lastRecordedViewportHeight = this.terminal.renderer.dimensions.canvasHeight;
-                this.viewportElement.style.height = this.lastRecordedViewportHeight + 'px';
-            }
-            var newBufferHeight = Math.round(this.currentRowHeight * this.lastRecordedBufferLength);
+            this.lastRecordedViewportHeight = this.viewportElement.offsetHeight;
+            var newBufferHeight = Math.round(this.currentRowHeight * this.lastRecordedBufferLength) + (this.lastRecordedViewportHeight - this.terminal.renderer.dimensions.canvasHeight);
             if (this.lastRecordedBufferHeight !== newBufferHeight) {
                 this.lastRecordedBufferHeight = newBufferHeight;
                 this.scrollArea.style.height = this.lastRecordedBufferHeight + 'px';
@@ -4424,6 +4792,9 @@ var Viewport = (function () {
         }
     };
     Viewport.prototype.onScroll = function (ev) {
+        if (!this.viewportElement.offsetParent) {
+            return;
+        }
         var newRow = Math.round(this.viewportElement.scrollTop / this.currentRowHeight);
         var diff = newRow - this.terminal.buffer.ydisp;
         this.terminal.scrollLines(diff, true);
@@ -4442,11 +4813,9 @@ var Viewport = (function () {
         this.viewportElement.scrollTop += ev.deltaY * multiplier;
         ev.preventDefault();
     };
-    ;
     Viewport.prototype.onTouchStart = function (ev) {
         this.lastTouchY = ev.touches[0].pageY;
     };
-    ;
     Viewport.prototype.onTouchMove = function (ev) {
         var deltaY = this.lastTouchY - ev.touches[0].pageY;
         this.lastTouchY = ev.touches[0].pageY;
@@ -4456,14 +4825,166 @@ var Viewport = (function () {
         this.viewportElement.scrollTop += deltaY;
         ev.preventDefault();
     };
-    ;
     return Viewport;
 }());
 exports.Viewport = Viewport;
 
 
 
-},{}],16:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var EscapeSequences_1 = require("../EscapeSequences");
+var Direction;
+(function (Direction) {
+    Direction["Up"] = "A";
+    Direction["Down"] = "B";
+    Direction["Right"] = "C";
+    Direction["Left"] = "D";
+})(Direction || (Direction = {}));
+var AltClickHandler = (function () {
+    function AltClickHandler(_mouseEvent, _terminal) {
+        this._mouseEvent = _mouseEvent;
+        this._terminal = _terminal;
+        this._lines = this._terminal.buffer.lines;
+        this._startCol = this._terminal.buffer.x;
+        this._startRow = this._terminal.buffer.y;
+        _a = this._terminal.mouseHelper.getCoords(this._mouseEvent, this._terminal.element, this._terminal.charMeasure, this._terminal.options.lineHeight, this._terminal.cols, this._terminal.rows, false).map(function (coordinate) {
+            return coordinate - 1;
+        }), this._endCol = _a[0], this._endRow = _a[1];
+        var _a;
+    }
+    AltClickHandler.prototype.move = function () {
+        if (this._mouseEvent.altKey) {
+            this._terminal.send(this._arrowSequences());
+        }
+    };
+    AltClickHandler.prototype._arrowSequences = function () {
+        if (!this._terminal.buffer.hasScrollback) {
+            return this._resetStartingRow() + this._moveToRequestedRow() + this._moveToRequestedCol();
+        }
+        return this._moveHorizontallyOnly();
+    };
+    AltClickHandler.prototype._resetStartingRow = function () {
+        var startRow = this._endRow - this._wrappedRowsForRow(this._endRow);
+        var endRow = this._endRow;
+        if (this._moveToRequestedRow().length === 0) {
+            return '';
+        }
+        else {
+            return repeat(this._bufferLine(this._startCol, this._startRow, this._startCol, this._startRow - this._wrappedRowsForRow(this._startRow), false).length, this._sequence(Direction.Left));
+        }
+    };
+    AltClickHandler.prototype._moveToRequestedRow = function () {
+        var startRow = this._startRow - this._wrappedRowsForRow(this._startRow);
+        var endRow = this._endRow - this._wrappedRowsForRow(this._endRow);
+        var rowsToMove = Math.abs(startRow - endRow) - this._wrappedRowsCount();
+        return repeat(rowsToMove, this._sequence(this._verticalDirection()));
+    };
+    AltClickHandler.prototype._moveToRequestedCol = function () {
+        var startRow;
+        if (this._moveToRequestedRow().length > 0) {
+            startRow = this._endRow - this._wrappedRowsForRow(this._endRow);
+        }
+        else {
+            startRow = this._startRow;
+        }
+        var endRow = this._endRow;
+        var direction = this._horizontalDirection();
+        return repeat(this._bufferLine(this._startCol, startRow, this._endCol, endRow, direction === Direction.Right).length, this._sequence(direction));
+    };
+    AltClickHandler.prototype._moveHorizontallyOnly = function () {
+        var direction = this._horizontalDirection();
+        return repeat(Math.abs(this._startCol - this._endCol), this._sequence(direction));
+    };
+    AltClickHandler.prototype._wrappedRowsCount = function () {
+        var wrappedRows = 0;
+        var startRow = this._startRow - this._wrappedRowsForRow(this._startRow);
+        var endRow = this._endRow - this._wrappedRowsForRow(this._endRow);
+        for (var i = 0; i < Math.abs(startRow - endRow); i++) {
+            var direction = this._verticalDirection() === Direction.Up ? -1 : 1;
+            if (this._lines.get(startRow + (direction * i)).isWrapped) {
+                wrappedRows++;
+            }
+        }
+        return wrappedRows;
+    };
+    AltClickHandler.prototype._wrappedRowsForRow = function (currentRow) {
+        var rowCount = 0;
+        var lineWraps = this._lines.get(currentRow).isWrapped;
+        while (lineWraps && currentRow >= 0 && currentRow < this._terminal.rows) {
+            rowCount++;
+            currentRow--;
+            lineWraps = this._lines.get(currentRow).isWrapped;
+        }
+        return rowCount;
+    };
+    AltClickHandler.prototype._horizontalDirection = function () {
+        var startRow;
+        if (this._moveToRequestedRow().length > 0) {
+            startRow = this._endRow - this._wrappedRowsForRow(this._endRow);
+        }
+        else {
+            startRow = this._startRow;
+        }
+        if ((this._startCol < this._endCol &&
+            startRow <= this._endRow) ||
+            (this._startCol >= this._endCol &&
+                startRow < this._endRow)) {
+            return Direction.Right;
+        }
+        else {
+            return Direction.Left;
+        }
+    };
+    AltClickHandler.prototype._verticalDirection = function () {
+        if (this._startRow > this._endRow) {
+            return Direction.Up;
+        }
+        else {
+            return Direction.Down;
+        }
+    };
+    AltClickHandler.prototype._bufferLine = function (startCol, startRow, endCol, endRow, forward) {
+        var currentCol = startCol;
+        var currentRow = startRow;
+        var bufferStr = '';
+        while (currentCol !== endCol || currentRow !== endRow) {
+            currentCol += forward ? 1 : -1;
+            if (forward && currentCol > this._terminal.cols - 1) {
+                bufferStr += this._terminal.buffer.translateBufferLineToString(currentRow, false, startCol, currentCol);
+                currentCol = 0;
+                startCol = 0;
+                currentRow++;
+            }
+            else if (!forward && currentCol < 0) {
+                bufferStr += this._terminal.buffer.translateBufferLineToString(currentRow, false, 0, startCol + 1);
+                currentCol = this._terminal.cols - 1;
+                startCol = currentCol;
+                currentRow--;
+            }
+        }
+        return bufferStr + this._terminal.buffer.translateBufferLineToString(currentRow, false, startCol, currentCol);
+    };
+    AltClickHandler.prototype._sequence = function (direction) {
+        var mod = this._terminal.applicationCursor ? 'O' : '[';
+        return EscapeSequences_1.C0.ESC + mod + direction;
+    };
+    return AltClickHandler;
+}());
+exports.AltClickHandler = AltClickHandler;
+function repeat(count, str) {
+    count = Math.floor(count);
+    var rpt = '';
+    for (var i = 0; i < count; i++) {
+        rpt += str;
+    }
+    return rpt;
+}
+
+
+
+},{"../EscapeSequences":7}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function prepareTextForTerminal(text, isMSWindows) {
@@ -4530,11 +5051,14 @@ function moveTextAreaUnderMouseCursor(ev, textarea) {
         textarea.style.left = null;
         textarea.style.top = null;
         textarea.style.zIndex = null;
-    }, 4);
+    }, 200);
 }
 exports.moveTextAreaUnderMouseCursor = moveTextAreaUnderMouseCursor;
-function rightClickHandler(ev, textarea, selectionManager) {
+function rightClickHandler(ev, textarea, selectionManager, shouldSelectWord) {
     moveTextAreaUnderMouseCursor(ev, textarea);
+    if (shouldSelectWord && !selectionManager.isClickInSelection(ev)) {
+        selectionManager.selectWordAtCursor(ev);
+    }
     textarea.value = selectionManager.selectionText;
     textarea.select();
 }
@@ -4542,7 +5066,7 @@ exports.rightClickHandler = rightClickHandler;
 
 
 
-},{}],17:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var HOVER_DURATION = 500;
@@ -4642,8 +5166,10 @@ var MouseZoneManager = (function () {
         }
         var zone = this._findZoneEventAt(e);
         if (zone) {
+            if (zone.willLinkActivate(e)) {
             e.preventDefault();
             e.stopImmediatePropagation();
+        }
         }
     };
     MouseZoneManager.prototype._onClick = function (e) {
@@ -4655,7 +5181,7 @@ var MouseZoneManager = (function () {
         }
     };
     MouseZoneManager.prototype._findZoneEventAt = function (e) {
-        var coords = this._terminal.mouseHelper.getCoords(e, this._terminal.element, this._terminal.charMeasure, this._terminal.options.lineHeight, this._terminal.cols, this._terminal.rows);
+        var coords = this._terminal.mouseHelper.getCoords(e, this._terminal.screenElement, this._terminal.charMeasure, this._terminal.options.lineHeight, this._terminal.cols, this._terminal.rows);
         if (!coords) {
             return null;
         }
@@ -4665,14 +5191,13 @@ var MouseZoneManager = (function () {
                 return zone;
             }
         }
-        ;
         return null;
     };
     return MouseZoneManager;
 }());
 exports.MouseZoneManager = MouseZoneManager;
 var MouseZone = (function () {
-    function MouseZone(x1, x2, y, clickCallback, hoverCallback, tooltipCallback, leaveCallback) {
+    function MouseZone(x1, x2, y, clickCallback, hoverCallback, tooltipCallback, leaveCallback, willLinkActivate) {
         this.x1 = x1;
         this.x2 = x2;
         this.y = y;
@@ -4680,6 +5205,7 @@ var MouseZone = (function () {
         this.hoverCallback = hoverCallback;
         this.tooltipCallback = tooltipCallback;
         this.leaveCallback = leaveCallback;
+        this.willLinkActivate = willLinkActivate;
     }
     return MouseZone;
 }());
@@ -4687,7 +5213,7 @@ exports.MouseZone = MouseZone;
 
 
 
-},{}],18:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CharAtlas_1 = require("./CharAtlas");
@@ -4695,7 +5221,8 @@ var Buffer_1 = require("../Buffer");
 exports.INVERTED_DEFAULT_COLOR = -1;
 var DIM_OPACITY = 0.5;
 var BaseRenderLayer = (function () {
-    function BaseRenderLayer(container, id, zIndex, _alpha, _colors) {
+    function BaseRenderLayer(_container, id, zIndex, _alpha, _colors) {
+        this._container = _container;
         this._alpha = _alpha;
         this._colors = _colors;
         this._scaledCharWidth = 0;
@@ -4705,15 +5232,17 @@ var BaseRenderLayer = (function () {
         this._scaledCharLeft = 0;
         this._scaledCharTop = 0;
         this._canvas = document.createElement('canvas');
-        this._canvas.id = "xterm-" + id + "-layer";
+        this._canvas.classList.add("xterm-" + id + "-layer");
         this._canvas.style.zIndex = zIndex.toString();
-        this._ctx = this._canvas.getContext('2d', { alpha: _alpha });
-        this._ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-        if (!_alpha) {
+        this._initCanvas();
+        this._container.appendChild(this._canvas);
+    }
+    BaseRenderLayer.prototype._initCanvas = function () {
+        this._ctx = this._canvas.getContext('2d', { alpha: this._alpha });
+        if (!this._alpha) {
             this.clearAll();
         }
-        container.appendChild(this._canvas);
-    }
+    };
     BaseRenderLayer.prototype.onOptionsChanged = function (terminal) { };
     BaseRenderLayer.prototype.onBlur = function (terminal) { };
     BaseRenderLayer.prototype.onFocus = function (terminal) { };
@@ -4723,13 +5252,25 @@ var BaseRenderLayer = (function () {
     BaseRenderLayer.prototype.onThemeChanged = function (terminal, colorSet) {
         this._refreshCharAtlas(terminal, colorSet);
     };
+    BaseRenderLayer.prototype.setTransparency = function (terminal, alpha) {
+        if (alpha === this._alpha) {
+            return;
+        }
+        var oldCanvas = this._canvas;
+        this._alpha = alpha;
+        this._canvas = this._canvas.cloneNode();
+        this._initCanvas();
+        this._container.replaceChild(this._canvas, oldCanvas);
+        this._refreshCharAtlas(terminal, this._colors);
+        this.onGridChanged(terminal, 0, terminal.rows - 1);
+    };
     BaseRenderLayer.prototype._refreshCharAtlas = function (terminal, colorSet) {
         var _this = this;
         if (this._scaledCharWidth <= 0 && this._scaledCharHeight <= 0) {
             return;
         }
         this._charAtlas = null;
-        var result = CharAtlas_1.acquireCharAtlas(terminal, this._colors, this._scaledCharWidth, this._scaledCharHeight);
+        var result = CharAtlas_1.acquireCharAtlas(terminal, colorSet, this._scaledCharWidth, this._scaledCharHeight);
         if (result instanceof HTMLCanvasElement) {
             this._charAtlas = result;
         }
@@ -4788,7 +5329,7 @@ var BaseRenderLayer = (function () {
         }
     };
     BaseRenderLayer.prototype.fillCharTrueColor = function (terminal, charData, x, y) {
-        this._ctx.font = terminal.options.fontSize * window.devicePixelRatio + "px " + terminal.options.fontFamily;
+        this._ctx.font = this._getFont(terminal, false);
         this._ctx.textBaseline = 'top';
         this._clipRow(terminal, y);
         this._ctx.fillText(charData[Buffer_1.CHAR_DATA_CHAR_INDEX], x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop);
@@ -4821,15 +5362,12 @@ var BaseRenderLayer = (function () {
             this._ctx.drawImage(this._charAtlas, code * charAtlasCellWidth, colorIndex * charAtlasCellHeight, charAtlasCellWidth, this._scaledCharHeight, x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop, charAtlasCellWidth, this._scaledCharHeight);
         }
         else {
-            this._drawUncachedChar(terminal, char, width, fg, x, y, bold, dim);
+            this._drawUncachedChar(terminal, char, width, fg, x, y, bold && terminal.options.enableBold, dim);
         }
     };
     BaseRenderLayer.prototype._drawUncachedChar = function (terminal, char, width, fg, x, y, bold, dim) {
         this._ctx.save();
-        this._ctx.font = terminal.options.fontSize * window.devicePixelRatio + "px " + terminal.options.fontFamily;
-        if (bold && terminal.options.enableBold) {
-            this._ctx.font = "bold " + this._ctx.font;
-        }
+        this._ctx.font = this._getFont(terminal, bold);
         this._ctx.textBaseline = 'top';
         if (fg === exports.INVERTED_DEFAULT_COLOR) {
             this._ctx.fillStyle = this._colors.background;
@@ -4852,16 +5390,20 @@ var BaseRenderLayer = (function () {
         this._ctx.rect(0, y * this._scaledCellHeight, terminal.cols * this._scaledCellWidth, this._scaledCellHeight);
         this._ctx.clip();
     };
+    BaseRenderLayer.prototype._getFont = function (terminal, isBold) {
+        var fontWeight = isBold ? terminal.options.fontWeightBold : terminal.options.fontWeight;
+        return fontWeight + " " + terminal.options.fontSize * window.devicePixelRatio + "px " + terminal.options.fontFamily;
+    };
     return BaseRenderLayer;
 }());
 exports.BaseRenderLayer = BaseRenderLayer;
 
 
 
-},{"../Buffer":1,"./CharAtlas":19}],19:[function(require,module,exports){
+},{"../Buffer":2,"./CharAtlas":23}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Browser_1 = require("../utils/Browser");
+var CharAtlasGenerator_1 = require("../shared/CharAtlasGenerator");
 exports.CHAR_ATLAS_CELL_SPACING = 1;
 var charAtlasCache = [];
 function acquireCharAtlas(terminal, colors, scaledCharWidth, scaledCharHeight) {
@@ -4891,8 +5433,27 @@ function acquireCharAtlas(terminal, colors, scaledCharWidth, scaledCharHeight) {
             return entry.bitmap;
         }
     }
+    var canvasFactory = function (width, height) {
+        var canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        return canvas;
+    };
+    var charAtlasConfig = {
+        scaledCharWidth: scaledCharWidth,
+        scaledCharHeight: scaledCharHeight,
+        fontSize: terminal.options.fontSize,
+        fontFamily: terminal.options.fontFamily,
+        fontWeight: terminal.options.fontWeight,
+        fontWeightBold: terminal.options.fontWeightBold,
+        background: colors.background,
+        foreground: colors.foreground,
+        ansiColors: colors.ansi,
+        devicePixelRatio: window.devicePixelRatio,
+        allowTransparency: terminal.options.allowTransparency
+    };
     var newEntry = {
-        bitmap: generator.generate(scaledCharWidth, scaledCharHeight, terminal.options.fontSize, terminal.options.fontFamily, colors.background, colors.foreground, colors.ansi),
+        bitmap: CharAtlasGenerator_1.generateCharAtlas(window, canvasFactory, charAtlasConfig),
         config: newConfig,
         ownedBy: [terminal]
     };
@@ -4914,6 +5475,9 @@ function generateConfig(scaledCharWidth, scaledCharHeight, terminal, colors) {
         scaledCharHeight: scaledCharHeight,
         fontFamily: terminal.options.fontFamily,
         fontSize: terminal.options.fontSize,
+        fontWeight: terminal.options.fontWeight,
+        fontWeightBold: terminal.options.fontWeightBold,
+        allowTransparency: terminal.options.allowTransparency,
         colors: clonedColors
     };
 }
@@ -4925,103 +5489,18 @@ function configEquals(a, b) {
     }
     return a.fontFamily === b.fontFamily &&
         a.fontSize === b.fontSize &&
+        a.fontWeight === b.fontWeight &&
+        a.fontWeightBold === b.fontWeightBold &&
+        a.allowTransparency === b.allowTransparency &&
         a.scaledCharWidth === b.scaledCharWidth &&
         a.scaledCharHeight === b.scaledCharHeight &&
         a.colors.foreground === b.colors.foreground &&
         a.colors.background === b.colors.background;
 }
-var generator;
-function initialize(document) {
-    if (!generator) {
-        generator = new CharAtlasGenerator(document);
-    }
-}
-exports.initialize = initialize;
-var CharAtlasGenerator = (function () {
-    function CharAtlasGenerator(_document) {
-        this._document = _document;
-        this._canvas = this._document.createElement('canvas');
-        this._ctx = this._canvas.getContext('2d', { alpha: false });
-        this._ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    }
-    CharAtlasGenerator.prototype.generate = function (scaledCharWidth, scaledCharHeight, fontSize, fontFamily, background, foreground, ansiColors) {
-        var cellWidth = scaledCharWidth + exports.CHAR_ATLAS_CELL_SPACING;
-        var cellHeight = scaledCharHeight + exports.CHAR_ATLAS_CELL_SPACING;
-        this._canvas.width = 255 * cellWidth;
-        this._canvas.height = (2 + 16) * cellHeight;
-        this._ctx.fillStyle = background;
-        this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
-        this._ctx.save();
-        this._ctx.fillStyle = foreground;
-        this._ctx.font = fontSize * window.devicePixelRatio + "px " + fontFamily;
-        this._ctx.textBaseline = 'top';
-        for (var i = 0; i < 256; i++) {
-            this._ctx.save();
-            this._ctx.beginPath();
-            this._ctx.rect(i * cellWidth, 0, cellWidth, cellHeight);
-            this._ctx.clip();
-            this._ctx.fillText(String.fromCharCode(i), i * cellWidth, 0);
-            this._ctx.restore();
-        }
-        this._ctx.save();
-        this._ctx.font = "bold " + this._ctx.font;
-        for (var i = 0; i < 256; i++) {
-            this._ctx.save();
-            this._ctx.beginPath();
-            this._ctx.rect(i * cellWidth, cellHeight, cellWidth, cellHeight);
-            this._ctx.clip();
-            this._ctx.fillText(String.fromCharCode(i), i * cellWidth, cellHeight);
-            this._ctx.restore();
-        }
-        this._ctx.restore();
-        this._ctx.font = fontSize * window.devicePixelRatio + "px " + fontFamily;
-        for (var colorIndex = 0; colorIndex < 16; colorIndex++) {
-            if (colorIndex === 8) {
-                this._ctx.font = "bold " + this._ctx.font;
-            }
-            var y = (colorIndex + 2) * cellHeight;
-            for (var i = 0; i < 256; i++) {
-                this._ctx.save();
-                this._ctx.beginPath();
-                this._ctx.rect(i * cellWidth, y, cellWidth, cellHeight);
-                this._ctx.clip();
-                this._ctx.fillStyle = ansiColors[colorIndex];
-                this._ctx.fillText(String.fromCharCode(i), i * cellWidth, y);
-                this._ctx.restore();
-            }
-        }
-        this._ctx.restore();
-        if (!('createImageBitmap' in window) || Browser_1.isFirefox) {
-            var result = this._canvas;
-            this._canvas = this._document.createElement('canvas');
-            this._ctx = this._canvas.getContext('2d');
-            this._ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-            return result;
-        }
-        var charAtlasImageData = this._ctx.getImageData(0, 0, this._canvas.width, this._canvas.height);
-        var r = parseInt(background.substr(1, 2), 16);
-        var g = parseInt(background.substr(3, 2), 16);
-        var b = parseInt(background.substr(5, 2), 16);
-        this._clearColor(charAtlasImageData, r, g, b);
-        var promise = window.createImageBitmap(charAtlasImageData);
-        this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-        return promise;
-    };
-    CharAtlasGenerator.prototype._clearColor = function (imageData, r, g, b) {
-        for (var offset = 0; offset < imageData.data.length; offset += 4) {
-            if (imageData.data[offset] === r &&
-                imageData.data[offset + 1] === g &&
-                imageData.data[offset + 2] === b) {
-                imageData.data[offset + 3] = 0;
-            }
-        }
-    };
-    return CharAtlasGenerator;
-}());
 
 
 
-},{"../utils/Browser":28}],20:[function(require,module,exports){
+},{"../shared/CharAtlasGenerator":32}],24:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var DEFAULT_FOREGROUND = '#ffffff';
@@ -5079,7 +5558,7 @@ var ColorManager = (function () {
     }
     ColorManager.prototype.setTheme = function (theme) {
         this.colors.foreground = theme.foreground || DEFAULT_FOREGROUND;
-        this.colors.background = this._validateColor(theme.background, DEFAULT_BACKGROUND);
+        this.colors.background = theme.background || DEFAULT_BACKGROUND;
         this.colors.cursor = theme.cursor || DEFAULT_CURSOR;
         this.colors.cursorAccent = theme.cursorAccent || DEFAULT_CURSOR_ACCENT;
         this.colors.selection = theme.selection || DEFAULT_SELECTION;
@@ -5100,28 +5579,13 @@ var ColorManager = (function () {
         this.colors.ansi[14] = theme.brightCyan || exports.DEFAULT_ANSI_COLORS[14];
         this.colors.ansi[15] = theme.brightWhite || exports.DEFAULT_ANSI_COLORS[15];
     };
-    ColorManager.prototype._validateColor = function (color, fallback) {
-        if (!color) {
-            return fallback;
-        }
-        if (color.length === 7 && color.charAt(0) === '#') {
-            return color;
-        }
-        if (color.length === 4 && color.charAt(0) === '#') {
-            var r = color.charAt(1);
-            var g = color.charAt(2);
-            var b = color.charAt(3);
-            return "#" + r + r + g + g + b + b;
-        }
-        return fallback;
-    };
     return ColorManager;
 }());
 exports.ColorManager = ColorManager;
 
 
 
-},{}],21:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5212,6 +5676,9 @@ var CursorRenderLayer = (function (_super) {
     CursorRenderLayer.prototype.onGridChanged = function (terminal, startRow, endRow) {
         if (!this._cursorBlinkStateManager || this._cursorBlinkStateManager.isPaused) {
             this._render(terminal, false);
+        }
+        else {
+            this._cursorBlinkStateManager.restartBlinkAnimation(terminal);
         }
     };
     CursorRenderLayer.prototype._render = function (terminal, triggeredByAnimationFrame) {
@@ -5407,7 +5874,7 @@ var CursorBlinkStateManager = (function () {
 
 
 
-},{"../Buffer":1,"./BaseRenderLayer":18}],22:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":22}],26:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var GridCache = (function () {
@@ -5439,7 +5906,7 @@ exports.GridCache = GridCache;
 
 
 
-},{}],23:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5452,8 +5919,8 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var BaseRenderLayer_1 = require("./BaseRenderLayer");
 var Types_1 = require("../Types");
+var BaseRenderLayer_1 = require("./BaseRenderLayer");
 var LinkRenderLayer = (function (_super) {
     __extends(LinkRenderLayer, _super);
     function LinkRenderLayer(container, zIndex, colors, terminal) {
@@ -5490,7 +5957,7 @@ exports.LinkRenderLayer = LinkRenderLayer;
 
 
 
-},{"../Types":14,"./BaseRenderLayer":18}],24:[function(require,module,exports){
+},{"../Types":17,"./BaseRenderLayer":22}],28:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5509,22 +5976,24 @@ var CursorRenderLayer_1 = require("./CursorRenderLayer");
 var ColorManager_1 = require("./ColorManager");
 var LinkRenderLayer_1 = require("./LinkRenderLayer");
 var EventEmitter_1 = require("../EventEmitter");
+var RenderDebouncer_1 = require("../utils/RenderDebouncer");
+var ScreenDprMonitor_1 = require("../utils/ScreenDprMonitor");
 var Renderer = (function (_super) {
     __extends(Renderer, _super);
     function Renderer(_terminal, theme) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
-        _this._refreshRowsQueue = [];
-        _this._refreshAnimationFrame = null;
+        _this._isPaused = false;
+        _this._needsFullRefresh = false;
         _this.colorManager = new ColorManager_1.ColorManager();
         if (theme) {
             _this.colorManager.setTheme(theme);
         }
         _this._renderLayers = [
-            new TextRenderLayer_1.TextRenderLayer(_this._terminal.element, 0, _this.colorManager.colors),
-            new SelectionRenderLayer_1.SelectionRenderLayer(_this._terminal.element, 1, _this.colorManager.colors),
-            new LinkRenderLayer_1.LinkRenderLayer(_this._terminal.element, 2, _this.colorManager.colors, _this._terminal),
-            new CursorRenderLayer_1.CursorRenderLayer(_this._terminal.element, 3, _this.colorManager.colors)
+            new TextRenderLayer_1.TextRenderLayer(_this._terminal.screenElement, 0, _this.colorManager.colors, _this._terminal.options.allowTransparency),
+            new SelectionRenderLayer_1.SelectionRenderLayer(_this._terminal.screenElement, 1, _this.colorManager.colors),
+            new LinkRenderLayer_1.LinkRenderLayer(_this._terminal.screenElement, 2, _this.colorManager.colors, _this._terminal),
+            new CursorRenderLayer_1.CursorRenderLayer(_this._terminal.screenElement, 3, _this.colorManager.colors)
         ];
         _this.dimensions = {
             scaledCharWidth: null,
@@ -5543,8 +6012,21 @@ var Renderer = (function (_super) {
         _this._devicePixelRatio = window.devicePixelRatio;
         _this._updateDimensions();
         _this.onOptionsChanged();
+        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._terminal, _this._renderRows.bind(_this));
+        _this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
+        _this._screenDprMonitor.setListener(function () { return _this.onWindowResize(window.devicePixelRatio); });
+        if ('IntersectionObserver' in window) {
+            var observer = new IntersectionObserver(function (e) { return _this.onIntersectionChange(e[0]); }, { threshold: 0 });
+            observer.observe(_this._terminal.element);
+        }
         return _this;
     }
+    Renderer.prototype.onIntersectionChange = function (entry) {
+        this._isPaused = entry.intersectionRatio === 0;
+        if (!this._isPaused && this._needsFullRefresh) {
+            this._terminal.refresh(0, this._terminal.rows - 1);
+        }
+    };
     Renderer.prototype.onWindowResize = function (devicePixelRatio) {
         if (this._devicePixelRatio !== devicePixelRatio) {
             this._devicePixelRatio = devicePixelRatio;
@@ -5558,14 +6040,26 @@ var Renderer = (function (_super) {
             l.onThemeChanged(_this._terminal, _this.colorManager.colors);
             l.reset(_this._terminal);
         });
+        if (this._isPaused) {
+            this._needsFullRefresh = true;
+        }
+        else {
         this._terminal.refresh(0, this._terminal.rows - 1);
+        }
         return this.colorManager.colors;
     };
     Renderer.prototype.onResize = function (cols, rows, didCharSizeChange) {
         var _this = this;
         this._updateDimensions();
         this._renderLayers.forEach(function (l) { return l.resize(_this._terminal, _this.dimensions, didCharSizeChange); });
+        if (this._isPaused) {
+            this._needsFullRefresh = true;
+        }
+        else {
         this._terminal.refresh(0, this._terminal.rows - 1);
+        }
+        this._terminal.screenElement.style.width = this.dimensions.canvasWidth + "px";
+        this._terminal.screenElement.style.height = this.dimensions.canvasHeight + "px";
         this.emit('resize', {
             width: this.dimensions.canvasWidth,
             height: this.dimensions.canvasHeight
@@ -5576,58 +6070,45 @@ var Renderer = (function (_super) {
     };
     Renderer.prototype.onBlur = function () {
         var _this = this;
-        this._renderLayers.forEach(function (l) { return l.onBlur(_this._terminal); });
+        this._runOperation(function (l) { return l.onBlur(_this._terminal); });
     };
     Renderer.prototype.onFocus = function () {
         var _this = this;
-        this._renderLayers.forEach(function (l) { return l.onFocus(_this._terminal); });
+        this._runOperation(function (l) { return l.onFocus(_this._terminal); });
     };
     Renderer.prototype.onSelectionChanged = function (start, end) {
         var _this = this;
-        this._renderLayers.forEach(function (l) { return l.onSelectionChanged(_this._terminal, start, end); });
+        this._runOperation(function (l) { return l.onSelectionChanged(_this._terminal, start, end); });
     };
     Renderer.prototype.onCursorMove = function () {
         var _this = this;
-        this._renderLayers.forEach(function (l) { return l.onCursorMove(_this._terminal); });
+        this._runOperation(function (l) { return l.onCursorMove(_this._terminal); });
     };
     Renderer.prototype.onOptionsChanged = function () {
         var _this = this;
-        this._renderLayers.forEach(function (l) { return l.onOptionsChanged(_this._terminal); });
+        this._runOperation(function (l) { return l.onOptionsChanged(_this._terminal); });
     };
     Renderer.prototype.clear = function () {
         var _this = this;
-        this._renderLayers.forEach(function (l) { return l.reset(_this._terminal); });
+        this._runOperation(function (l) { return l.reset(_this._terminal); });
     };
-    Renderer.prototype.queueRefresh = function (start, end) {
-        this._refreshRowsQueue.push({ start: start, end: end });
-        if (!this._refreshAnimationFrame) {
-            this._refreshAnimationFrame = window.requestAnimationFrame(this._refreshLoop.bind(this));
-        }
-    };
-    Renderer.prototype._refreshLoop = function () {
-        var _this = this;
-        var start;
-        var end;
-        if (this._refreshRowsQueue.length > 4) {
-            start = 0;
-            end = this._terminal.rows - 1;
+    Renderer.prototype._runOperation = function (operation) {
+        if (this._isPaused) {
+            this._needsFullRefresh = true;
         }
         else {
-            start = this._refreshRowsQueue[0].start;
-            end = this._refreshRowsQueue[0].end;
-            for (var i = 1; i < this._refreshRowsQueue.length; i++) {
-                if (this._refreshRowsQueue[i].start < start) {
-                    start = this._refreshRowsQueue[i].start;
-                }
-                if (this._refreshRowsQueue[i].end > end) {
-                    end = this._refreshRowsQueue[i].end;
-                }
+            this._renderLayers.forEach(function (l) { return operation(l); });
             }
+    };
+    Renderer.prototype.refreshRows = function (start, end) {
+        if (this._isPaused) {
+            this._needsFullRefresh = true;
+            return;
         }
-        this._refreshRowsQueue = [];
-        this._refreshAnimationFrame = null;
-        start = Math.max(start, 0);
-        end = Math.min(end, this._terminal.rows - 1);
+        this._renderDebouncer.refresh(start, end);
+    };
+    Renderer.prototype._renderRows = function (start, end) {
+        var _this = this;
         this._renderLayers.forEach(function (l) { return l.onGridChanged(_this._terminal, start, end); });
         this._terminal.emit('refresh', { start: start, end: end });
     };
@@ -5654,7 +6135,7 @@ exports.Renderer = Renderer;
 
 
 
-},{"../EventEmitter":7,"./ColorManager":20,"./CursorRenderLayer":21,"./LinkRenderLayer":23,"./SelectionRenderLayer":25,"./TextRenderLayer":26}],25:[function(require,module,exports){
+},{"../EventEmitter":8,"../utils/RenderDebouncer":38,"../utils/ScreenDprMonitor":39,"./ColorManager":24,"./CursorRenderLayer":25,"./LinkRenderLayer":27,"./SelectionRenderLayer":29,"./TextRenderLayer":30}],29:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5728,7 +6209,7 @@ exports.SelectionRenderLayer = SelectionRenderLayer;
 
 
 
-},{"./BaseRenderLayer":18}],26:[function(require,module,exports){
+},{"./BaseRenderLayer":22}],30:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5748,15 +6229,15 @@ var BaseRenderLayer_1 = require("./BaseRenderLayer");
 var OVERLAP_OWNED_CHAR_DATA = [null, '', 0, -1];
 var TextRenderLayer = (function (_super) {
     __extends(TextRenderLayer, _super);
-    function TextRenderLayer(container, zIndex, colors) {
-        var _this = _super.call(this, container, 'text', zIndex, false, colors) || this;
+    function TextRenderLayer(container, zIndex, colors, alpha) {
+        var _this = _super.call(this, container, 'text', zIndex, alpha, colors) || this;
         _this._characterOverlapCache = {};
         _this._state = new GridCache_1.GridCache();
         return _this;
     }
     TextRenderLayer.prototype.resize = function (terminal, dim, charSizeChanged) {
         _super.prototype.resize.call(this, terminal, dim, charSizeChanged);
-        var terminalFont = terminal.options.fontSize * window.devicePixelRatio + "px " + terminal.options.fontFamily;
+        var terminalFont = this._getFont(terminal, false);
         if (this._characterWidth !== dim.scaledCharWidth || this._characterFont !== terminalFont) {
             this._characterWidth = dim.scaledCharWidth;
             this._characterFont = terminalFont;
@@ -5829,7 +6310,7 @@ var TextRenderLayer = (function (_super) {
                 }
                 this._ctx.save();
                 if (flags & Types_1.FLAGS.BOLD) {
-                    this._ctx.font = "bold " + this._ctx.font;
+                    this._ctx.font = this._getFont(terminal, true);
                     if (fg < 8) {
                         fg += 8;
                     }
@@ -5850,6 +6331,9 @@ var TextRenderLayer = (function (_super) {
                 this._ctx.restore();
             }
         }
+    };
+    TextRenderLayer.prototype.onOptionsChanged = function (terminal) {
+        this.setTransparency(terminal, terminal.options.allowTransparency);
     };
     TextRenderLayer.prototype._isOverlapping = function (charData) {
         if (charData[Buffer_1.CHAR_DATA_WIDTH_INDEX] !== 1) {
@@ -5884,7 +6368,7 @@ exports.TextRenderLayer = TextRenderLayer;
 
 
 
-},{"../Buffer":1,"./BaseRenderLayer":18,"./GridCache":22,"./Types":27}],27:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":22,"./GridCache":26,"./Types":31}],31:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var FLAGS;
@@ -5896,28 +6380,112 @@ var FLAGS;
     FLAGS[FLAGS["INVISIBLE"] = 16] = "INVISIBLE";
     FLAGS[FLAGS["DIM"] = 32] = "DIM";
 })(FLAGS = exports.FLAGS || (exports.FLAGS = {}));
-;
 
 
 
-},{}],28:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Generic_1 = require("./Generic");
+var Browser_1 = require("./utils/Browser");
+exports.CHAR_ATLAS_CELL_SPACING = 1;
+function generateCharAtlas(context, canvasFactory, request) {
+    var cellWidth = request.scaledCharWidth + exports.CHAR_ATLAS_CELL_SPACING;
+    var cellHeight = request.scaledCharHeight + exports.CHAR_ATLAS_CELL_SPACING;
+    var canvas = canvasFactory(255 * cellWidth, (2 + 16) * cellHeight);
+    var ctx = canvas.getContext('2d', { alpha: request.allowTransparency });
+    ctx.fillStyle = request.background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.fillStyle = request.foreground;
+    ctx.font = getFont(request.fontWeight, request);
+    ctx.textBaseline = 'top';
+    for (var i = 0; i < 256; i++) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(i * cellWidth, 0, cellWidth, cellHeight);
+        ctx.clip();
+        ctx.fillText(String.fromCharCode(i), i * cellWidth, 0);
+        ctx.restore();
+    }
+    ctx.save();
+    ctx.font = getFont(request.fontWeightBold, request);
+    for (var i = 0; i < 256; i++) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(i * cellWidth, cellHeight, cellWidth, cellHeight);
+        ctx.clip();
+        ctx.fillText(String.fromCharCode(i), i * cellWidth, cellHeight);
+        ctx.restore();
+    }
+    ctx.restore();
+    ctx.font = getFont(request.fontWeight, request);
+    for (var colorIndex = 0; colorIndex < 16; colorIndex++) {
+        if (colorIndex === 8) {
+            ctx.font = getFont(request.fontWeightBold, request);
+        }
+        var y = (colorIndex + 2) * cellHeight;
+        for (var i = 0; i < 256; i++) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(i * cellWidth, y, cellWidth, cellHeight);
+            ctx.clip();
+            ctx.fillStyle = request.ansiColors[colorIndex];
+            ctx.fillText(String.fromCharCode(i), i * cellWidth, y);
+            ctx.restore();
+        }
+    }
+    ctx.restore();
+    if (!('createImageBitmap' in context) || Browser_1.isFirefox) {
+        if (canvas instanceof HTMLCanvasElement) {
+            return canvas;
+        }
+        else {
+            return new Promise(function (r) { return r(canvas.transferToImageBitmap()); });
+        }
+    }
+    var charAtlasImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var r = parseInt(request.background.substr(1, 2), 16);
+    var g = parseInt(request.background.substr(3, 2), 16);
+    var b = parseInt(request.background.substr(5, 2), 16);
+    clearColor(charAtlasImageData, r, g, b);
+    return context.createImageBitmap(charAtlasImageData);
+}
+exports.generateCharAtlas = generateCharAtlas;
+function clearColor(imageData, r, g, b) {
+    for (var offset = 0; offset < imageData.data.length; offset += 4) {
+        if (imageData.data[offset] === r &&
+            imageData.data[offset + 1] === g &&
+            imageData.data[offset + 2] === b) {
+            imageData.data[offset + 3] = 0;
+        }
+    }
+}
+function getFont(fontWeight, request) {
+    return fontWeight + " " + request.fontSize * request.devicePixelRatio + "px " + request.fontFamily;
+}
+
+
+
+},{"./utils/Browser":33}],33:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var isNode = (typeof navigator === 'undefined') ? true : false;
 var userAgent = (isNode) ? 'node' : navigator.userAgent;
 var platform = (isNode) ? 'node' : navigator.platform;
 exports.isFirefox = !!~userAgent.indexOf('Firefox');
 exports.isMSIE = !!~userAgent.indexOf('MSIE') || !!~userAgent.indexOf('Trident');
-exports.isMac = Generic_1.contains(['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'], platform);
+exports.isMac = contains(['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'], platform);
 exports.isIpad = platform === 'iPad';
 exports.isIphone = platform === 'iPhone';
-exports.isMSWindows = Generic_1.contains(['Windows', 'Win16', 'Win32', 'WinCE'], platform);
+exports.isMSWindows = contains(['Windows', 'Win16', 'Win32', 'WinCE'], platform);
 exports.isLinux = platform.indexOf('Linux') >= 0;
+function contains(arr, el) {
+    return arr.indexOf(el) >= 0;
+}
 
 
 
-},{"./Generic":31}],29:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5980,7 +6548,7 @@ exports.CharMeasure = CharMeasure;
 
 
 
-},{"../EventEmitter":7}],30:[function(require,module,exports){
+},{"../EventEmitter":8}],35:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -6150,18 +6718,27 @@ exports.CircularList = CircularList;
 
 
 
-},{"../EventEmitter":7}],31:[function(require,module,exports){
+},{"../EventEmitter":8}],36:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-function contains(arr, el) {
-    return arr.indexOf(el) >= 0;
+function addDisposableListener(node, type, handler, useCapture) {
+    node.addEventListener(type, handler, useCapture);
+    return {
+        dispose: function () {
+            if (!handler) {
+                return;
+            }
+            node.removeEventListener(type, handler, useCapture);
+            node = null;
+            handler = null;
+        }
+    };
 }
-exports.contains = contains;
-;
+exports.addDisposableListener = addDisposableListener;
 
 
 
-},{}],32:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var MouseHelper = (function () {
@@ -6178,7 +6755,7 @@ var MouseHelper = (function () {
         while (element) {
             x -= element.offsetLeft;
             y -= element.offsetTop;
-            element = 'offsetParent' in element ? element.offsetParent : element.parentElement;
+            element = element.offsetParent;
         }
         element = originalElement;
         while (element && element !== element.ownerDocument.body) {
@@ -6216,14 +6793,87 @@ exports.MouseHelper = MouseHelper;
 
 
 
-},{}],33:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BellSound = 'data:audio/wav;base64,UklGRigBAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQBAADpAFgCwAMlBZoG/wdmCcoKRAypDQ8PbRDBEQQTOxRtFYcWlBePGIUZXhoiG88bcBz7HHIdzh0WHlMeZx51HmkeUx4WHs8dah0AHXwc3hs9G4saxRnyGBIYGBcQFv8U4RPAEoYRQBACD70NWwwHC6gJOwjWBloF7gOBAhABkf8b/qv8R/ve+Xf4Ife79W/0JfPZ8Z/wde9N7ijtE+wU6xvqM+lb6H7nw+YX5mrlxuQz5Mzje+Ma49fioeKD4nXiYeJy4pHitOL04j/jn+MN5IPkFOWs5U3mDefM55/ogOl36m7rdOyE7abuyu8D8Unyj/Pg9D/2qfcb+Yn6/vuK/Qj/lAAlAg==';
+var RenderDebouncer = (function () {
+    function RenderDebouncer(_terminal, _callback) {
+        this._terminal = _terminal;
+        this._callback = _callback;
+        this._animationFrame = null;
+    }
+    RenderDebouncer.prototype.dispose = function () {
+        if (this._animationFrame) {
+            window.cancelAnimationFrame(this._animationFrame);
+            this._animationFrame = null;
+        }
+    };
+    RenderDebouncer.prototype.refresh = function (rowStart, rowEnd) {
+        var _this = this;
+        rowStart = rowStart || 0;
+        rowEnd = rowEnd || this._terminal.rows - 1;
+        this._rowStart = this._rowStart !== undefined ? Math.min(this._rowStart, rowStart) : rowStart;
+        this._rowEnd = this._rowEnd !== undefined ? Math.max(this._rowEnd, rowEnd) : rowEnd;
+        if (this._animationFrame) {
+            return;
+        }
+        this._animationFrame = window.requestAnimationFrame(function () { return _this._innerRefresh(); });
+    };
+    RenderDebouncer.prototype._innerRefresh = function () {
+        this._rowStart = Math.max(this._rowStart, 0);
+        this._rowEnd = Math.min(this._rowEnd, this._terminal.rows - 1);
+        this._callback(this._rowStart, this._rowEnd);
+        this._rowStart = null;
+        this._rowEnd = null;
+        this._animationFrame = null;
+    };
+    return RenderDebouncer;
+}());
+exports.RenderDebouncer = RenderDebouncer;
 
 
 
-},{}],34:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var ScreenDprMonitor = (function () {
+    function ScreenDprMonitor() {
+    }
+    ScreenDprMonitor.prototype.setListener = function (listener) {
+        var _this = this;
+        if (this._listener) {
+            this.clearListener();
+        }
+        this._listener = listener;
+        this._outerListener = function () {
+            _this._listener(window.devicePixelRatio, _this._currentDevicePixelRatio);
+            _this._updateDpr();
+        };
+        this._updateDpr();
+    };
+    ScreenDprMonitor.prototype._updateDpr = function () {
+        if (this._resolutionMediaMatchList) {
+            this._resolutionMediaMatchList.removeListener(this._outerListener);
+        }
+        this._currentDevicePixelRatio = window.devicePixelRatio;
+        this._resolutionMediaMatchList = window.matchMedia("screen and (resolution: " + window.devicePixelRatio + "dppx)");
+        this._resolutionMediaMatchList.addListener(this._outerListener);
+    };
+    ScreenDprMonitor.prototype.clearListener = function () {
+        if (!this._listener) {
+            return;
+        }
+        this._resolutionMediaMatchList.removeListener(this._outerListener);
+        this._listener = null;
+        this._outerListener = null;
+    };
+    return ScreenDprMonitor;
+}());
+exports.ScreenDprMonitor = ScreenDprMonitor;
+
+
+
+},{}],40:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("./Terminal");
@@ -6231,6 +6881,6 @@ module.exports = Terminal_1.Terminal;
 
 
 
-},{"./Terminal":13}]},{},[34])(34)
+},{"./Terminal":16}]},{},[40])(40)
 });
 //# sourceMappingURL=xterm.js.map
