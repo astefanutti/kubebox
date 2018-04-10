@@ -43,19 +43,18 @@ class Client {
       method : 'GET',
     },
     this.master_api);
-    // This is an unauthenticated request
-    delete apis.headers['Authorization'];
     return apis;
   }
 
-  get_apis() {
+  get_apis({ authorization } = { authorization: true }) {
     const apis = merge({
       path   : '/',
       method : 'GET',
     },
     this.master_api);
-    // This is an unauthenticated request
-    delete apis.headers['Authorization'];
+    if (!authorization) {
+      delete apis.headers['Authorization'];
+    }
     return apis;
   }
 
@@ -68,29 +67,29 @@ class Client {
         method  : 'GET',
         auth    : `${username}:${password}`,
         headers : {
-          'X-Csrf-Token' : '1'
-        }
+          'X-Csrf-Token' : '1',
+        },
       }, this.master_api);
   }
 
   oauth_authorize_web({ username, password }) {
     delete this.master_api.headers['Authorization'];
     return merge({
-        path    : `/oauth/authorize?client_id=openshift-browser-client&redirect_uri=${this.master_api.url}/oauth/token/display&response_type=code`,
+        path    : `/oauth/authorize?client_id=openshift-browser-client&redirect_uri=${new URI(this.master_api.url).segment('/oauth/token/display')}&response_type=code`,
         method  : 'GET',
         auth    : `${username}:${password}`,
         headers : {
-          'X-Csrf-Token' : '1'
-        }
+          'X-Csrf-Token' : '1',
+        },
       }, this.master_api);
   }
 
   // token can be passed to test authentication
   get_user(token) {
     const request = merge({
-      path   : '/oapi/v1/users/~',
-      method : 'GET',
-      headers : {}
+      path    : '/oapi/v1/users/~',
+      method  : 'GET',
+      headers : {},
     }, this.master_api);
     if (token) {
       request.headers['Authorization'] = `Bearer ${token}`;
@@ -99,28 +98,28 @@ class Client {
  }
 
   get_namespaces() {
-    return Object.assign({
+    return merge({
       path   : '/api/v1/namespaces',
       method : 'GET'
     }, this.master_api);
  }
 
   get_projects() {
-    return Object.assign({
+    return merge({
       path   : '/oapi/v1/projects',
       method : 'GET'
     }, this.master_api);
   }
 
   get_pods(namespace) {
-    return Object.assign({
+    return merge({
       path   : `/api/v1/namespaces/${namespace}/pods`,
       method : 'GET'
     }, this.master_api);
   }
 
   get_pod(namespace, name) {
-    return Object.assign({
+    return merge({
       path   : `/api/v1/namespaces/${namespace}/pods/${name}`,
       method : 'GET'
     }, this.master_api);
@@ -136,7 +135,7 @@ class Client {
         Connection             : 'Upgrade',
         Upgrade                : 'websocket',
         'Sec-WebSocket-Key'    : crypto.createHash('SHA1').digest('base64'),
-        'Sec-WebSocket-Version': 13
+        'Sec-WebSocket-Version': 13,
       }
     }, this.master_api);
   }
@@ -155,7 +154,7 @@ class Client {
         Upgrade                  : 'WebSocket',
         'Sec-WebSocket-Protocol' : 'binary.k8s.io',
         'Sec-WebSocket-Key'      : crypto.createHash('SHA1').digest('base64'),
-        'Sec-WebSocket-Version'  : 13
+        'Sec-WebSocket-Version'  : 13,
       }
     }, this.master_api);
   }
@@ -200,18 +199,18 @@ class Client {
 
   // Gets the stats from the Summary API exposed by Kubelet on the specified node
   summary_stats(node) {
-    return Object.assign({
-      path: `/api/v1/nodes/${node}/proxy/stats/summary`,
-      method  : 'GET',
+    return merge({
+      path   : `/api/v1/nodes/${node}/proxy/stats/summary`,
+      method : 'GET',
     }, this.master_api);
   }
 
   // Gets the cAdvisor data collected by Kubelet and exposed on the /stats endpoint
   // This does not work on Kubernetes 1.8.0, see https://github.com/kubernetes/kubernetes/issues/56297
   container_stats(node, namespace, pod, uid, container) {
-    return Object.assign({
-      path: `/api/v1/nodes/${node}/proxy/stats/${namespace}/${pod}/${uid}/${container}`,
-      method  : 'GET',
+    return merge({
+      path   : `/api/v1/nodes/${node}/proxy/stats/${namespace}/${pod}/${uid}/${container}`,
+      method : 'GET',
     }, this.master_api);
   }
 
@@ -219,9 +218,9 @@ class Client {
   // cAdvisor port is not accessible in OpenShift, see https://github.com/openshift/origin/issues/4143,
   // And may eventually be removed from Kubernetes, see https://github.com/kubernetes/kubernetes/issues/53615.
   cadvisor_container_stats(node, id) {
-    return Object.assign({
-      path: `/api/v1/nodes/${node}:4194/proxy/api/v1.2/docker/${id}`,
-      method  : 'GET',
+    return merge({
+      path   : `/api/v1/nodes/${node}:4194/proxy/api/v1.2/docker/${id}`,
+      method : 'GET',
     }, this.master_api);
   }
 }
@@ -229,12 +228,16 @@ class Client {
 function merge(target, source) {
   return Object.keys(source).reduce((target, key) => {
     const prop = source[key];
-    // Only deep copy Object
     if (typeof prop === 'object' && Object.prototype.toString.call(prop) === '[object Object]') {
+      // Only deep copy Object
       if (!target[key]) target[key] = {};
       merge(target[key], prop);
     } else if (typeof target[key] === 'undefined') {
       target[key] = prop;
+    } else if (key === 'path' && source.path) {
+      target.path = URI.joinPaths(source.path, target.path)
+        .query(URI.parse(target.path).query || '')
+        .resource();
     }
     return target;
   }, target);
@@ -242,7 +245,7 @@ function merge(target, source) {
 
 module.exports = Client;
 
-},{"crypto":139,"urijs":310}],2:[function(require,module,exports){
+},{"crypto":138,"urijs":"urijs"}],2:[function(require,module,exports){
 'use strict';
 
 const URI = require('urijs');
@@ -278,129 +281,13 @@ class Cluster {
 Cluster.default = new Cluster({ server: undefined, name: '' });
 
 module.exports = Cluster;
-},{"urijs":310}],3:[function(require,module,exports){
+},{"urijs":"urijs"}],3:[function(require,module,exports){
 module.exports.Cluster    = require('./cluster');
 module.exports.Context    = require('./context');
 module.exports.KubeConfig = require('./manager');
 module.exports.Namespace  = require('./namespace');
 module.exports.User       = require('./user');
-},{"./cluster":2,"./context":4,"./manager":5,"./namespace":6,"./user":7}],4:[function(require,module,exports){
-(function (Buffer){
-'use strict';
-
-const fs        = require('fs'),
-      URI       = require('urijs'),
-      Cluster   = require('./cluster'),
-      Namespace = require('./namespace'),
-      User      = require('./user');
-
-/**
- * contexts:
- * - context:
- *     cluster: horse-cluster
- *     namespace: chisel-ns
- *     user: green-user
- *   name: federal-context
- * - context:
- *     cluster: pig-cluster
- *     namespace: saw-ns
- *     user: black-user
- *   name: queen-anne-context
- */
-class Context {
-
-  constructor({ cluster, namespace, user, name }) {
-    if (typeof name === 'undefined') {
-      if (typeof namespace.name === 'undefined') {
-        this.name = cluster.name + '/' + user.username;
-      } else {
-        this.name = namespace.name + '/' + cluster.name + '/' + user.username;
-      }
-    } else {
-      this.name = name;
-    }
-    this.cluster = cluster;
-    this.namespace = namespace;
-    this.user = user;
-  }
-
-  getMasterApi() {
-    if (typeof this.cluster.server === 'undefined') {
-      return undefined;
-    }
-
-    const api = getBaseMasterApi(this.cluster.server);
-    // TODO: handle browser support for loading file certs
-    if (this.user.certificatePath) {
-      api.cert = fs.readFileSync(this.user.certificatePath);
-    }
-    if (this.user.certificateBase64) {
-      api.cert = Buffer.from(this.user.certificateBase64, 'base64');
-    }
-    if (this.user.keyPath) {
-      api.key = fs.readFileSync(this.user.keyPath);
-    }
-    if (this.user.keyBase64) {
-      api.key = Buffer.from(this.user.keyBase64, 'base64');
-    }
-    if (this.user.token) {
-      api.headers['Authorization'] = `Bearer ${this.user.token}`;
-    }
-    if (this.cluster.rejectUnauthorized) {
-      api.rejectUnauthorized = false;
-    }
-    //remove me!
-    api.rejectUnauthorized = true;
-    if (this.cluster.ca) {
-      api.ca = fs.readFileSync(this.cluster.ca);
-    }
-    if (this.cluster.certData) {
-      api.ca = Buffer.from(this.cluster.certData, 'base64');
-    }
-    return api;
-  }
-}
-
-function getBaseMasterApi(url) {
-  const api = {
-    headers  : {
-      'Accept' : 'application/json, text/plain, */*',
-    },
-    get url() {
-      // Do not report default ports as it can cause non matching redirection URLs
-      // during OAuth authentication
-      const skipPort = !this.port || this.protocol === 'http:' && this.port === '80' || this.protocol === 'https:' && this.port === '443';
-      return `${this.protocol}//${this.hostname}${skipPort ? '' : `:${this.port}`}`;
-    },
-    set url(url) {
-      const uri = URI.parse(url);
-      let parts = {};
-      if (uri.protocol) {
-        parts = uri;
-      } else {
-        URI.parseHost(url, parts);
-      }
-      const { protocol = 'https', hostname, port } = parts;
-      this.protocol = protocol + ':';
-      this.hostname = hostname;
-      this.port     = port;
-    }
-  }
-  api.url = url;
-  return api;
-}
-
-Context.default = new Context({
-  cluster   : Cluster.default,
-  namespace : Namespace.default,
-  user      : User.default,
-  name      : ''
-});
-
-module.exports = Context;
-}).call(this,require("buffer").Buffer)
-
-},{"./cluster":2,"./namespace":6,"./user":7,"buffer":129,"fs":79,"urijs":310}],5:[function(require,module,exports){
+},{"./cluster":2,"./context":"context","./manager":4,"./namespace":5,"./user":6}],4:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -432,7 +319,7 @@ class KubeConfigManager extends EventEmitter {
         this.current_context = this.server_contexts.find(c => c.name === this.current_context.name) || Context.default;
       }
     } else {
-      const kube_config = readKubeConfigFromFile({ debug });
+      const kube_config = readKubeConfigFromFiles({ debug });
       this.contexts = loadContexts(kube_config);
       // TODO: support client access information provided as CLI options
       //       CLI option -> Kube config context -> prompt user
@@ -511,15 +398,60 @@ class KubeConfigManager extends EventEmitter {
   }
 }
 
-function readKubeConfigFromFile({ debug }) {
-  const config_path = path.join(os.homedir(), '.kube/config');
-  try {
-    fs.accessSync(config_path, fs.constants.F_OK | fs.constants.R_OK);
-  } catch (error) {
-    debug.log(`Unable to read Kube config file from: ${config_path}`);
-    return {};
+function readKubeConfigFromFiles({ debug }) {
+  let files;
+  if (process.env.KUBECONFIG) {
+    files = process.env.KUBECONFIG.split(path.delimiter);
+  } else {
+    files = [path.join(os.homedir(), '.kube/config')];
   }
-  return yaml.safeLoad(fs.readFileSync(config_path, 'utf8'));
+
+  return files.reduce((merged, file) => {
+    try {
+      fs.accessSync(file, fs.constants.F_OK | fs.constants.R_OK);
+    } catch (error) {
+      debug.log(`{red-fg}Unable to read Kube config file from '${file}'{/red-fg}`);
+      return merged;
+    }
+    let config;
+    try {
+      config = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+      debug.log(`{red-fg}Unable to deserialize Kube config file from '${file}': ${error.message}{/red-fg}`);
+      return merged;
+    }
+    // Resolve pathes relative to the location of the kubeconfig file
+    // See: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#file-references
+    config.clusters.forEach(cluster => {
+      const ca = cluster.cluster['certificate-authority'];
+      if (ca && !path.isAbsolute(ca)) {
+        cluster.cluster['certificate-authority'] = path.resolve(path.dirname(file), ca);
+      }
+    });
+    config.users.forEach(user => {
+      const cert = user.user['client-certificate'];
+      if (cert && !path.isAbsolute(cert)) {
+        user.user['client-certificate'] = path.resolve(path.dirname(file), cert);
+      }
+      const key = user.user['client-key'];
+      if (key && !path.isAbsolute(key)) {
+        user.user['client-key'] = path.resolve(path.dirname(file), key);
+      }
+    });
+    // Merge kubeconfig file
+    // See: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#merging-kubeconfig-files
+    merged.clusters.push(...config.clusters.filter(cluster => !merged.clusters.find(c => c.name === cluster.name)));
+    merged.contexts.push(...config.contexts.filter(context => !merged.contexts.find(c => c.name === context.name)));
+    merged.users.push(...config.users.filter(user => !merged.users.find(u => u.name === user.name)));
+    if (!merged['current-context']) {
+      merged['current-context'] = config['current-context'];
+    }
+    return merged;
+  }, {
+    clusters : [],
+    contexts : [],
+    users    : [],
+  });
 }
 
 function readKubeConfigFromLocalStore({ debug }) {
@@ -645,8 +577,7 @@ function findContextsByClusterUrl(contexts, url) {
 
 module.exports = KubeConfigManager;
 }).call(this,require('_process'))
-
-},{"../util":32,"./cluster":2,"./context":4,"./namespace":6,"./user":7,"_process":215,"events":166,"fs":79,"js-yaml":268,"os":191,"path":208,"urijs":310}],6:[function(require,module,exports){
+},{"../util":31,"./cluster":2,"./context":"context","./namespace":5,"./user":6,"_process":214,"events":165,"fs":78,"js-yaml":267,"os":190,"path":207,"urijs":"urijs"}],5:[function(require,module,exports){
 'use strict';
 
 class Namespace {
@@ -659,7 +590,7 @@ class Namespace {
 Namespace.default = new Namespace();
 
 module.exports = Namespace;
-},{}],7:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 'use strict';
 
 const { isNotEmpty } = require('../util');
@@ -701,7 +632,7 @@ class User {
 User.default = new User({ name: '', token: '' });
 
 module.exports = User;
-},{"../util":32}],8:[function(require,module,exports){
+},{"../util":31}],7:[function(require,module,exports){
 'use strict';
 
 module.exports.delay = delay => new Promise(resolve => setTimeout(resolve, delay));
@@ -712,7 +643,7 @@ module.exports.call = f => val => {
   f(); return val;
 };
 
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 'use strict';
 
 class Cancellations {
@@ -761,7 +692,7 @@ class Cancellations {
 
 exports.Cancellations = Cancellations;
 
-},{}],10:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (Buffer,process,global){
 /*
 **  blessed-xterm -- XTerm Widget for Blessed Curses Environment
@@ -794,15 +725,15 @@ const os      = require('os');
 if (os.platform() === 'browser') {
     // lets grab the xterm from index.html and not reimport
     var Terminal = window.Terminal;
-}  else {
-    var {Terminal} = require("xterm");
+} else {
+    var { Terminal } = require("xterm");
     require("./../xterm/Terminal");
 }
 
 /*  the API class  */
 class XTerm extends blessed.Box {
     /*  construct the API class  */
-    constructor (options = {}) {
+    constructor(options = {}) {
 
         /*  disable the special "scrollable" feature of Blessed's Element
             which would use a ScrolledBox instead of a Box under the surface  */
@@ -818,21 +749,21 @@ class XTerm extends blessed.Box {
         }
 
         /*  provide option fallbacks  */
-        setOption(this.options, "args",             [])
-        setOption(this.options, "env",              process.env)
-        setOption(this.options, "cwd",              process.cwd())
-        setOption(this.options, "cursorType",       "block")
-        setOption(this.options, "scrollback",       1000)
-        setOption(this.options, "ignoreKeys",       [])
+        setOption(this.options, "args", [])
+        setOption(this.options, "env", process.env)
+        setOption(this.options, "cwd", process.cwd())
+        setOption(this.options, "cursorType", "block")
+        setOption(this.options, "scrollback", 1000)
+        setOption(this.options, "ignoreKeys", [])
         setOption(this.options, "mousePassthrough", false)
 
         /*  ensure style is available  */
-        setOption(this.options,       "style", {})
-        setOption(this.options.style, "bg",    "default")
-        setOption(this.options.style, "fg",    "default")
+        setOption(this.options, "style", {})
+        setOption(this.options.style, "bg", "default")
+        setOption(this.options.style, "fg", "default")
 
         /*  determine border colors  */
-        if (   this.options.style
+        if (this.options.style
             && this.options.style.focus
             && this.options.style.focus.border
             && this.options.style.focus.border.fg)
@@ -844,7 +775,7 @@ class XTerm extends blessed.Box {
             this.borderFocus = this.options.style.border.fg
         else
             this.borderFocus = this.options.style.fg || "default"
-        if (   this.options.style
+        if (this.options.style
             && this.options.style.scrolling
             && this.options.style.scrolling.border
             && this.options.style.scrolling.border.fg)
@@ -854,7 +785,7 @@ class XTerm extends blessed.Box {
 
         /*  initialize scrolling mode  */
         this.scrolling = false;
-        
+
         /*  perform internal bootstrapping  */
         this.on('keypress', function fn(ch, key) {
             /*  only in case we are focused  */
@@ -868,17 +799,17 @@ class XTerm extends blessed.Box {
             }
         });
         var self = this;
-        this.refreshIntervalId = setInterval(function() {
+        this.refreshIntervalId = setInterval(function () {
             self.blinking = !self.blinking;
             self.screen.render();
-          }, 500);
-        this.on('mouse', function(data) {
+        }, 500);
+        this.on('mouse', function (data) {
 
             /*  only in case we are focused  */
             if (this.screen.focused !== this)
-            return
+                return
             let oldmouse = this.mousedown;
-            if (data.action === 'mouseup'){
+            if (data.action === 'mouseup') {
                 // hold selection
                 this.mousedown = false;;
             }
@@ -898,12 +829,12 @@ class XTerm extends blessed.Box {
             } else {
                 this.mousedown = false;
             }
-            if(oldmouse && oldmouse != this.mousedown || this.mousedown){
+            if (oldmouse && oldmouse != this.mousedown || this.mousedown) {
                 this.screen.render();
             }
-          });
-          this._bootstrap();
-          this.handler = options.handler;
+        });
+        this._bootstrap();
+        this.handler = options.handler;
     }
 
     fallbackCopyTextToClipboard(text) {
@@ -912,31 +843,30 @@ class XTerm extends blessed.Box {
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-
         try {
-          var successful = document.execCommand('copy');
-          var msg = successful ? 'successful' : 'unsuccessful';
-          console.log('Fallback: Copying text command was ' + msg);
+            var successful = document.execCommand('copy');
+            if (!successful) {
+                this.options.debug.log('Unable to copy, copying text command was ' + msg);
+            }
         } catch (err) {
-          console.error('Fallback: Oops, unable to copy', err);
+            this.options.debug.log('Unable to copy', err);
         }
-
         document.body.removeChild(textArea);
     }
 
     /*  identify us to Blessed  */
-    get type () {
+    get type() {
         return "terminal"
     }
 
     /*  bootstrap the API class  */
-    _bootstrap () {
+    _bootstrap() {
         // This code executes in the jsdom global scope
         this.term = new Terminal({
-            cols:        this.width  - this.iwidth,
-            rows:        this.height - this.iheight,
-            scrollback:  this.options.scrollback !== "none" ?
-            this.options.scrollback : this.height - this.iheight,
+            cols: this.width - this.iwidth,
+            rows: this.height - this.iheight,
+            scrollback: this.options.scrollback !== "none" ?
+                this.options.scrollback : this.height - this.iheight,
         });
         this.term.cursorState = 1;
 
@@ -951,8 +881,8 @@ class XTerm extends blessed.Box {
         }
 
         /*  monkey-patch XTerm to prevent any key handling  */
-        this.term.keyDown  = () => {}
-        this.term.keyPress = () => {}
+        this.term.keyDown = () => { }
+        this.term.keyPress = () => { }
         this.term.focus();
 
         /*  pass-through title changes by application  */
@@ -985,17 +915,17 @@ class XTerm extends blessed.Box {
         }
 
         /*  pass raw keyboard input from Blessed to XTerm  */
-        this.skipInputDataOnce   = false
-        this.skipInputDataAlways = false
+        this.skipInputDataOnce = false;
+        this.skipInputDataAlways = false;
         this.screen.program.input.on("data", this._onScreenEventInputData = (data) => {
             /*  only in case we are focused and not in scrolling mode  */
             if (this.screen.focused !== this || this.scrolling)
-                return
+                return;
             if (this.skipInputDataAlways)
-                return
+                return;
             if (this.skipInputDataOnce) {
-                this.skipInputDataOnce = false
-                return
+                this.skipInputDataOnce = false;
+                return;
             }
             if (!_isMouse(data))
                 this.handler(data);
@@ -1014,19 +944,19 @@ class XTerm extends blessed.Box {
             }
 
             /*  handle scrolling keys  */
-            if (   !this.scrolling
+            if (!this.scrolling
                 && this.options.controKey !== "none"
                 && key.full === this.options.controlKey)
                 this._scrollingStart()
             else if (this.scrolling) {
-                if (   key.full === this.options.controlKey
+                if (key.full === this.options.controlKey
                     || key.full.match(/^(?:escape|return|space)$/)) {
                     this._scrollingEnd()
                     this.skipInputDataOnce = true
                 }
-                else if (key.full === "up")       this.scroll(-1)
-                else if (key.full === "down")     this.scroll(+1)
-                else if (key.full === "pageup")   this.scroll(-(this.height - 2))
+                else if (key.full === "up") this.scroll(-1)
+                else if (key.full === "down") this.scroll(+1)
+                else if (key.full === "pageup") this.scroll(-(this.height - 2))
                 else if (key.full === "pagedown") this.scroll(+(this.height - 2))
             }
         })
@@ -1046,10 +976,10 @@ class XTerm extends blessed.Box {
                     return
 
                 /*  only in case we are touched  */
-                if (   (ev.x < this.aleft + this.ileft)
-                    || (ev.y < this.atop  + this.itop)
+                if ((ev.x < this.aleft + this.ileft)
+                    || (ev.y < this.atop + this.itop)
                     || (ev.x > this.aleft - this.ileft + this.width)
-                    || (ev.y > this.atop  - this.itop  + this.height))
+                    || (ev.y > this.atop - this.itop + this.height))
                     return
 
                 /*  generate canonical mouse input sequence,
@@ -1089,7 +1019,7 @@ class XTerm extends blessed.Box {
             const nextTick = global.setImmediate || process.nextTick.bind(process)
             nextTick(() => {
                 /*  determine new width/height  */
-                let width  = this.width  - this.iwidth
+                let width = this.width - this.iwidth
                 let height = this.height - this.iheight
 
                 /*  pass-through to XTerm  */
@@ -1099,7 +1029,7 @@ class XTerm extends blessed.Box {
 
         /*  perform an initial resizing once  */
         this.once("render", () => {
-            let width  = this.width  - this.iwidth
+            let width = this.width - this.iwidth
             let height = this.height - this.iheight
             this.term.resize(width, height)
         })
@@ -1120,64 +1050,64 @@ class XTerm extends blessed.Box {
     }
 
     /*  process input data  */
-    enableInput (process) {
+    enableInput(process) {
         this.skipInputDataAlways = !process;
     }
 
     /*  write data to the terminal  */
-    write (data) {
+    write(data) {
         return this.term.write(data)
     }
 
-    getSelectedText () {
-         // let's not render twice
-         /*  call the underlying Element's rendering function  */
-         let ret = this._render()
-         if (!ret)
-             return
+    getSelectedText() {
+        // let's not render twice
+        /*  call the underlying Element's rendering function  */
+        let ret = this._render()
+        if (!ret)
+            return
 
-         let xi = ret.xi + this.ileft
-         let xl = ret.xl - this.iright
-         let yi = ret.yi + this.itop
-         let yl = ret.yl - this.ibottom
-         let result = [];
-         let x1 = this.x1,y1 = this.y1,x2 = this.x2,y2 = this.y2;
-        if ( this.y1 > this.y2 || (this.y1 == this.y2 && this.x1 > this.x2)) {
+        let xi = ret.xi + this.ileft
+        let xl = ret.xl - this.iright
+        let yi = ret.yi + this.itop
+        let yl = ret.yl - this.ibottom
+        let result = [];
+        let x1 = this.x1, y1 = this.y1, x2 = this.x2, y2 = this.y2;
+        if (this.y1 > this.y2 || (this.y1 == this.y2 && this.x1 > this.x2)) {
             x1 = this.x2;
             y1 = this.y2;
             x2 = this.x1;
             y2 = this.y1;
         }
 
-         let endRow = y1 == y2 ? x2 : null;
-         // Get first row
-         result.push(this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + y1 - yi, true, x1 - xi, endRow));
+        let endRow = y1 == y2 ? x2 : null;
+        // Get first row
+        result.push(this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + y1 - yi, true, x1 - xi, endRow));
 
-         // Get middle rows
-         for (let i = y1 + 1; i <= y2 - 1; i++) {
-           const lineText = this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + i - yi, true);
-           result.push(lineText);
-         }
+        // Get middle rows
+        for (let i = y1 + 1; i <= y2 - 1; i++) {
+            const lineText = this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + i - yi, true);
+            result.push(lineText);
+        }
 
-         // Get last row
-         if (y1 != y2) {
-           const lineText = this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + y2 - yi, true, 0, x2);
-           result.push(lineText);
-         }
+        // Get last row
+        if (y1 != y2) {
+            const lineText = this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + y2 - yi, true, 0, x2);
+            result.push(lineText);
+        }
 
-         const NON_BREAKING_SPACE_CHAR = String.fromCharCode(160);
-         const ALL_NON_BREAKING_SPACE_REGEX = new RegExp(NON_BREAKING_SPACE_CHAR, 'g');
+        const NON_BREAKING_SPACE_CHAR = String.fromCharCode(160);
+        const ALL_NON_BREAKING_SPACE_REGEX = new RegExp(NON_BREAKING_SPACE_CHAR, 'g');
 
-         // Format string by replacing non-breaking space chars with regular spaces
-         // and joining the array into a multi-line string.
+        // Format string by replacing non-breaking space chars with regular spaces
+        // and joining the array into a multi-line string.
         const formattedResult = result.map(line => {
             return line.replace(ALL_NON_BREAKING_SPACE_REGEX, ' ');
-          }).join('\n');
-         return formattedResult;
-       }
+        }).join('\n');
+        return formattedResult;
+    }
 
     /*  render the widget  */
-    render () {
+    render() {
         /*  call the underlying Element's rendering function  */
         let ret = this._render()
         if (!ret)
@@ -1200,8 +1130,8 @@ class XTerm extends blessed.Box {
         /*  iterate over all lines  */
         let cursor
         let dirtyAny = false;
-        let X1 = this.x1,y1 = this.y1,x2 = this.x2,y2 = this.y2;
-        if ( this.y1 > this.y2 || (this.y1 == this.y2 && this.x1 > this.x2)) {
+        let X1 = this.x1, y1 = this.y1, x2 = this.x2, y2 = this.y2;
+        if (this.y1 > this.y2 || (this.y1 == this.y2 && this.x1 > this.x2)) {
             X1 = this.x2;
             y1 = this.y2;
             x2 = this.x1;
@@ -1224,12 +1154,12 @@ class XTerm extends blessed.Box {
             }
 
             /*  determine cursor column position  */
-            if (   y === yi + this.term.buffer.y
+            if (y === yi + this.term.buffer.y
                 && this.term.cursorState
                 && this.screen.focused === this
                 // FIXME : hasSelection -> select mode correct mapping?
                 && (this.term.buffer.ydisp === this.term.buffer.ybase || this.term.selectionManager.hasSelection)
-                && !this.term.cursorHidden                                      )
+                && !this.term.cursorHidden)
                 cursor = xi + this.term.buffer.x
             else
                 cursor = -1
@@ -1254,22 +1184,21 @@ class XTerm extends blessed.Box {
                             x0 = this.dattr | (2 << 18)
                         else if (this.options.cursorType === "block")
                             x0 = this.dattr | (8 << 18)
-                    } else{
                     }
                 }
 
-                // inverse x0 if selected
+                // inverse x0 if selected 
                 let inverse = false;
                 if (y1 <= y && y2 >= y && !(y1 == y2 && X1 == x2)) {
                     if (y1 == y2) {
                         if (X1 <= x && x2 >= x) {
                             inverse = true;
                         }
-                    } else if ( y == y1 && x >= X1) {
+                    } else if (y == y1 && x >= X1) {
                         inverse = true;
                     } else if (y == y2 && x <= x2) {
                         inverse = true;
-                    } else if (y > y1 && y < y2 ) {
+                    } else if (y > y1 && y < y2) {
                         inverse = true;
                     }
                 }
@@ -1293,24 +1222,21 @@ class XTerm extends blessed.Box {
             /*  mark Blessed Screen line as dirty  */
             if (dirty) {
                 sline.dirty = true
-                dirtyAny    = true
+                dirtyAny = true
             }
         }
-
-        /*  indicate that we updated our rendered content  */
-        if (dirtyAny > 0)
         return ret
     }
 
     /*  support scrolling similar to Blessed ScrolledBox  */
-    _scrollingStart () {
+    _scrollingStart() {
         this.scrolling = true
         this.style.focus.border.fg = this.borderScrolling
         this.focus()
         this.screen.render()
         this.emit("scrolling-start")
     }
-    _scrollingEnd () {
+    _scrollingEnd() {
         this.term.scrollToBottom()
         this.style.focus.border.fg = this.borderFocus
         this.focus()
@@ -1318,44 +1244,44 @@ class XTerm extends blessed.Box {
         this.scrolling = false
         this.emit("scrolling-end")
     }
-    getScroll () {
+    getScroll() {
         return this.term.buffer.ydisp
     }
-    getScrollHeight () {
+    getScrollHeight() {
         return this.term.rows - 1
     }
-    getScrollPerc () {
+    getScrollPerc() {
         return (this.term.buffer.ybase > 0 ? ((this.term.buffer.ydisp / this.term.buffer.ybase) * 100) : 100)
     }
-    setScrollPerc (i) {
+    setScrollPerc(i) {
         return this.setScroll(Math.floor((i / 100) * this.term.buffer.ybase))
     }
-    setScroll (offset) {
+    setScroll(offset) {
         return this.scrollTo(offset)
     }
-    scrollTo (offset) {
+    scrollTo(offset) {
         if (!this.scrolling)
             this._scrollingStart()
         this.term.scrollLines(offset - this.term.buffer.ydisp)
         this.screen.render()
         this.emit("scroll")
     }
-    scroll (offset) {
+    scroll(offset) {
         if (!this.scrolling)
             this._scrollingStart()
         this.term.scrollLines(offset)
         this.screen.render()
         this.emit("scroll")
     }
-    resetScroll () {
+    resetScroll() {
         if (this.scrolling)
             this._scrollingEnd()
     }
 
     /*  kill widget  */
-    kill () {
+    kill() {
         /*  tear down XTerm  */
-        this.term.refresh = () => {}
+        this.term.refresh = () => { }
         this.term.write("\x1b[H\x1b[J")
         // this.term.clearCursorBlinkingInterval()
         this.term.destroy()
@@ -1367,8 +1293,7 @@ module.exports = XTerm
 
 
 }).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":186,"./../xterm/Terminal":31,"_process":215,"blessed":"blessed","os":191,"xterm":undefined}],11:[function(require,module,exports){
+},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":185,"./../xterm/Terminal":30,"_process":214,"blessed":"blessed","os":190,"xterm":undefined}],10:[function(require,module,exports){
 (function (process,global){
 const blessed = require('blessed');
 
@@ -1530,8 +1455,7 @@ blessed.Element.prototype.setLine = function(i, line) {
 // PATCH END
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"_process":215,"blessed":"blessed"}],12:[function(require,module,exports){
+},{"_process":214,"blessed":"blessed"}],11:[function(require,module,exports){
 const blessed = require('blessed');
 
 blessed.listbar.prototype.add =
@@ -1663,7 +1587,7 @@ blessed.listbar.prototype.appendItem = function (item, callback) {
   this.emit('add item');
 };
 
-},{"blessed":"blessed"}],13:[function(require,module,exports){
+},{"blessed":"blessed"}],12:[function(require,module,exports){
 const blessed = require('blessed');
 const util    = require('util');
 
@@ -1879,7 +1803,7 @@ blessed.log = function (options) {
   return log;
 }
 
-},{"blessed":"blessed","util":262}],14:[function(require,module,exports){
+},{"blessed":"blessed","util":261}],13:[function(require,module,exports){
 const blessed = require('blessed');
 
 blessed.Node.prototype.insert = function (element, i) {
@@ -1957,7 +1881,7 @@ blessed.Node.prototype.remove = function (element) {
   }
 };
 
-},{"blessed":"blessed"}],15:[function(require,module,exports){
+},{"blessed":"blessed"}],14:[function(require,module,exports){
 require('./element');
 require('./listbar');
 require('./log');
@@ -1965,7 +1889,7 @@ require('./node');
 require('./screen');
 require('./table');
 
-},{"./element":11,"./listbar":12,"./log":13,"./node":14,"./screen":16,"./table":17}],16:[function(require,module,exports){
+},{"./element":10,"./listbar":11,"./log":12,"./node":13,"./screen":15,"./table":16}],15:[function(require,module,exports){
 const blessed = require('blessed');
 
 blessed.Screen.prototype._listenMouse = function (el) {
@@ -2077,7 +2001,7 @@ blessed.Screen.prototype._listenMouse = function (el) {
   });
 };
 
-},{"blessed":"blessed"}],17:[function(require,module,exports){
+},{"blessed":"blessed"}],16:[function(require,module,exports){
 const blessed = require('blessed');
 
 // See https://github.com/chjj/blessed/pull/292
@@ -2136,7 +2060,7 @@ blessed.ListTable.prototype._calculateMaxes = function () {
   return (this._maxes = maxes);
 };
 
-},{"blessed":"blessed"}],18:[function(require,module,exports){
+},{"blessed":"blessed"}],17:[function(require,module,exports){
 'use strict';
 
 const blessed = require('blessed'),
@@ -2222,7 +2146,7 @@ class Chart {
 
 module.exports = Chart;
 
-},{"./contrib/line":21,"blessed":"blessed"}],19:[function(require,module,exports){
+},{"./contrib/line":20,"blessed":"blessed"}],18:[function(require,module,exports){
 var blessed = require('blessed')
    , Node = blessed.Node
    , Box = blessed.Box
@@ -2274,7 +2198,7 @@ Canvas.prototype.render = function() {
 };
 
 module.exports = Canvas
-},{"blessed":"blessed","drawille-canvas-blessed-contrib":266}],20:[function(require,module,exports){
+},{"blessed":"blessed","drawille-canvas-blessed-contrib":265}],19:[function(require,module,exports){
 const blessed = require('blessed');
 
 function Carousel(pages, options) {
@@ -2353,7 +2277,7 @@ Carousel.prototype.start = function () {
 
 module.exports = Carousel;
 
-},{"blessed":"blessed"}],21:[function(require,module,exports){
+},{"blessed":"blessed"}],20:[function(require,module,exports){
 var blessed = require('blessed')
 , Node = blessed.Node
 , Canvas = require('./canvas')
@@ -2601,7 +2525,7 @@ Line.prototype.setData = function(data) {
 
 module.exports = Line
 
-},{"./canvas":19,"./utils":22,"blessed":"blessed","drawille-canvas-blessed-contrib":266}],22:[function(require,module,exports){
+},{"./canvas":18,"./utils":21,"blessed":"blessed","drawille-canvas-blessed-contrib":265}],21:[function(require,module,exports){
 const x256 = require('x256');
 
 exports.getColorCode = function (color) {
@@ -2629,7 +2553,7 @@ exports.arrayMax = function (array, iteratee) {
   return result;
 }
 
-},{"x256":313}],23:[function(require,module,exports){
+},{"x256":311}],22:[function(require,module,exports){
 'use strict';
 
 const blessed  = require('blessed'),
@@ -2649,7 +2573,7 @@ const { delay } = require('../promise');
 
 class Dashboard {
 
-  constructor({ screen, navbar, status, client, debug, kube_config }) {
+  constructor({ screen, navbar, status, client, debug }) {
     let current_namespace, pod_selected, container_selected, pods_list = [];
     const cancellations = new task.Cancellations();
     const dashboard = this;
@@ -2672,7 +2596,7 @@ class Dashboard {
         ch    : ' ',
         style : { bg: 'white' },
         track : {
-          style : { bg: 'black' },
+          style : { bg: 'grey' },
         }
       },
       style : {
@@ -2794,8 +2718,7 @@ class Dashboard {
       // check if connection already exists
       if (navbar.select(byId)) return;
 
-      const user = kube_config.current_context.user.username;
-      const exec = new Exec({ screen, status, namespace, pod: name, container, user });
+      const exec = new Exec({ screen, status, namespace, pod: name, container, debug });
       const { promise, cancellation } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: () => exec.print(), readable: exec });
 
       exec.on('exit', () => {
@@ -2805,7 +2728,7 @@ class Dashboard {
       });
 
       promise
-        .then(() => debug.log(`{grey-fg}Remote shell in container: '${container}', pod: '${name}' and namespace: '${namespace}' with user '${user}'{/grey-fg}...`))
+        .then(() => debug.log(`{grey-fg}Remote shell into '${namespace}/${name}/${container}'{/grey-fg}`))
         .then(() => {
           navbar.add({
             id     : id,
@@ -3160,7 +3083,7 @@ class Dashboard {
 
 module.exports = Dashboard;
 
-},{"../http-then":"http-then","../promise":8,"../task":9,"../util":32,"./chart":18,"./exec":25,"./spinner":29,"blessed":"blessed","lodash.debounce":298,"moment":304,"moment-duration-format":303}],24:[function(require,module,exports){
+},{"../http-then":"http-then","../promise":7,"../task":8,"../util":31,"./chart":17,"./exec":24,"./spinner":28,"blessed":"blessed","lodash.debounce":297,"moment":303,"moment-duration-format":302}],23:[function(require,module,exports){
 'use strict';
 
 const blessed = require('blessed');
@@ -3202,7 +3125,7 @@ module.exports = screen => {
   }
 };
 
-},{"blessed":"blessed"}],25:[function(require,module,exports){
+},{"blessed":"blessed"}],24:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
@@ -3213,7 +3136,7 @@ const blessed    = require('blessed'),
 
 class Exec extends Duplex {
 
-  constructor({ screen, status, namespace, pod, container, user }) {
+  constructor({ screen, status, namespace, pod, container, debug }) {
     super();
     let terminal, term, self = this;
 
@@ -3256,12 +3179,13 @@ class Exec extends Duplex {
       parent: screen,
       handler: handler,
       screenKeys: true,
-      label: `${namespace}/${pod}/${container}@${user}`,
+      label: `${namespace}/${pod}/${container}`,
       left: 0,
       top: 1,
       width: '100%',
       bottom: 1,
       border: 'line',
+      debug: debug
     });
     terminal.on('click', terminal.focus.bind(terminal));
     terminal.on('keypress', (ch, key) => {
@@ -3283,7 +3207,7 @@ class Exec extends Duplex {
     this.blur = function () {
       screen.grabKeys = false;
       terminal.skipInputDataOnce = true;
-      terminal.enableInput(false);      
+      terminal.enableInput(false);
     };
 
     this.focus = function () {
@@ -3310,8 +3234,8 @@ class Exec extends Duplex {
           // skip empty data frame payload on connect!
           if (message.length <= 1) continue;
           var channel = message[0].toString();
-          message =  message.slice(1).toString();
-          switch(channel) {
+          message = message.slice(1).toString();
+          switch (channel) {
           case '1':
             term.write(message);
             screen.render();
@@ -3332,15 +3256,14 @@ class Exec extends Duplex {
 
 module.exports = Exec;
 }).call(this,require("buffer").Buffer)
-
-},{"./blessed-xterm/blessed-xterm":10,"blessed":"blessed","buffer":129,"os":191,"stream":250}],26:[function(require,module,exports){
+},{"./blessed-xterm/blessed-xterm":9,"blessed":"blessed","buffer":128,"os":190,"stream":249}],25:[function(require,module,exports){
 (function (process){
 'use strict';
 
 const blessed = require('blessed'),
       os      = require('os');
 
-function login_form(screen, kube_config, kubebox, { closable, server } = { closable: false }) {
+function login_form(screen, kube_config, kubebox, { closable } = { closable: false }) {
   const form = blessed.form({
     name      : 'form',
     screen    : screen,
@@ -3349,7 +3272,7 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
     left      : 'center',
     top       : 'center',
     width     : 53,
-    height    : server ? 7 : 9,
+    height    : kube_config ? 9 : 7,
     shrink    : false,
     border    : { type : 'line' },
   });
@@ -3364,20 +3287,23 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
   form.on('keypress', (ch, key) => {
     switch(key.full) {
       case 'left':
-        kube_config.previousContext();
+        if (kube_config) {
+          kube_config.previousContext();
+          refresh();
+        }
         break;
       case 'right':
-        kube_config.nextContext();
+        if (kube_config) {
+          kube_config.nextContext();
+          refresh();
+        }
         break;
       case 'enter':
         form.submit();
         break;
       case 'escape':
         if (closable) form.cancel();
-      default:
-        return;
     }
-    refresh();
   });
 
   form.on('key q', () => {
@@ -3388,7 +3314,7 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
 
   blessed.text({
     // hide the URL input when a server URL is already provided
-    hidden  : server,
+    hidden  : !kube_config,
     parent  : form,
     left    : 1,
     bottom  : 6,
@@ -3398,7 +3324,7 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
 
   const url = blessed.textbox({
     // hide the URL input when a server URL is already provided
-    hidden       : server,
+    hidden       : !kube_config,
     parent       : form,
     name         : 'url',
     inputOnFocus : true,
@@ -3408,7 +3334,7 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
     width        : 35,
     left         : 15,
     bottom       : 6,
-    value        : kube_config.current_context.cluster.server,
+    value        : kube_config ? kube_config.current_context.cluster.server : '',
   });
   // retain key grabbing as text areas reset it after input reading
   url.on('blur', () => form.screen.grabKeys = true);
@@ -3431,7 +3357,7 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
     width        : 30,
     left         : 15,
     bottom       : 4,
-    value        : kube_config.current_context.user.username,
+    value        : kube_config ? kube_config.current_context.user.username : '',
   });
   // retain key grabbing as text areas reset it after input reading
   username.on('blur', () => form.screen.grabKeys = true);
@@ -3455,7 +3381,7 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
     left         : 15,
     censor       : true,
     bottom       : 3,
-    value        : kube_config.current_context.user.password,
+    value        : kube_config ? kube_config.current_context.user.password : '',
   });
   // retain key grabbing as text areas reset it after input reading
   password.on('blur', () => form.screen.grabKeys = true);
@@ -3478,12 +3404,12 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
     width        : 33,
     left         : 15,
     bottom       : 2,
-    value        : kube_config.current_context.user.token,
+    value        : kube_config ? kube_config.current_context.user.token : '',
   });
   // retain key grabbing as text areas reset it after input reading
   token.on('blur', () => form.screen.grabKeys = true);
 
-  if (os.platform() === 'browser') {
+  if (os.platform() === 'browser' && kube_config) {
     const config = blessed.button({
       parent  : form,
       mouse   : true,
@@ -3586,30 +3512,30 @@ function login_form(screen, kube_config, kubebox, { closable, server } = { closa
     username : () => username.value,
     password : () => password.value,
     token    : () => token.value,
-    url      : () => server || url.value,
+    url      : () => url.value,
   };
 }
 
-function prompt(screen, kube_config, kubebox, { closable, message, server }) {
+function prompt(screen, kube_config, kubebox, { closable, message }) {
   let cancellation = Function.prototype;
   const promise = new Promise(function (fulfill, reject) {
     screen.saveFocus();
     screen.grabKeys = true;
     screen.grabMouse = true;
 
-    const { form, refresh, username, password, token, url } = login_form(screen, kube_config, kubebox, { closable, server });
+    const { form, refresh, username, password, token, url } = login_form(screen, kube_config, kubebox, { closable });
 
     function kubeConfigChange() {
       form.resetSelected();
       form.focus();
       refresh();
     };
-    kube_config.on('kubeConfigChange', kubeConfigChange);
+    if (kube_config) kube_config.on('kubeConfigChange', kubeConfigChange);
 
     let closed = false;
     function close_login_form() {
       closed = true;
-      kube_config.removeListener('kubeConfigChange', kubeConfigChange);
+      if (kube_config) kube_config.removeListener('kubeConfigChange', kubeConfigChange);
       // work around form 'element keypress' event handler that focus the form on ESC
       form.focus = () => {};
       form.destroy();
@@ -3661,8 +3587,7 @@ function prompt(screen, kube_config, kubebox, { closable, message, server }) {
 module.exports.prompt = prompt;
 
 }).call(this,require('_process'))
-
-},{"_process":215,"blessed":"blessed","os":191}],27:[function(require,module,exports){
+},{"_process":214,"blessed":"blessed","os":190}],26:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -3688,7 +3613,7 @@ function namespaces_list(screen) {
       ch      : ' ',
       style   : { bg: 'white' },
       track   : {
-        style : { bg: 'black' }
+        style : { bg: 'grey' }
       }
     },
     style : {
@@ -3785,8 +3710,7 @@ function prompt(screen, client, { current_namespace, promptAfterRequest } = { pr
 module.exports.prompt = prompt;
 
 }).call(this,require('_process'))
-
-},{"../http-then":"http-then","./spinner":29,"_process":215,"blessed":"blessed","os":191}],28:[function(require,module,exports){
+},{"../http-then":"http-then","./spinner":28,"_process":214,"blessed":"blessed","os":190}],27:[function(require,module,exports){
 const blessed  = require('blessed'),
       Carousel = require('./contrib/carousel');
 
@@ -3920,7 +3844,7 @@ class NavBar {
 
 module.exports = NavBar;
 
-},{"./contrib/carousel":20,"blessed":"blessed"}],29:[function(require,module,exports){
+},{"./contrib/carousel":19,"blessed":"blessed"}],28:[function(require,module,exports){
 class Spinner {
 
   constructor() {
@@ -4016,7 +3940,7 @@ module.exports = screen => ({
   until: promise => until(screen, promise),
 });
 
-},{}],30:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 module.exports.Dashboard  = require('./dashboard');
 module.exports.Exec       = require('./exec');
 module.exports.login      = require('./login');
@@ -4024,7 +3948,7 @@ module.exports.namespaces = require('./namespaces');
 module.exports.NavBar     = require('./navbar');
 module.exports.spinner    = require('./spinner');
 
-},{"./dashboard":23,"./exec":25,"./login":26,"./namespaces":27,"./navbar":28,"./spinner":29}],31:[function(require,module,exports){
+},{"./dashboard":22,"./exec":24,"./login":25,"./namespaces":26,"./navbar":27,"./spinner":28}],30:[function(require,module,exports){
 "use strict";
 
 const {Terminal} = require("xterm");
@@ -4321,7 +4245,7 @@ Terminal.prototype.resize = function (x, y) {
     this.refresh(0, this.rows - 1);
     this.emit('resize', { cols: x, rows: y });
 };
-},{"xterm":undefined}],32:[function(require,module,exports){
+},{"xterm":undefined}],31:[function(require,module,exports){
 'use strict';
 
 const os = require('os');
@@ -4411,7 +4335,7 @@ module.exports.isLocalStorageAvailable = function () {
       storage.length !== 0;
   }
 }
-},{"os":191}],33:[function(require,module,exports){
+},{"os":190}],32:[function(require,module,exports){
 /**
  * alias.js - terminfo/cap aliases for blessed.
  * https://github.com/chjj/blessed
@@ -4939,7 +4863,7 @@ alias.strings = {
   'set_pglen_inch':                                        ['slength',                            'sL']  //                               YI Set page length to #1 hundredth of an inch
 };
 
-},{}],34:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 /**
  * colors.js - color-related functions for blessed.
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -5471,7 +5395,7 @@ Object.keys(exports.ccolors).forEach(function(name) {
   delete exports.ccolors[name];
 });
 
-},{}],35:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 /**
  * events.js - event emitter for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -5662,7 +5586,7 @@ exports.EventEmitter = EventEmitter;
 
 module.exports = exports;
 
-},{}],36:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 (function (process,Buffer){
 /**
  * gpmclient.js - support the gpm mouse protocol
@@ -5887,8 +5811,7 @@ GpmClient.prototype.hasMetaKey =  function(mod) {
 module.exports = GpmClient;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-
-},{"_process":215,"buffer":129,"events":166,"fs":79,"net":79}],37:[function(require,module,exports){
+},{"_process":214,"buffer":128,"events":165,"fs":78,"net":78}],36:[function(require,module,exports){
 /**
  * helpers.js - helpers for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -6055,7 +5978,7 @@ helpers.__defineGetter__('Element', function() {
   return helpers._element;
 });
 
-},{"./unicode":41,"./widgets/element":48,"./widgets/screen":68,"fs":79}],38:[function(require,module,exports){
+},{"./unicode":40,"./widgets/element":47,"./widgets/screen":67,"fs":78}],37:[function(require,module,exports){
 (function (Buffer){
 /**
  * keys.js - emit key presses
@@ -6398,8 +6321,7 @@ function isMouse(s) {
 }
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/is-buffer/index.js")})
-
-},{"../../browserify/node_modules/is-buffer/index.js":186,"events":166,"string_decoder":255}],39:[function(require,module,exports){
+},{"../../browserify/node_modules/is-buffer/index.js":185,"events":165,"string_decoder":254}],38:[function(require,module,exports){
 (function (Buffer,process,global){
 /**
  * program.js - basic curses-like functionality for blessed.
@@ -10698,8 +10620,7 @@ function merge(out) {
 module.exports = Program;
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"../../browserify/node_modules/is-buffer/index.js":186,"./colors":34,"./gpmclient":36,"./keys":38,"./tput":40,"_process":215,"child_process":79,"events":166,"fs":79,"string_decoder":255,"util":262}],40:[function(require,module,exports){
+},{"../../browserify/node_modules/is-buffer/index.js":185,"./colors":33,"./gpmclient":35,"./keys":37,"./tput":39,"_process":214,"child_process":78,"events":165,"fs":78,"string_decoder":254,"util":261}],39:[function(require,module,exports){
 (function (process,Buffer,__dirname){
 /**
  * tput.js - parse and compile terminfo caps to javascript.
@@ -13740,8 +13661,7 @@ Tput.prototype.detectUnicode = function() {
   return true;
 };
 }).call(this,require('_process'),require("buffer").Buffer,"/node_modules/blessed/lib")
-
-},{"./alias":33,"_process":215,"assert":94,"buffer":129,"child_process":79,"fs":79,"path":208}],41:[function(require,module,exports){
+},{"./alias":32,"_process":214,"assert":93,"buffer":128,"child_process":78,"fs":78,"path":207}],40:[function(require,module,exports){
 (function (process){
 /**
  * unicode.js - east asian width and surrogate pairs
@@ -14535,8 +14455,7 @@ exports.chars.combining = new RegExp(
 */
 
 }).call(this,require('_process'))
-
-},{"../":"blessed","_process":215}],42:[function(require,module,exports){
+},{"../":"blessed","_process":214}],41:[function(require,module,exports){
 /**
  * widget.js - high-level interface for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -14632,7 +14551,7 @@ require('./widgets/text');
 require('./widgets/textarea');
 require('./widgets/textbox');
 require('./widgets/video');
-},{"./widgets/ansiimage":43,"./widgets/bigtext":44,"./widgets/box":45,"./widgets/button":46,"./widgets/checkbox":47,"./widgets/element":48,"./widgets/filemanager":49,"./widgets/form":50,"./widgets/image":51,"./widgets/input":52,"./widgets/layout":53,"./widgets/line":54,"./widgets/list":55,"./widgets/listbar":56,"./widgets/listtable":57,"./widgets/loading":58,"./widgets/log":59,"./widgets/message":60,"./widgets/node":61,"./widgets/overlayimage":62,"./widgets/progressbar":63,"./widgets/prompt":64,"./widgets/question":65,"./widgets/radiobutton":66,"./widgets/radioset":67,"./widgets/screen":68,"./widgets/scrollablebox":69,"./widgets/scrollabletext":70,"./widgets/table":71,"./widgets/terminal":72,"./widgets/text":73,"./widgets/textarea":74,"./widgets/textbox":75,"./widgets/video":76}],43:[function(require,module,exports){
+},{"./widgets/ansiimage":42,"./widgets/bigtext":43,"./widgets/box":44,"./widgets/button":45,"./widgets/checkbox":46,"./widgets/element":47,"./widgets/filemanager":48,"./widgets/form":49,"./widgets/image":50,"./widgets/input":51,"./widgets/layout":52,"./widgets/line":53,"./widgets/list":54,"./widgets/listbar":55,"./widgets/listtable":56,"./widgets/loading":57,"./widgets/log":58,"./widgets/message":59,"./widgets/node":60,"./widgets/overlayimage":61,"./widgets/progressbar":62,"./widgets/prompt":63,"./widgets/question":64,"./widgets/radiobutton":65,"./widgets/radioset":66,"./widgets/screen":67,"./widgets/scrollablebox":68,"./widgets/scrollabletext":69,"./widgets/table":70,"./widgets/terminal":71,"./widgets/text":72,"./widgets/textarea":73,"./widgets/textbox":74,"./widgets/video":75}],42:[function(require,module,exports){
 /**
  * ansiimage.js - render PNGS/GIFS as ANSI
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -14801,7 +14720,7 @@ ANSIImage.prototype.render = function() {
 
 module.exports = ANSIImage;
 
-},{"../../vendor/tng":77,"../colors":34,"./box":45,"./node":61,"child_process":79}],44:[function(require,module,exports){
+},{"../../vendor/tng":76,"../colors":33,"./box":44,"./node":60,"child_process":78}],43:[function(require,module,exports){
 (function (__dirname){
 /**
  * bigtext.js - bigtext element for blessed
@@ -14964,8 +14883,7 @@ BigText.prototype.render = function() {
 module.exports = BigText;
 
 }).call(this,"/node_modules/blessed/lib/widgets")
-
-},{"./box":45,"./node":61,"fs":79}],45:[function(require,module,exports){
+},{"./box":44,"./node":60,"fs":78}],44:[function(require,module,exports){
 /**
  * box.js - box element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -15001,7 +14919,7 @@ Box.prototype.type = 'box';
 
 module.exports = Box;
 
-},{"./element":48,"./node":61}],46:[function(require,module,exports){
+},{"./element":47,"./node":60}],45:[function(require,module,exports){
 /**
  * button.js - button element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -15065,7 +14983,7 @@ Button.prototype.press = function() {
 
 module.exports = Button;
 
-},{"./input":52,"./node":61}],47:[function(require,module,exports){
+},{"./input":51,"./node":60}],46:[function(require,module,exports){
 /**
  * checkbox.js - checkbox element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -15158,7 +15076,7 @@ Checkbox.prototype.toggle = function() {
 
 module.exports = Checkbox;
 
-},{"./input":52,"./node":61}],48:[function(require,module,exports){
+},{"./input":51,"./node":60}],47:[function(require,module,exports){
 (function (process,global){
 /**
  * element.js - base element for blessed
@@ -17732,8 +17650,7 @@ Element.prototype.screenshot = function(xi, xl, yi, yl) {
 module.exports = Element;
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"../colors":34,"../helpers":37,"../unicode":41,"./box":45,"./node":61,"./scrollablebox":69,"_process":215,"assert":94}],49:[function(require,module,exports){
+},{"../colors":33,"../helpers":36,"../unicode":40,"./box":44,"./node":60,"./scrollablebox":68,"_process":214,"assert":93}],48:[function(require,module,exports){
 (function (process){
 /**
  * filemanager.js - file manager element for blessed
@@ -17949,8 +17866,7 @@ FileManager.prototype.reset = function(cwd, callback) {
 module.exports = FileManager;
 
 }).call(this,require('_process'))
-
-},{"../helpers":37,"./list":55,"./node":61,"_process":215,"fs":79,"path":208}],50:[function(require,module,exports){
+},{"../helpers":36,"./list":54,"./node":60,"_process":214,"fs":78,"path":207}],49:[function(require,module,exports){
 /**
  * form.js - form element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -18219,7 +18135,7 @@ Form.prototype.reset = function() {
 
 module.exports = Form;
 
-},{"./box":45,"./node":61}],51:[function(require,module,exports){
+},{"./box":44,"./node":60}],50:[function(require,module,exports){
 /**
  * image.js - image element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -18282,7 +18198,7 @@ Image.prototype.type = 'image';
 
 module.exports = Image;
 
-},{"./ansiimage":43,"./box":45,"./node":61,"./overlayimage":62}],52:[function(require,module,exports){
+},{"./ansiimage":42,"./box":44,"./node":60,"./overlayimage":61}],51:[function(require,module,exports){
 /**
  * input.js - abstract input element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -18318,7 +18234,7 @@ Input.prototype.type = 'input';
 
 module.exports = Input;
 
-},{"./box":45,"./node":61}],53:[function(require,module,exports){
+},{"./box":44,"./node":60}],52:[function(require,module,exports){
 /**
  * layout.js - layout element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -18553,7 +18469,7 @@ Layout.prototype.render = function() {
 
 module.exports = Layout;
 
-},{"./element":48,"./node":61}],54:[function(require,module,exports){
+},{"./element":47,"./node":60}],53:[function(require,module,exports){
 /**
  * line.js - line element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -18611,7 +18527,7 @@ Line.prototype.type = 'line';
 
 module.exports = Line;
 
-},{"./box":45,"./node":61}],55:[function(require,module,exports){
+},{"./box":44,"./node":60}],54:[function(require,module,exports){
 /**
  * list.js - list element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -19212,7 +19128,7 @@ List.prototype.cancelSelected = function(i) {
 
 module.exports = List;
 
-},{"../helpers":37,"./box":45,"./node":61}],56:[function(require,module,exports){
+},{"../helpers":36,"./box":44,"./node":60}],55:[function(require,module,exports){
 /**
  * listbar.js - listbar element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -19625,7 +19541,7 @@ Listbar.prototype.selectTab = function(index) {
 
 module.exports = Listbar;
 
-},{"../helpers":37,"./box":45,"./node":61}],57:[function(require,module,exports){
+},{"../helpers":36,"./box":44,"./node":60}],56:[function(require,module,exports){
 /**
  * listtable.js - list table element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -19879,7 +19795,7 @@ ListTable.prototype.render = function() {
 
 module.exports = ListTable;
 
-},{"./box":45,"./list":55,"./node":61,"./table":71}],58:[function(require,module,exports){
+},{"./box":44,"./list":54,"./node":60,"./table":70}],57:[function(require,module,exports){
 /**
  * loading.js - loading element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -19969,7 +19885,7 @@ Loading.prototype.stop = function() {
 
 module.exports = Loading;
 
-},{"./box":45,"./node":61,"./text":73}],59:[function(require,module,exports){
+},{"./box":44,"./node":60,"./text":72}],58:[function(require,module,exports){
 (function (process,global){
 /**
  * log.js - log element for blessed
@@ -20056,8 +19972,7 @@ Log.prototype.scroll = function(offset, always) {
 module.exports = Log;
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./node":61,"./scrollabletext":70,"_process":215,"util":262}],60:[function(require,module,exports){
+},{"./node":60,"./scrollabletext":69,"_process":214,"util":261}],59:[function(require,module,exports){
 /**
  * message.js - message element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -20182,7 +20097,7 @@ Message.prototype.error = function(text, time, callback) {
 
 module.exports = Message;
 
-},{"./box":45,"./node":61}],61:[function(require,module,exports){
+},{"./box":44,"./node":60}],60:[function(require,module,exports){
 (function (process){
 /**
  * node.js - base abstract node for blessed
@@ -20468,8 +20383,7 @@ Node.prototype.set = function(name, value) {
 module.exports = Node;
 
 }).call(this,require('_process'))
-
-},{"../events":35,"./screen":68,"_process":215}],62:[function(require,module,exports){
+},{"../events":34,"./screen":67,"_process":214}],61:[function(require,module,exports){
 (function (process){
 /**
  * overlayimage.js - w3m image element for blessed
@@ -21190,8 +21104,7 @@ OverlayImage.prototype.displayImage = function(callback) {
 module.exports = OverlayImage;
 
 }).call(this,require('_process'))
-
-},{"../helpers":37,"./box":45,"./node":61,"_process":215,"child_process":79,"fs":79}],63:[function(require,module,exports){
+},{"../helpers":36,"./box":44,"./node":60,"_process":214,"child_process":78,"fs":78}],62:[function(require,module,exports){
 /**
  * progressbar.js - progress bar element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -21350,7 +21263,7 @@ ProgressBar.prototype.reset = function() {
 
 module.exports = ProgressBar;
 
-},{"./input":52,"./node":61}],64:[function(require,module,exports){
+},{"./input":51,"./node":60}],63:[function(require,module,exports){
 /**
  * prompt.js - prompt element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -21472,7 +21385,7 @@ Prompt.prototype.readInput = function(text, value, callback) {
 
 module.exports = Prompt;
 
-},{"./box":45,"./button":46,"./node":61,"./textbox":75}],65:[function(require,module,exports){
+},{"./box":44,"./button":45,"./node":60,"./textbox":74}],64:[function(require,module,exports){
 /**
  * question.js - question element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -21590,7 +21503,7 @@ Question.prototype.ask = function(text, callback) {
 
 module.exports = Question;
 
-},{"./box":45,"./button":46,"./node":61}],66:[function(require,module,exports){
+},{"./box":44,"./button":45,"./node":60}],65:[function(require,module,exports){
 /**
  * radiobutton.js - radio button element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -21653,7 +21566,7 @@ RadioButton.prototype.toggle = RadioButton.prototype.check;
 
 module.exports = RadioButton;
 
-},{"./checkbox":47,"./node":61}],67:[function(require,module,exports){
+},{"./checkbox":46,"./node":60}],66:[function(require,module,exports){
 /**
  * radioset.js - radio set element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -21691,7 +21604,7 @@ RadioSet.prototype.type = 'radio-set';
 
 module.exports = RadioSet;
 
-},{"./box":45,"./node":61}],68:[function(require,module,exports){
+},{"./box":44,"./node":60}],67:[function(require,module,exports){
 (function (process,global){
 /**
  * screen.js - screen node for blessed
@@ -23993,8 +23906,7 @@ Object.keys(angleTable).forEach(function(key) {
 module.exports = Screen;
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"../colors":34,"../helpers":37,"../program":39,"../unicode":41,"./box":45,"./element":48,"./log":59,"./node":61,"_process":215,"child_process":79,"fs":79,"path":208}],69:[function(require,module,exports){
+},{"../colors":33,"../helpers":36,"../program":38,"../unicode":40,"./box":44,"./element":47,"./log":58,"./node":60,"_process":214,"child_process":78,"fs":78,"path":207}],68:[function(require,module,exports){
 /**
  * scrollablebox.js - scrollable box element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -24385,7 +24297,7 @@ ScrollableBox.prototype.setScrollPerc = function(i) {
 
 module.exports = ScrollableBox;
 
-},{"./box":45,"./node":61}],70:[function(require,module,exports){
+},{"./box":44,"./node":60}],69:[function(require,module,exports){
 /**
  * scrollabletext.js - scrollable text element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -24422,7 +24334,7 @@ ScrollableText.prototype.type = 'scrollable-text';
 
 module.exports = ScrollableText;
 
-},{"./node":61,"./scrollablebox":69}],71:[function(require,module,exports){
+},{"./node":60,"./scrollablebox":68}],70:[function(require,module,exports){
 /**
  * table.js - table element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -24778,7 +24690,7 @@ Table.prototype.render = function() {
 
 module.exports = Table;
 
-},{"./box":45,"./node":61}],72:[function(require,module,exports){
+},{"./box":44,"./node":60}],71:[function(require,module,exports){
 (function (Buffer,process,global){
 /**
  * terminal.js - term.js terminal element for blessed
@@ -25194,8 +25106,7 @@ Terminal.prototype.kill = function() {
 module.exports = Terminal;
 
 }).call(this,{"isBuffer":require("../../../browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"../../../browserify/node_modules/is-buffer/index.js":186,"./box":45,"./node":61,"_process":215,"pty.js":undefined,"term.js":undefined}],73:[function(require,module,exports){
+},{"../../../browserify/node_modules/is-buffer/index.js":185,"./box":44,"./node":60,"_process":214,"pty.js":undefined,"term.js":undefined}],72:[function(require,module,exports){
 /**
  * text.js - text element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -25232,7 +25143,7 @@ Text.prototype.type = 'text';
 
 module.exports = Text;
 
-},{"./element":48,"./node":61}],74:[function(require,module,exports){
+},{"./element":47,"./node":60}],73:[function(require,module,exports){
 (function (process,global){
 /**
  * textarea.js - textarea element for blessed
@@ -25578,8 +25489,7 @@ Textarea.prototype.readEditor = function(callback) {
 module.exports = Textarea;
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"../unicode":41,"./input":52,"./node":61,"_process":215}],75:[function(require,module,exports){
+},{"../unicode":40,"./input":51,"./node":60,"_process":214}],74:[function(require,module,exports){
 /**
  * textbox.js - textbox element for blessed
  * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
@@ -25658,7 +25568,7 @@ Textbox.prototype.submit = function() {
 
 module.exports = Textbox;
 
-},{"./node":61,"./textarea":74}],76:[function(require,module,exports){
+},{"./node":60,"./textarea":73}],75:[function(require,module,exports){
 (function (process){
 /**
  * video.js - video element for blessed
@@ -25788,8 +25698,7 @@ Video.prototype.exists = function(program) {
 module.exports = Video;
 
 }).call(this,require('_process'))
-
-},{"./box":45,"./node":61,"./terminal":72,"_process":215,"child_process":79}],77:[function(require,module,exports){
+},{"./box":44,"./node":60,"./terminal":71,"_process":214,"child_process":78}],76:[function(require,module,exports){
 (function (process,Buffer){
 /**
  * tng.js - png reader
@@ -27548,8 +27457,7 @@ exports.gif = GIF;
 module.exports = exports;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-
-},{"_process":215,"assert":94,"blessed/lib/colors":34,"buffer":129,"child_process":79,"fs":79,"path":208,"util":262,"zlib":127}],78:[function(require,module,exports){
+},{"_process":214,"assert":93,"blessed/lib/colors":33,"buffer":128,"child_process":78,"fs":78,"path":207,"util":261,"zlib":126}],77:[function(require,module,exports){
 module.exports = function(x0, y0, x1, y1, fn) {
   if(!fn) {
     var arr = [];
@@ -27584,9 +27492,9 @@ module.exports = function(x0, y0, x1, y1, fn) {
   return arr;
 };
 
-},{}],79:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 
-},{}],80:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 var asn1 = exports;
 
 asn1.bignum = require('bn.js');
@@ -27597,7 +27505,7 @@ asn1.constants = require('./asn1/constants');
 asn1.decoders = require('./asn1/decoders');
 asn1.encoders = require('./asn1/encoders');
 
-},{"./asn1/api":81,"./asn1/base":83,"./asn1/constants":87,"./asn1/decoders":89,"./asn1/encoders":92,"bn.js":96}],81:[function(require,module,exports){
+},{"./asn1/api":80,"./asn1/base":82,"./asn1/constants":86,"./asn1/decoders":88,"./asn1/encoders":91,"bn.js":95}],80:[function(require,module,exports){
 var asn1 = require('../asn1');
 var inherits = require('inherits');
 
@@ -27660,7 +27568,7 @@ Entity.prototype.encode = function encode(data, enc, /* internal */ reporter) {
   return this._getEncoder(enc).encode(data, reporter);
 };
 
-},{"../asn1":80,"inherits":185,"vm":263}],82:[function(require,module,exports){
+},{"../asn1":79,"inherits":184,"vm":262}],81:[function(require,module,exports){
 var inherits = require('inherits');
 var Reporter = require('../base').Reporter;
 var Buffer = require('buffer').Buffer;
@@ -27778,7 +27686,7 @@ EncoderBuffer.prototype.join = function join(out, offset) {
   return out;
 };
 
-},{"../base":83,"buffer":129,"inherits":185}],83:[function(require,module,exports){
+},{"../base":82,"buffer":128,"inherits":184}],82:[function(require,module,exports){
 var base = exports;
 
 base.Reporter = require('./reporter').Reporter;
@@ -27786,7 +27694,7 @@ base.DecoderBuffer = require('./buffer').DecoderBuffer;
 base.EncoderBuffer = require('./buffer').EncoderBuffer;
 base.Node = require('./node');
 
-},{"./buffer":82,"./node":84,"./reporter":85}],84:[function(require,module,exports){
+},{"./buffer":81,"./node":83,"./reporter":84}],83:[function(require,module,exports){
 var Reporter = require('../base').Reporter;
 var EncoderBuffer = require('../base').EncoderBuffer;
 var DecoderBuffer = require('../base').DecoderBuffer;
@@ -28422,7 +28330,7 @@ Node.prototype._isPrintstr = function isPrintstr(str) {
   return /^[A-Za-z0-9 '\(\)\+,\-\.\/:=\?]*$/.test(str);
 };
 
-},{"../base":83,"minimalistic-assert":189}],85:[function(require,module,exports){
+},{"../base":82,"minimalistic-assert":188}],84:[function(require,module,exports){
 var inherits = require('inherits');
 
 function Reporter(options) {
@@ -28545,7 +28453,7 @@ ReporterError.prototype.rethrow = function rethrow(msg) {
   return this;
 };
 
-},{"inherits":185}],86:[function(require,module,exports){
+},{"inherits":184}],85:[function(require,module,exports){
 var constants = require('../constants');
 
 exports.tagClass = {
@@ -28589,7 +28497,7 @@ exports.tag = {
 };
 exports.tagByName = constants._reverse(exports.tag);
 
-},{"../constants":87}],87:[function(require,module,exports){
+},{"../constants":86}],86:[function(require,module,exports){
 var constants = exports;
 
 // Helper
@@ -28610,7 +28518,7 @@ constants._reverse = function reverse(map) {
 
 constants.der = require('./der');
 
-},{"./der":86}],88:[function(require,module,exports){
+},{"./der":85}],87:[function(require,module,exports){
 var inherits = require('inherits');
 
 var asn1 = require('../../asn1');
@@ -28936,13 +28844,13 @@ function derDecodeLen(buf, primitive, fail) {
   return len;
 }
 
-},{"../../asn1":80,"inherits":185}],89:[function(require,module,exports){
+},{"../../asn1":79,"inherits":184}],88:[function(require,module,exports){
 var decoders = exports;
 
 decoders.der = require('./der');
 decoders.pem = require('./pem');
 
-},{"./der":88,"./pem":90}],90:[function(require,module,exports){
+},{"./der":87,"./pem":89}],89:[function(require,module,exports){
 var inherits = require('inherits');
 var Buffer = require('buffer').Buffer;
 
@@ -28993,7 +28901,7 @@ PEMDecoder.prototype.decode = function decode(data, options) {
   return DERDecoder.prototype.decode.call(this, input, options);
 };
 
-},{"./der":88,"buffer":129,"inherits":185}],91:[function(require,module,exports){
+},{"./der":87,"buffer":128,"inherits":184}],90:[function(require,module,exports){
 var inherits = require('inherits');
 var Buffer = require('buffer').Buffer;
 
@@ -29290,13 +29198,13 @@ function encodeTag(tag, primitive, cls, reporter) {
   return res;
 }
 
-},{"../../asn1":80,"buffer":129,"inherits":185}],92:[function(require,module,exports){
+},{"../../asn1":79,"buffer":128,"inherits":184}],91:[function(require,module,exports){
 var encoders = exports;
 
 encoders.der = require('./der');
 encoders.pem = require('./pem');
 
-},{"./der":91,"./pem":93}],93:[function(require,module,exports){
+},{"./der":90,"./pem":92}],92:[function(require,module,exports){
 var inherits = require('inherits');
 
 var DEREncoder = require('./der');
@@ -29319,7 +29227,7 @@ PEMEncoder.prototype.encode = function encode(data, options) {
   return out.join('\n');
 };
 
-},{"./der":91,"inherits":185}],94:[function(require,module,exports){
+},{"./der":90,"inherits":184}],93:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -29813,8 +29721,7 @@ var objectKeys = Object.keys || function (obj) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"util/":262}],95:[function(require,module,exports){
+},{"util/":261}],94:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -29930,7 +29837,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],96:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 (function (module, exports) {
   'use strict';
 
@@ -33359,7 +33266,7 @@ function fromByteArray (uint8) {
   };
 })(typeof module === 'undefined' || module, this);
 
-},{"buffer":98}],97:[function(require,module,exports){
+},{"buffer":97}],96:[function(require,module,exports){
 var r;
 
 module.exports = function rand(len) {
@@ -33426,9 +33333,9 @@ if (typeof self === 'object') {
   }
 }
 
-},{"crypto":98}],98:[function(require,module,exports){
-arguments[4][79][0].apply(exports,arguments)
-},{"dup":79}],99:[function(require,module,exports){
+},{"crypto":97}],97:[function(require,module,exports){
+arguments[4][78][0].apply(exports,arguments)
+},{"dup":78}],98:[function(require,module,exports){
 // based on the aes implimentation in triple sec
 // https://github.com/keybase/triplesec
 // which is in turn based on the one from crypto-js
@@ -33658,7 +33565,7 @@ AES.prototype.scrub = function () {
 
 module.exports.AES = AES
 
-},{"safe-buffer":241}],100:[function(require,module,exports){
+},{"safe-buffer":240}],99:[function(require,module,exports){
 var aes = require('./aes')
 var Buffer = require('safe-buffer').Buffer
 var Transform = require('cipher-base')
@@ -33777,7 +33684,7 @@ StreamCipher.prototype.setAAD = function setAAD (buf) {
 
 module.exports = StreamCipher
 
-},{"./aes":99,"./ghash":104,"./incr32":105,"buffer-xor":128,"cipher-base":131,"inherits":185,"safe-buffer":241}],101:[function(require,module,exports){
+},{"./aes":98,"./ghash":103,"./incr32":104,"buffer-xor":127,"cipher-base":130,"inherits":184,"safe-buffer":240}],100:[function(require,module,exports){
 var ciphers = require('./encrypter')
 var deciphers = require('./decrypter')
 var modes = require('./modes/list.json')
@@ -33792,7 +33699,7 @@ exports.createDecipher = exports.Decipher = deciphers.createDecipher
 exports.createDecipheriv = exports.Decipheriv = deciphers.createDecipheriv
 exports.listCiphers = exports.getCiphers = getCiphers
 
-},{"./decrypter":102,"./encrypter":103,"./modes/list.json":113}],102:[function(require,module,exports){
+},{"./decrypter":101,"./encrypter":102,"./modes/list.json":112}],101:[function(require,module,exports){
 var AuthCipher = require('./authCipher')
 var Buffer = require('safe-buffer').Buffer
 var MODES = require('./modes')
@@ -33915,7 +33822,7 @@ function createDecipher (suite, password) {
 exports.createDecipher = createDecipher
 exports.createDecipheriv = createDecipheriv
 
-},{"./aes":99,"./authCipher":100,"./modes":112,"./streamCipher":115,"cipher-base":131,"evp_bytestokey":167,"inherits":185,"safe-buffer":241}],103:[function(require,module,exports){
+},{"./aes":98,"./authCipher":99,"./modes":111,"./streamCipher":114,"cipher-base":130,"evp_bytestokey":166,"inherits":184,"safe-buffer":240}],102:[function(require,module,exports){
 var MODES = require('./modes')
 var AuthCipher = require('./authCipher')
 var Buffer = require('safe-buffer').Buffer
@@ -34031,7 +33938,7 @@ function createCipher (suite, password) {
 exports.createCipheriv = createCipheriv
 exports.createCipher = createCipher
 
-},{"./aes":99,"./authCipher":100,"./modes":112,"./streamCipher":115,"cipher-base":131,"evp_bytestokey":167,"inherits":185,"safe-buffer":241}],104:[function(require,module,exports){
+},{"./aes":98,"./authCipher":99,"./modes":111,"./streamCipher":114,"cipher-base":130,"evp_bytestokey":166,"inherits":184,"safe-buffer":240}],103:[function(require,module,exports){
 var Buffer = require('safe-buffer').Buffer
 var ZEROES = Buffer.alloc(16, 0)
 
@@ -34122,7 +34029,7 @@ GHASH.prototype.final = function (abl, bl) {
 
 module.exports = GHASH
 
-},{"safe-buffer":241}],105:[function(require,module,exports){
+},{"safe-buffer":240}],104:[function(require,module,exports){
 function incr32 (iv) {
   var len = iv.length
   var item
@@ -34139,7 +34046,7 @@ function incr32 (iv) {
 }
 module.exports = incr32
 
-},{}],106:[function(require,module,exports){
+},{}],105:[function(require,module,exports){
 var xor = require('buffer-xor')
 
 exports.encrypt = function (self, block) {
@@ -34158,7 +34065,7 @@ exports.decrypt = function (self, block) {
   return xor(out, pad)
 }
 
-},{"buffer-xor":128}],107:[function(require,module,exports){
+},{"buffer-xor":127}],106:[function(require,module,exports){
 var Buffer = require('safe-buffer').Buffer
 var xor = require('buffer-xor')
 
@@ -34193,7 +34100,7 @@ exports.encrypt = function (self, data, decrypt) {
   return out
 }
 
-},{"buffer-xor":128,"safe-buffer":241}],108:[function(require,module,exports){
+},{"buffer-xor":127,"safe-buffer":240}],107:[function(require,module,exports){
 var Buffer = require('safe-buffer').Buffer
 
 function encryptByte (self, byteParam, decrypt) {
@@ -34237,7 +34144,7 @@ exports.encrypt = function (self, chunk, decrypt) {
   return out
 }
 
-},{"safe-buffer":241}],109:[function(require,module,exports){
+},{"safe-buffer":240}],108:[function(require,module,exports){
 var Buffer = require('safe-buffer').Buffer
 
 function encryptByte (self, byteParam, decrypt) {
@@ -34264,7 +34171,7 @@ exports.encrypt = function (self, chunk, decrypt) {
   return out
 }
 
-},{"safe-buffer":241}],110:[function(require,module,exports){
+},{"safe-buffer":240}],109:[function(require,module,exports){
 var xor = require('buffer-xor')
 var Buffer = require('safe-buffer').Buffer
 var incr32 = require('../incr32')
@@ -34296,7 +34203,7 @@ exports.encrypt = function (self, chunk) {
   return xor(chunk, pad)
 }
 
-},{"../incr32":105,"buffer-xor":128,"safe-buffer":241}],111:[function(require,module,exports){
+},{"../incr32":104,"buffer-xor":127,"safe-buffer":240}],110:[function(require,module,exports){
 exports.encrypt = function (self, block) {
   return self._cipher.encryptBlock(block)
 }
@@ -34305,7 +34212,7 @@ exports.decrypt = function (self, block) {
   return self._cipher.decryptBlock(block)
 }
 
-},{}],112:[function(require,module,exports){
+},{}],111:[function(require,module,exports){
 var modeModules = {
   ECB: require('./ecb'),
   CBC: require('./cbc'),
@@ -34325,7 +34232,7 @@ for (var key in modes) {
 
 module.exports = modes
 
-},{"./cbc":106,"./cfb":107,"./cfb1":108,"./cfb8":109,"./ctr":110,"./ecb":111,"./list.json":113,"./ofb":114}],113:[function(require,module,exports){
+},{"./cbc":105,"./cfb":106,"./cfb1":107,"./cfb8":108,"./ctr":109,"./ecb":110,"./list.json":112,"./ofb":113}],112:[function(require,module,exports){
 module.exports={
   "aes-128-ecb": {
     "cipher": "AES",
@@ -34518,7 +34425,7 @@ module.exports={
   }
 }
 
-},{}],114:[function(require,module,exports){
+},{}],113:[function(require,module,exports){
 (function (Buffer){
 var xor = require('buffer-xor')
 
@@ -34538,8 +34445,7 @@ exports.encrypt = function (self, chunk) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129,"buffer-xor":128}],115:[function(require,module,exports){
+},{"buffer":128,"buffer-xor":127}],114:[function(require,module,exports){
 var aes = require('./aes')
 var Buffer = require('safe-buffer').Buffer
 var Transform = require('cipher-base')
@@ -34568,7 +34474,7 @@ StreamCipher.prototype._final = function () {
 
 module.exports = StreamCipher
 
-},{"./aes":99,"cipher-base":131,"inherits":185,"safe-buffer":241}],116:[function(require,module,exports){
+},{"./aes":98,"cipher-base":130,"inherits":184,"safe-buffer":240}],115:[function(require,module,exports){
 var ebtk = require('evp_bytestokey')
 var aes = require('browserify-aes/browser')
 var DES = require('browserify-des')
@@ -34643,7 +34549,7 @@ function getCiphers () {
 }
 exports.listCiphers = exports.getCiphers = getCiphers
 
-},{"browserify-aes/browser":101,"browserify-aes/modes":112,"browserify-des":117,"browserify-des/modes":118,"evp_bytestokey":167}],117:[function(require,module,exports){
+},{"browserify-aes/browser":100,"browserify-aes/modes":111,"browserify-des":116,"browserify-des/modes":117,"evp_bytestokey":166}],116:[function(require,module,exports){
 (function (Buffer){
 var CipherBase = require('cipher-base')
 var des = require('des.js')
@@ -34690,8 +34596,7 @@ DES.prototype._final = function () {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129,"cipher-base":131,"des.js":140,"inherits":185}],118:[function(require,module,exports){
+},{"buffer":128,"cipher-base":130,"des.js":139,"inherits":184}],117:[function(require,module,exports){
 exports['des-ecb'] = {
   key: 8,
   iv: 0
@@ -34717,7 +34622,7 @@ exports['des-ede'] = {
   iv: 0
 }
 
-},{}],119:[function(require,module,exports){
+},{}],118:[function(require,module,exports){
 (function (Buffer){
 var bn = require('bn.js');
 var randomBytes = require('randombytes');
@@ -34761,11 +34666,10 @@ function getr(priv) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"bn.js":96,"buffer":129,"randombytes":226}],120:[function(require,module,exports){
+},{"bn.js":95,"buffer":128,"randombytes":225}],119:[function(require,module,exports){
 module.exports = require('./browser/algorithms.json')
 
-},{"./browser/algorithms.json":121}],121:[function(require,module,exports){
+},{"./browser/algorithms.json":120}],120:[function(require,module,exports){
 module.exports={
   "sha224WithRSAEncryption": {
     "sign": "rsa",
@@ -34919,7 +34823,7 @@ module.exports={
   }
 }
 
-},{}],122:[function(require,module,exports){
+},{}],121:[function(require,module,exports){
 module.exports={
   "1.3.132.0.10": "secp256k1",
   "1.3.132.0.33": "p224",
@@ -34929,7 +34833,7 @@ module.exports={
   "1.3.132.0.35": "p521"
 }
 
-},{}],123:[function(require,module,exports){
+},{}],122:[function(require,module,exports){
 (function (Buffer){
 var createHash = require('create-hash')
 var stream = require('stream')
@@ -35024,8 +34928,7 @@ module.exports = {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"./algorithms.json":121,"./sign":124,"./verify":125,"buffer":129,"create-hash":134,"inherits":185,"stream":250}],124:[function(require,module,exports){
+},{"./algorithms.json":120,"./sign":123,"./verify":124,"buffer":128,"create-hash":133,"inherits":184,"stream":249}],123:[function(require,module,exports){
 (function (Buffer){
 // much of this based on https://github.com/indutny/self-signed/blob/gh-pages/lib/rsa.js
 var createHmac = require('create-hmac')
@@ -35174,8 +35077,7 @@ module.exports.getKey = getKey
 module.exports.makeKey = makeKey
 
 }).call(this,require("buffer").Buffer)
-
-},{"./curves.json":122,"bn.js":96,"browserify-rsa":119,"buffer":129,"create-hmac":137,"elliptic":150,"parse-asn1":207}],125:[function(require,module,exports){
+},{"./curves.json":121,"bn.js":95,"browserify-rsa":118,"buffer":128,"create-hmac":136,"elliptic":149,"parse-asn1":206}],124:[function(require,module,exports){
 (function (Buffer){
 // much of this based on https://github.com/indutny/self-signed/blob/gh-pages/lib/rsa.js
 var BN = require('bn.js')
@@ -35262,8 +35164,7 @@ function checkValue (b, q) {
 module.exports = verify
 
 }).call(this,require("buffer").Buffer)
-
-},{"./curves.json":122,"bn.js":96,"buffer":129,"elliptic":150,"parse-asn1":207}],126:[function(require,module,exports){
+},{"./curves.json":121,"bn.js":95,"buffer":128,"elliptic":149,"parse-asn1":206}],125:[function(require,module,exports){
 (function (process,Buffer){
 var msg = require('pako/lib/zlib/messages');
 var zstream = require('pako/lib/zlib/zstream');
@@ -35503,8 +35404,7 @@ Zlib.prototype._error = function(status) {
 exports.Zlib = Zlib;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-
-},{"_process":215,"buffer":129,"pako/lib/zlib/constants":194,"pako/lib/zlib/deflate.js":196,"pako/lib/zlib/inflate.js":198,"pako/lib/zlib/messages":200,"pako/lib/zlib/zstream":202}],127:[function(require,module,exports){
+},{"_process":214,"buffer":128,"pako/lib/zlib/constants":193,"pako/lib/zlib/deflate.js":195,"pako/lib/zlib/inflate.js":197,"pako/lib/zlib/messages":199,"pako/lib/zlib/zstream":201}],126:[function(require,module,exports){
 (function (process,Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -36118,8 +36018,7 @@ util.inherits(InflateRaw, Zlib);
 util.inherits(Unzip, Zlib);
 
 }).call(this,require('_process'),require("buffer").Buffer)
-
-},{"./binding":126,"_process":215,"_stream_transform":238,"assert":94,"buffer":129,"util":262}],128:[function(require,module,exports){
+},{"./binding":125,"_process":214,"_stream_transform":237,"assert":93,"buffer":128,"util":261}],127:[function(require,module,exports){
 (function (Buffer){
 module.exports = function xor (a, b) {
   var length = Math.min(a.length, b.length)
@@ -36133,8 +36032,7 @@ module.exports = function xor (a, b) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129}],129:[function(require,module,exports){
+},{"buffer":128}],128:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -37850,7 +37748,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":95,"ieee754":183}],130:[function(require,module,exports){
+},{"base64-js":94,"ieee754":182}],129:[function(require,module,exports){
 module.exports = {
   "100": "Continue",
   "101": "Switching Protocols",
@@ -37916,7 +37814,7 @@ module.exports = {
   "511": "Network Authentication Required"
 }
 
-},{}],131:[function(require,module,exports){
+},{}],130:[function(require,module,exports){
 var Buffer = require('safe-buffer').Buffer
 var Transform = require('stream').Transform
 var StringDecoder = require('string_decoder').StringDecoder
@@ -38017,7 +37915,7 @@ CipherBase.prototype._toString = function (value, enc, fin) {
 
 module.exports = CipherBase
 
-},{"inherits":185,"safe-buffer":241,"stream":250,"string_decoder":255}],132:[function(require,module,exports){
+},{"inherits":184,"safe-buffer":240,"stream":249,"string_decoder":254}],131:[function(require,module,exports){
 (function (Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -38128,8 +38026,7 @@ function objectToString(o) {
 }
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")})
-
-},{"../../is-buffer/index.js":186}],133:[function(require,module,exports){
+},{"../../is-buffer/index.js":185}],132:[function(require,module,exports){
 (function (Buffer){
 var elliptic = require('elliptic');
 var BN = require('bn.js');
@@ -38255,8 +38152,7 @@ function formatReturnValue(bn, enc, len) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"bn.js":96,"buffer":129,"elliptic":150}],134:[function(require,module,exports){
+},{"bn.js":95,"buffer":128,"elliptic":149}],133:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 var inherits = require('inherits')
@@ -38312,8 +38208,7 @@ module.exports = function createHash (alg) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"./md5":136,"buffer":129,"cipher-base":131,"inherits":185,"ripemd160":240,"sha.js":243}],135:[function(require,module,exports){
+},{"./md5":135,"buffer":128,"cipher-base":130,"inherits":184,"ripemd160":239,"sha.js":242}],134:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 var intSize = 4
@@ -38347,8 +38242,7 @@ module.exports = function hash (buf, fn) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129}],136:[function(require,module,exports){
+},{"buffer":128}],135:[function(require,module,exports){
 'use strict'
 /*
  * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
@@ -38501,7 +38395,7 @@ module.exports = function md5 (buf) {
   return makeHash(buf, core_md5)
 }
 
-},{"./make-hash":135}],137:[function(require,module,exports){
+},{"./make-hash":134}],136:[function(require,module,exports){
 'use strict'
 var inherits = require('inherits')
 var Legacy = require('./legacy')
@@ -38565,7 +38459,7 @@ module.exports = function createHmac (alg, key) {
   return new Hmac(alg, key)
 }
 
-},{"./legacy":138,"cipher-base":131,"create-hash/md5":136,"inherits":185,"ripemd160":240,"safe-buffer":241,"sha.js":243}],138:[function(require,module,exports){
+},{"./legacy":137,"cipher-base":130,"create-hash/md5":135,"inherits":184,"ripemd160":239,"safe-buffer":240,"sha.js":242}],137:[function(require,module,exports){
 'use strict'
 var inherits = require('inherits')
 var Buffer = require('safe-buffer').Buffer
@@ -38613,7 +38507,7 @@ Hmac.prototype._final = function () {
 }
 module.exports = Hmac
 
-},{"cipher-base":131,"inherits":185,"safe-buffer":241}],139:[function(require,module,exports){
+},{"cipher-base":130,"inherits":184,"safe-buffer":240}],138:[function(require,module,exports){
 'use strict'
 
 exports.randomBytes = exports.rng = exports.pseudoRandomBytes = exports.prng = require('randombytes')
@@ -38712,7 +38606,7 @@ exports.constants = {
   'POINT_CONVERSION_HYBRID': 6
 }
 
-},{"browserify-cipher":116,"browserify-sign":123,"browserify-sign/algos":120,"create-ecdh":133,"create-hash":134,"create-hmac":137,"diffie-hellman":146,"pbkdf2":209,"public-encrypt":216,"randombytes":226,"randomfill":305}],140:[function(require,module,exports){
+},{"browserify-cipher":115,"browserify-sign":122,"browserify-sign/algos":119,"create-ecdh":132,"create-hash":133,"create-hmac":136,"diffie-hellman":145,"pbkdf2":208,"public-encrypt":215,"randombytes":225,"randomfill":304}],139:[function(require,module,exports){
 'use strict';
 
 exports.utils = require('./des/utils');
@@ -38721,7 +38615,7 @@ exports.DES = require('./des/des');
 exports.CBC = require('./des/cbc');
 exports.EDE = require('./des/ede');
 
-},{"./des/cbc":141,"./des/cipher":142,"./des/des":143,"./des/ede":144,"./des/utils":145}],141:[function(require,module,exports){
+},{"./des/cbc":140,"./des/cipher":141,"./des/des":142,"./des/ede":143,"./des/utils":144}],140:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -38788,7 +38682,7 @@ proto._update = function _update(inp, inOff, out, outOff) {
   }
 };
 
-},{"inherits":185,"minimalistic-assert":189}],142:[function(require,module,exports){
+},{"inherits":184,"minimalistic-assert":188}],141:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -38931,7 +38825,7 @@ Cipher.prototype._finalDecrypt = function _finalDecrypt() {
   return this._unpad(out);
 };
 
-},{"minimalistic-assert":189}],143:[function(require,module,exports){
+},{"minimalistic-assert":188}],142:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -39076,7 +38970,7 @@ DES.prototype._decrypt = function _decrypt(state, lStart, rStart, out, off) {
   utils.rip(l, r, out, off);
 };
 
-},{"../des":140,"inherits":185,"minimalistic-assert":189}],144:[function(require,module,exports){
+},{"../des":139,"inherits":184,"minimalistic-assert":188}],143:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -39133,7 +39027,7 @@ EDE.prototype._update = function _update(inp, inOff, out, outOff) {
 EDE.prototype._pad = DES.prototype._pad;
 EDE.prototype._unpad = DES.prototype._unpad;
 
-},{"../des":140,"inherits":185,"minimalistic-assert":189}],145:[function(require,module,exports){
+},{"../des":139,"inherits":184,"minimalistic-assert":188}],144:[function(require,module,exports){
 'use strict';
 
 exports.readUInt32BE = function readUInt32BE(bytes, off) {
@@ -39391,7 +39285,7 @@ exports.padSplit = function padSplit(num, size, group) {
   return out.join(' ');
 };
 
-},{}],146:[function(require,module,exports){
+},{}],145:[function(require,module,exports){
 (function (Buffer){
 var generatePrime = require('./lib/generatePrime')
 var primes = require('./lib/primes.json')
@@ -39437,8 +39331,7 @@ exports.DiffieHellmanGroup = exports.createDiffieHellmanGroup = exports.getDiffi
 exports.createDiffieHellman = exports.DiffieHellman = createDiffieHellman
 
 }).call(this,require("buffer").Buffer)
-
-},{"./lib/dh":147,"./lib/generatePrime":148,"./lib/primes.json":149,"buffer":129}],147:[function(require,module,exports){
+},{"./lib/dh":146,"./lib/generatePrime":147,"./lib/primes.json":148,"buffer":128}],146:[function(require,module,exports){
 (function (Buffer){
 var BN = require('bn.js');
 var MillerRabin = require('miller-rabin');
@@ -39606,8 +39499,7 @@ function formatReturnValue(bn, enc) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"./generatePrime":148,"bn.js":96,"buffer":129,"miller-rabin":188,"randombytes":226}],148:[function(require,module,exports){
+},{"./generatePrime":147,"bn.js":95,"buffer":128,"miller-rabin":187,"randombytes":225}],147:[function(require,module,exports){
 var randomBytes = require('randombytes');
 module.exports = findPrime;
 findPrime.simpleSieve = simpleSieve;
@@ -39714,7 +39606,7 @@ function findPrime(bits, gen) {
 
 }
 
-},{"bn.js":96,"miller-rabin":188,"randombytes":226}],149:[function(require,module,exports){
+},{"bn.js":95,"miller-rabin":187,"randombytes":225}],148:[function(require,module,exports){
 module.exports={
     "modp1": {
         "gen": "02",
@@ -39749,7 +39641,7 @@ module.exports={
         "prime": "ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aaac42dad33170d04507a33a85521abdf1cba64ecfb850458dbef0a8aea71575d060c7db3970f85a6e1e4c7abf5ae8cdb0933d71e8c94e04a25619dcee3d2261ad2ee6bf12ffa06d98a0864d87602733ec86a64521f2b18177b200cbbe117577a615d6c770988c0bad946e208e24fa074e5ab3143db5bfce0fd108e4b82d120a92108011a723c12a787e6d788719a10bdba5b2699c327186af4e23c1a946834b6150bda2583e9ca2ad44ce8dbbbc2db04de8ef92e8efc141fbecaa6287c59474e6bc05d99b2964fa090c3a2233ba186515be7ed1f612970cee2d7afb81bdd762170481cd0069127d5b05aa993b4ea988d8fddc186ffb7dc90a6c08f4df435c93402849236c3fab4d27c7026c1d4dcb2602646dec9751e763dba37bdf8ff9406ad9e530ee5db382f413001aeb06a53ed9027d831179727b0865a8918da3edbebcf9b14ed44ce6cbaced4bb1bdb7f1447e6cc254b332051512bd7af426fb8f401378cd2bf5983ca01c64b92ecf032ea15d1721d03f482d7ce6e74fef6d55e702f46980c82b5a84031900b1c9e59e7c97fbec7e8f323a97a7e36cc88be0f1d45b7ff585ac54bd407b22b4154aacc8f6d7ebf48e1d814cc5ed20f8037e0a79715eef29be32806a1d58bb7c5da76f550aa3d8a1fbff0eb19ccb1a313d55cda56c9ec2ef29632387fe8d76e3c0468043e8f663f4860ee12bf2d5b0b7474d6e694f91e6dbe115974a3926f12fee5e438777cb6a932df8cd8bec4d073b931ba3bc832b68d9dd300741fa7bf8afc47ed2576f6936ba424663aab639c5ae4f5683423b4742bf1c978238f16cbe39d652de3fdb8befc848ad922222e04a4037c0713eb57a81a23f0c73473fc646cea306b4bcbc8862f8385ddfa9d4b7fa2c087e879683303ed5bdd3a062b3cf5b3a278a66d2a13f83f44f82ddf310ee074ab6a364597e899a0255dc164f31cc50846851df9ab48195ded7ea1b1d510bd7ee74d73faf36bc31ecfa268359046f4eb879f924009438b481c6cd7889a002ed5ee382bc9190da6fc026e479558e4475677e9aa9e3050e2765694dfc81f56e880b96e7160c980dd98edd3dfffffffffffffffff"
     }
 }
-},{}],150:[function(require,module,exports){
+},{}],149:[function(require,module,exports){
 'use strict';
 
 var elliptic = exports;
@@ -39764,7 +39656,7 @@ elliptic.curves = require('./elliptic/curves');
 elliptic.ec = require('./elliptic/ec');
 elliptic.eddsa = require('./elliptic/eddsa');
 
-},{"../package.json":165,"./elliptic/curve":153,"./elliptic/curves":156,"./elliptic/ec":157,"./elliptic/eddsa":160,"./elliptic/utils":164,"brorand":97}],151:[function(require,module,exports){
+},{"../package.json":164,"./elliptic/curve":152,"./elliptic/curves":155,"./elliptic/ec":156,"./elliptic/eddsa":159,"./elliptic/utils":163,"brorand":96}],150:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -40141,7 +40033,7 @@ BasePoint.prototype.dblp = function dblp(k) {
   return r;
 };
 
-},{"../../elliptic":150,"bn.js":96}],152:[function(require,module,exports){
+},{"../../elliptic":149,"bn.js":95}],151:[function(require,module,exports){
 'use strict';
 
 var curve = require('../curve');
@@ -40576,7 +40468,7 @@ Point.prototype.eqXToP = function eqXToP(x) {
 Point.prototype.toP = Point.prototype.normalize;
 Point.prototype.mixedAdd = Point.prototype.add;
 
-},{"../../elliptic":150,"../curve":153,"bn.js":96,"inherits":185}],153:[function(require,module,exports){
+},{"../../elliptic":149,"../curve":152,"bn.js":95,"inherits":184}],152:[function(require,module,exports){
 'use strict';
 
 var curve = exports;
@@ -40586,7 +40478,7 @@ curve.short = require('./short');
 curve.mont = require('./mont');
 curve.edwards = require('./edwards');
 
-},{"./base":151,"./edwards":152,"./mont":154,"./short":155}],154:[function(require,module,exports){
+},{"./base":150,"./edwards":151,"./mont":153,"./short":154}],153:[function(require,module,exports){
 'use strict';
 
 var curve = require('../curve');
@@ -40768,7 +40660,7 @@ Point.prototype.getX = function getX() {
   return this.x.fromRed();
 };
 
-},{"../../elliptic":150,"../curve":153,"bn.js":96,"inherits":185}],155:[function(require,module,exports){
+},{"../../elliptic":149,"../curve":152,"bn.js":95,"inherits":184}],154:[function(require,module,exports){
 'use strict';
 
 var curve = require('../curve');
@@ -41708,7 +41600,7 @@ JPoint.prototype.isInfinity = function isInfinity() {
   return this.z.cmpn(0) === 0;
 };
 
-},{"../../elliptic":150,"../curve":153,"bn.js":96,"inherits":185}],156:[function(require,module,exports){
+},{"../../elliptic":149,"../curve":152,"bn.js":95,"inherits":184}],155:[function(require,module,exports){
 'use strict';
 
 var curves = exports;
@@ -41915,7 +41807,7 @@ defineCurve('secp256k1', {
   ]
 });
 
-},{"../elliptic":150,"./precomputed/secp256k1":163,"hash.js":169}],157:[function(require,module,exports){
+},{"../elliptic":149,"./precomputed/secp256k1":162,"hash.js":168}],156:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -42157,7 +42049,7 @@ EC.prototype.getKeyRecoveryParam = function(e, signature, Q, enc) {
   throw new Error('Unable to find valid recovery factor');
 };
 
-},{"../../elliptic":150,"./key":158,"./signature":159,"bn.js":96,"hmac-drbg":181}],158:[function(require,module,exports){
+},{"../../elliptic":149,"./key":157,"./signature":158,"bn.js":95,"hmac-drbg":180}],157:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -42278,7 +42170,7 @@ KeyPair.prototype.inspect = function inspect() {
          ' pub: ' + (this.pub && this.pub.inspect()) + ' >';
 };
 
-},{"../../elliptic":150,"bn.js":96}],159:[function(require,module,exports){
+},{"../../elliptic":149,"bn.js":95}],158:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -42415,7 +42307,7 @@ Signature.prototype.toDER = function toDER(enc) {
   return utils.encode(res, enc);
 };
 
-},{"../../elliptic":150,"bn.js":96}],160:[function(require,module,exports){
+},{"../../elliptic":149,"bn.js":95}],159:[function(require,module,exports){
 'use strict';
 
 var hash = require('hash.js');
@@ -42535,7 +42427,7 @@ EDDSA.prototype.isPoint = function isPoint(val) {
   return val instanceof this.pointClass;
 };
 
-},{"../../elliptic":150,"./key":161,"./signature":162,"hash.js":169}],161:[function(require,module,exports){
+},{"../../elliptic":149,"./key":160,"./signature":161,"hash.js":168}],160:[function(require,module,exports){
 'use strict';
 
 var elliptic = require('../../elliptic');
@@ -42633,7 +42525,7 @@ KeyPair.prototype.getPublic = function getPublic(enc) {
 
 module.exports = KeyPair;
 
-},{"../../elliptic":150}],162:[function(require,module,exports){
+},{"../../elliptic":149}],161:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -42701,7 +42593,7 @@ Signature.prototype.toHex = function toHex() {
 
 module.exports = Signature;
 
-},{"../../elliptic":150,"bn.js":96}],163:[function(require,module,exports){
+},{"../../elliptic":149,"bn.js":95}],162:[function(require,module,exports){
 module.exports = {
   doubles: {
     step: 4,
@@ -43483,7 +43375,7 @@ module.exports = {
   }
 };
 
-},{}],164:[function(require,module,exports){
+},{}],163:[function(require,module,exports){
 'use strict';
 
 var utils = exports;
@@ -43605,7 +43497,7 @@ function intFromLE(bytes) {
 utils.intFromLE = intFromLE;
 
 
-},{"bn.js":96,"minimalistic-assert":189,"minimalistic-crypto-utils":190}],165:[function(require,module,exports){
+},{"bn.js":95,"minimalistic-assert":188,"minimalistic-crypto-utils":189}],164:[function(require,module,exports){
 module.exports={
   "_args": [
     [
@@ -43698,7 +43590,7 @@ module.exports={
   "version": "6.4.0"
 }
 
-},{}],166:[function(require,module,exports){
+},{}],165:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -44002,7 +43894,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],167:[function(require,module,exports){
+},{}],166:[function(require,module,exports){
 var Buffer = require('safe-buffer').Buffer
 var MD5 = require('md5.js')
 
@@ -44049,7 +43941,7 @@ function EVP_BytesToKey (password, salt, keyBits, ivLen) {
 
 module.exports = EVP_BytesToKey
 
-},{"md5.js":299,"safe-buffer":241}],168:[function(require,module,exports){
+},{"md5.js":298,"safe-buffer":240}],167:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 var Transform = require('stream').Transform
@@ -44136,8 +44028,7 @@ HashBase.prototype._digest = function () {
 module.exports = HashBase
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129,"inherits":185,"stream":250}],169:[function(require,module,exports){
+},{"buffer":128,"inherits":184,"stream":249}],168:[function(require,module,exports){
 var hash = exports;
 
 hash.utils = require('./hash/utils');
@@ -44154,7 +44045,7 @@ hash.sha384 = hash.sha.sha384;
 hash.sha512 = hash.sha.sha512;
 hash.ripemd160 = hash.ripemd.ripemd160;
 
-},{"./hash/common":170,"./hash/hmac":171,"./hash/ripemd":172,"./hash/sha":173,"./hash/utils":180}],170:[function(require,module,exports){
+},{"./hash/common":169,"./hash/hmac":170,"./hash/ripemd":171,"./hash/sha":172,"./hash/utils":179}],169:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -44248,7 +44139,7 @@ BlockHash.prototype._pad = function pad() {
   return res;
 };
 
-},{"./utils":180,"minimalistic-assert":189}],171:[function(require,module,exports){
+},{"./utils":179,"minimalistic-assert":188}],170:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -44297,7 +44188,7 @@ Hmac.prototype.digest = function digest(enc) {
   return this.outer.digest(enc);
 };
 
-},{"./utils":180,"minimalistic-assert":189}],172:[function(require,module,exports){
+},{"./utils":179,"minimalistic-assert":188}],171:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -44445,7 +44336,7 @@ var sh = [
   8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
 ];
 
-},{"./common":170,"./utils":180}],173:[function(require,module,exports){
+},{"./common":169,"./utils":179}],172:[function(require,module,exports){
 'use strict';
 
 exports.sha1 = require('./sha/1');
@@ -44454,7 +44345,7 @@ exports.sha256 = require('./sha/256');
 exports.sha384 = require('./sha/384');
 exports.sha512 = require('./sha/512');
 
-},{"./sha/1":174,"./sha/224":175,"./sha/256":176,"./sha/384":177,"./sha/512":178}],174:[function(require,module,exports){
+},{"./sha/1":173,"./sha/224":174,"./sha/256":175,"./sha/384":176,"./sha/512":177}],173:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -44530,7 +44421,7 @@ SHA1.prototype._digest = function digest(enc) {
     return utils.split32(this.h, 'big');
 };
 
-},{"../common":170,"../utils":180,"./common":179}],175:[function(require,module,exports){
+},{"../common":169,"../utils":179,"./common":178}],174:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -44562,7 +44453,7 @@ SHA224.prototype._digest = function digest(enc) {
 };
 
 
-},{"../utils":180,"./256":176}],176:[function(require,module,exports){
+},{"../utils":179,"./256":175}],175:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -44669,7 +44560,7 @@ SHA256.prototype._digest = function digest(enc) {
     return utils.split32(this.h, 'big');
 };
 
-},{"../common":170,"../utils":180,"./common":179,"minimalistic-assert":189}],177:[function(require,module,exports){
+},{"../common":169,"../utils":179,"./common":178,"minimalistic-assert":188}],176:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -44706,7 +44597,7 @@ SHA384.prototype._digest = function digest(enc) {
     return utils.split32(this.h.slice(0, 12), 'big');
 };
 
-},{"../utils":180,"./512":178}],178:[function(require,module,exports){
+},{"../utils":179,"./512":177}],177:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -45038,7 +44929,7 @@ function g1_512_lo(xh, xl) {
   return r;
 }
 
-},{"../common":170,"../utils":180,"minimalistic-assert":189}],179:[function(require,module,exports){
+},{"../common":169,"../utils":179,"minimalistic-assert":188}],178:[function(require,module,exports){
 'use strict';
 
 var utils = require('../utils');
@@ -45089,7 +44980,7 @@ function g1_256(x) {
 }
 exports.g1_256 = g1_256;
 
-},{"../utils":180}],180:[function(require,module,exports){
+},{"../utils":179}],179:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -45344,7 +45235,7 @@ function shr64_lo(ah, al, num) {
 }
 exports.shr64_lo = shr64_lo;
 
-},{"inherits":185,"minimalistic-assert":189}],181:[function(require,module,exports){
+},{"inherits":184,"minimalistic-assert":188}],180:[function(require,module,exports){
 'use strict';
 
 var hash = require('hash.js');
@@ -45459,7 +45350,7 @@ HmacDRBG.prototype.generate = function generate(len, enc, add, addEnc) {
   return utils.encode(res, enc);
 };
 
-},{"hash.js":169,"minimalistic-assert":189,"minimalistic-crypto-utils":190}],182:[function(require,module,exports){
+},{"hash.js":168,"minimalistic-assert":188,"minimalistic-crypto-utils":189}],181:[function(require,module,exports){
 var http = require('http')
 var url = require('url')
 
@@ -45492,7 +45383,7 @@ function validateParams (params) {
   return params
 }
 
-},{"http":251,"url":257}],183:[function(require,module,exports){
+},{"http":250,"url":256}],182:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -45578,7 +45469,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],184:[function(require,module,exports){
+},{}],183:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -45589,7 +45480,7 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],185:[function(require,module,exports){
+},{}],184:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -45614,7 +45505,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],186:[function(require,module,exports){
+},{}],185:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -45637,14 +45528,14 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-},{}],187:[function(require,module,exports){
+},{}],186:[function(require,module,exports){
 var toString = {}.toString;
 
 module.exports = Array.isArray || function (arr) {
   return toString.call(arr) == '[object Array]';
 };
 
-},{}],188:[function(require,module,exports){
+},{}],187:[function(require,module,exports){
 var bn = require('bn.js');
 var brorand = require('brorand');
 
@@ -45761,7 +45652,7 @@ MillerRabin.prototype.getDivisor = function getDivisor(n, k) {
   return false;
 };
 
-},{"bn.js":96,"brorand":97}],189:[function(require,module,exports){
+},{"bn.js":95,"brorand":96}],188:[function(require,module,exports){
 module.exports = assert;
 
 function assert(val, msg) {
@@ -45774,7 +45665,7 @@ assert.equal = function assertEqual(l, r, msg) {
     throw new Error(msg || ('Assertion failed: ' + l + ' != ' + r));
 };
 
-},{}],190:[function(require,module,exports){
+},{}],189:[function(require,module,exports){
 'use strict';
 
 var utils = exports;
@@ -45834,7 +45725,7 @@ utils.encode = function encode(arr, enc) {
     return arr;
 };
 
-},{}],191:[function(require,module,exports){
+},{}],190:[function(require,module,exports){
 exports.endianness = function () { return 'LE' };
 
 exports.hostname = function () {
@@ -45881,7 +45772,7 @@ exports.tmpdir = exports.tmpDir = function () {
 
 exports.EOL = '\n';
 
-},{}],192:[function(require,module,exports){
+},{}],191:[function(require,module,exports){
 'use strict';
 
 
@@ -45985,7 +45876,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],193:[function(require,module,exports){
+},{}],192:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -46019,7 +45910,7 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],194:[function(require,module,exports){
+},{}],193:[function(require,module,exports){
 'use strict';
 
 
@@ -46071,7 +45962,7 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],195:[function(require,module,exports){
+},{}],194:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -46114,7 +46005,7 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],196:[function(require,module,exports){
+},{}],195:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -47971,7 +47862,7 @@ exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":192,"./adler32":193,"./crc32":195,"./messages":200,"./trees":201}],197:[function(require,module,exports){
+},{"../utils/common":191,"./adler32":192,"./crc32":194,"./messages":199,"./trees":200}],196:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -48299,7 +48190,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],198:[function(require,module,exports){
+},{}],197:[function(require,module,exports){
 'use strict';
 
 
@@ -49839,7 +49730,7 @@ exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":192,"./adler32":193,"./crc32":195,"./inffast":197,"./inftrees":199}],199:[function(require,module,exports){
+},{"../utils/common":191,"./adler32":192,"./crc32":194,"./inffast":196,"./inftrees":198}],198:[function(require,module,exports){
 'use strict';
 
 
@@ -50168,7 +50059,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":192}],200:[function(require,module,exports){
+},{"../utils/common":191}],199:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -50183,7 +50074,7 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],201:[function(require,module,exports){
+},{}],200:[function(require,module,exports){
 'use strict';
 
 
@@ -51387,7 +51278,7 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":192}],202:[function(require,module,exports){
+},{"../utils/common":191}],201:[function(require,module,exports){
 'use strict';
 
 
@@ -51418,7 +51309,7 @@ function ZStream() {
 
 module.exports = ZStream;
 
-},{}],203:[function(require,module,exports){
+},{}],202:[function(require,module,exports){
 module.exports={"2.16.840.1.101.3.4.1.1": "aes-128-ecb",
 "2.16.840.1.101.3.4.1.2": "aes-128-cbc",
 "2.16.840.1.101.3.4.1.3": "aes-128-ofb",
@@ -51432,7 +51323,7 @@ module.exports={"2.16.840.1.101.3.4.1.1": "aes-128-ecb",
 "2.16.840.1.101.3.4.1.43": "aes-256-ofb",
 "2.16.840.1.101.3.4.1.44": "aes-256-cfb"
 }
-},{}],204:[function(require,module,exports){
+},{}],203:[function(require,module,exports){
 // from https://github.com/indutny/self-signed/blob/gh-pages/lib/asn1.js
 // Fedor, you are amazing.
 'use strict'
@@ -51556,7 +51447,7 @@ exports.signature = asn1.define('signature', function () {
   )
 })
 
-},{"./certificate":205,"asn1.js":80}],205:[function(require,module,exports){
+},{"./certificate":204,"asn1.js":79}],204:[function(require,module,exports){
 // from https://github.com/Rantanen/node-dtls/blob/25a7dc861bda38cfeac93a723500eea4f0ac2e86/Certificate.js
 // thanks to @Rantanen
 
@@ -51646,7 +51537,7 @@ var X509Certificate = asn.define('X509Certificate', function () {
 
 module.exports = X509Certificate
 
-},{"asn1.js":80}],206:[function(require,module,exports){
+},{"asn1.js":79}],205:[function(require,module,exports){
 (function (Buffer){
 // adapted from https://github.com/apatil/pemstrip
 var findProc = /Proc-Type: 4,ENCRYPTED\n\r?DEK-Info: AES-((?:128)|(?:192)|(?:256))-CBC,([0-9A-H]+)\n\r?\n\r?([0-9A-z\n\r\+\/\=]+)\n\r?/m
@@ -51680,8 +51571,7 @@ module.exports = function (okey, password) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"browserify-aes":101,"buffer":129,"evp_bytestokey":167}],207:[function(require,module,exports){
+},{"browserify-aes":100,"buffer":128,"evp_bytestokey":166}],206:[function(require,module,exports){
 (function (Buffer){
 var asn1 = require('./asn1')
 var aesid = require('./aesid.json')
@@ -51791,8 +51681,7 @@ function decrypt (data, password) {
 }
 
 }).call(this,require("buffer").Buffer)
-
-},{"./aesid.json":203,"./asn1":204,"./fixProc":206,"browserify-aes":101,"buffer":129,"pbkdf2":209}],208:[function(require,module,exports){
+},{"./aesid.json":202,"./asn1":203,"./fixProc":205,"browserify-aes":100,"buffer":128,"pbkdf2":208}],207:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -52020,14 +51909,13 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-
-},{"_process":215}],209:[function(require,module,exports){
+},{"_process":214}],208:[function(require,module,exports){
 
 exports.pbkdf2 = require('./lib/async')
 
 exports.pbkdf2Sync = require('./lib/sync')
 
-},{"./lib/async":210,"./lib/sync":213}],210:[function(require,module,exports){
+},{"./lib/async":209,"./lib/sync":212}],209:[function(require,module,exports){
 (function (process,global){
 var checkParameters = require('./precondition')
 var defaultEncoding = require('./default-encoding')
@@ -52129,8 +52017,7 @@ module.exports = function (password, salt, iterations, keylen, digest, callback)
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./default-encoding":211,"./precondition":212,"./sync":213,"_process":215,"safe-buffer":241}],211:[function(require,module,exports){
+},{"./default-encoding":210,"./precondition":211,"./sync":212,"_process":214,"safe-buffer":240}],210:[function(require,module,exports){
 (function (process){
 var defaultEncoding
 /* istanbul ignore next */
@@ -52144,8 +52031,7 @@ if (process.browser) {
 module.exports = defaultEncoding
 
 }).call(this,require('_process'))
-
-},{"_process":215}],212:[function(require,module,exports){
+},{"_process":214}],211:[function(require,module,exports){
 var MAX_ALLOC = Math.pow(2, 30) - 1 // default in iojs
 module.exports = function (iterations, keylen) {
   if (typeof iterations !== 'number') {
@@ -52165,7 +52051,7 @@ module.exports = function (iterations, keylen) {
   }
 }
 
-},{}],213:[function(require,module,exports){
+},{}],212:[function(require,module,exports){
 var md5 = require('create-hash/md5')
 var rmd160 = require('ripemd160')
 var sha = require('sha.js')
@@ -52268,7 +52154,7 @@ function pbkdf2 (password, salt, iterations, keylen, digest) {
 
 module.exports = pbkdf2
 
-},{"./default-encoding":211,"./precondition":212,"create-hash/md5":136,"ripemd160":240,"safe-buffer":241,"sha.js":243}],214:[function(require,module,exports){
+},{"./default-encoding":210,"./precondition":211,"create-hash/md5":135,"ripemd160":239,"safe-buffer":240,"sha.js":242}],213:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -52315,8 +52201,7 @@ function nextTick(fn, arg1, arg2, arg3) {
 }
 
 }).call(this,require('_process'))
-
-},{"_process":215}],215:[function(require,module,exports){
+},{"_process":214}],214:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -52502,7 +52387,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],216:[function(require,module,exports){
+},{}],215:[function(require,module,exports){
 exports.publicEncrypt = require('./publicEncrypt');
 exports.privateDecrypt = require('./privateDecrypt');
 
@@ -52513,7 +52398,7 @@ exports.privateEncrypt = function privateEncrypt(key, buf) {
 exports.publicDecrypt = function publicDecrypt(key, buf) {
   return exports.privateDecrypt(key, buf, true);
 };
-},{"./privateDecrypt":218,"./publicEncrypt":219}],217:[function(require,module,exports){
+},{"./privateDecrypt":217,"./publicEncrypt":218}],216:[function(require,module,exports){
 (function (Buffer){
 var createHash = require('create-hash');
 module.exports = function (seed, len) {
@@ -52532,8 +52417,7 @@ function i2ops(c) {
   return out;
 }
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129,"create-hash":134}],218:[function(require,module,exports){
+},{"buffer":128,"create-hash":133}],217:[function(require,module,exports){
 (function (Buffer){
 var parseKeys = require('parse-asn1');
 var mgf = require('./mgf');
@@ -52644,8 +52528,7 @@ function compare(a, b){
   return dif;
 }
 }).call(this,require("buffer").Buffer)
-
-},{"./mgf":217,"./withPublic":220,"./xor":221,"bn.js":96,"browserify-rsa":119,"buffer":129,"create-hash":134,"parse-asn1":207}],219:[function(require,module,exports){
+},{"./mgf":216,"./withPublic":219,"./xor":220,"bn.js":95,"browserify-rsa":118,"buffer":128,"create-hash":133,"parse-asn1":206}],218:[function(require,module,exports){
 (function (Buffer){
 var parseKeys = require('parse-asn1');
 var randomBytes = require('randombytes');
@@ -52743,8 +52626,7 @@ function nonZero(len, crypto) {
   return out;
 }
 }).call(this,require("buffer").Buffer)
-
-},{"./mgf":217,"./withPublic":220,"./xor":221,"bn.js":96,"browserify-rsa":119,"buffer":129,"create-hash":134,"parse-asn1":207,"randombytes":226}],220:[function(require,module,exports){
+},{"./mgf":216,"./withPublic":219,"./xor":220,"bn.js":95,"browserify-rsa":118,"buffer":128,"create-hash":133,"parse-asn1":206,"randombytes":225}],219:[function(require,module,exports){
 (function (Buffer){
 var bn = require('bn.js');
 function withPublic(paddedMsg, key) {
@@ -52757,8 +52639,7 @@ function withPublic(paddedMsg, key) {
 
 module.exports = withPublic;
 }).call(this,require("buffer").Buffer)
-
-},{"bn.js":96,"buffer":129}],221:[function(require,module,exports){
+},{"bn.js":95,"buffer":128}],220:[function(require,module,exports){
 module.exports = function xor(a, b) {
   var len = a.length;
   var i = -1;
@@ -52767,7 +52648,7 @@ module.exports = function xor(a, b) {
   }
   return a
 };
-},{}],222:[function(require,module,exports){
+},{}],221:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -53304,8 +53185,7 @@ module.exports = function xor(a, b) {
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],223:[function(require,module,exports){
+},{}],222:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -53391,7 +53271,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],224:[function(require,module,exports){
+},{}],223:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -53478,13 +53358,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],225:[function(require,module,exports){
+},{}],224:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":223,"./encode":224}],226:[function(require,module,exports){
+},{"./decode":222,"./encode":223}],225:[function(require,module,exports){
 (function (process,global){
 'use strict'
 
@@ -53526,11 +53406,10 @@ function randomBytes (size, cb) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"_process":215,"safe-buffer":241}],227:[function(require,module,exports){
+},{"_process":214,"safe-buffer":240}],226:[function(require,module,exports){
 module.exports = require('./lib/_stream_duplex.js');
 
-},{"./lib/_stream_duplex.js":228}],228:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":227}],227:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -53655,7 +53534,7 @@ function forEach(xs, f) {
     f(xs[i], i);
   }
 }
-},{"./_stream_readable":230,"./_stream_writable":232,"core-util-is":132,"inherits":185,"process-nextick-args":214}],229:[function(require,module,exports){
+},{"./_stream_readable":229,"./_stream_writable":231,"core-util-is":131,"inherits":184,"process-nextick-args":213}],228:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -53703,7 +53582,7 @@ function PassThrough(options) {
 PassThrough.prototype._transform = function (chunk, encoding, cb) {
   cb(null, chunk);
 };
-},{"./_stream_transform":231,"core-util-is":132,"inherits":185}],230:[function(require,module,exports){
+},{"./_stream_transform":230,"core-util-is":131,"inherits":184}],229:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -54713,8 +54592,7 @@ function indexOf(xs, x) {
   return -1;
 }
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./_stream_duplex":228,"./internal/streams/BufferList":233,"./internal/streams/destroy":234,"./internal/streams/stream":235,"_process":215,"core-util-is":132,"events":166,"inherits":185,"isarray":187,"process-nextick-args":214,"safe-buffer":241,"string_decoder/":255,"util":98}],231:[function(require,module,exports){
+},{"./_stream_duplex":227,"./internal/streams/BufferList":232,"./internal/streams/destroy":233,"./internal/streams/stream":234,"_process":214,"core-util-is":131,"events":165,"inherits":184,"isarray":186,"process-nextick-args":213,"safe-buffer":240,"string_decoder/":254,"util":97}],230:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -54929,7 +54807,7 @@ function done(stream, er, data) {
 
   return stream.push(null);
 }
-},{"./_stream_duplex":228,"core-util-is":132,"inherits":185}],232:[function(require,module,exports){
+},{"./_stream_duplex":227,"core-util-is":131,"inherits":184}],231:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -55596,8 +55474,7 @@ Writable.prototype._destroy = function (err, cb) {
   cb(err);
 };
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./_stream_duplex":228,"./internal/streams/destroy":234,"./internal/streams/stream":235,"_process":215,"core-util-is":132,"inherits":185,"process-nextick-args":214,"safe-buffer":241,"util-deprecate":259}],233:[function(require,module,exports){
+},{"./_stream_duplex":227,"./internal/streams/destroy":233,"./internal/streams/stream":234,"_process":214,"core-util-is":131,"inherits":184,"process-nextick-args":213,"safe-buffer":240,"util-deprecate":258}],232:[function(require,module,exports){
 'use strict';
 
 /*<replacement>*/
@@ -55672,7 +55549,7 @@ module.exports = function () {
 
   return BufferList;
 }();
-},{"safe-buffer":241}],234:[function(require,module,exports){
+},{"safe-buffer":240}],233:[function(require,module,exports){
 'use strict';
 
 /*<replacement>*/
@@ -55745,13 +55622,13 @@ module.exports = {
   destroy: destroy,
   undestroy: undestroy
 };
-},{"process-nextick-args":214}],235:[function(require,module,exports){
+},{"process-nextick-args":213}],234:[function(require,module,exports){
 module.exports = require('events').EventEmitter;
 
-},{"events":166}],236:[function(require,module,exports){
+},{"events":165}],235:[function(require,module,exports){
 module.exports = require('./readable').PassThrough
 
-},{"./readable":237}],237:[function(require,module,exports){
+},{"./readable":236}],236:[function(require,module,exports){
 exports = module.exports = require('./lib/_stream_readable.js');
 exports.Stream = exports;
 exports.Readable = exports;
@@ -55760,13 +55637,13 @@ exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":228,"./lib/_stream_passthrough.js":229,"./lib/_stream_readable.js":230,"./lib/_stream_transform.js":231,"./lib/_stream_writable.js":232}],238:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":227,"./lib/_stream_passthrough.js":228,"./lib/_stream_readable.js":229,"./lib/_stream_transform.js":230,"./lib/_stream_writable.js":231}],237:[function(require,module,exports){
 module.exports = require('./readable').Transform
 
-},{"./readable":237}],239:[function(require,module,exports){
+},{"./readable":236}],238:[function(require,module,exports){
 module.exports = require('./lib/_stream_writable.js');
 
-},{"./lib/_stream_writable.js":232}],240:[function(require,module,exports){
+},{"./lib/_stream_writable.js":231}],239:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 var inherits = require('inherits')
@@ -56061,8 +55938,7 @@ function fn5 (a, b, c, d, e, m, k, s) {
 module.exports = RIPEMD160
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129,"hash-base":168,"inherits":185}],241:[function(require,module,exports){
+},{"buffer":128,"hash-base":167,"inherits":184}],240:[function(require,module,exports){
 /* eslint-disable node/no-deprecated-api */
 var buffer = require('buffer')
 var Buffer = buffer.Buffer
@@ -56126,7 +56002,7 @@ SafeBuffer.allocUnsafeSlow = function (size) {
   return buffer.SlowBuffer(size)
 }
 
-},{"buffer":129}],242:[function(require,module,exports){
+},{"buffer":128}],241:[function(require,module,exports){
 var Buffer = require('safe-buffer').Buffer
 
 // prototype class for hash functions
@@ -56209,7 +56085,7 @@ Hash.prototype._update = function () {
 
 module.exports = Hash
 
-},{"safe-buffer":241}],243:[function(require,module,exports){
+},{"safe-buffer":240}],242:[function(require,module,exports){
 var exports = module.exports = function SHA (algorithm) {
   algorithm = algorithm.toLowerCase()
 
@@ -56226,7 +56102,7 @@ exports.sha256 = require('./sha256')
 exports.sha384 = require('./sha384')
 exports.sha512 = require('./sha512')
 
-},{"./sha":244,"./sha1":245,"./sha224":246,"./sha256":247,"./sha384":248,"./sha512":249}],244:[function(require,module,exports){
+},{"./sha":243,"./sha1":244,"./sha224":245,"./sha256":246,"./sha384":247,"./sha512":248}],243:[function(require,module,exports){
 /*
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-0, as defined
  * in FIPS PUB 180-1
@@ -56322,7 +56198,7 @@ Sha.prototype._hash = function () {
 
 module.exports = Sha
 
-},{"./hash":242,"inherits":185,"safe-buffer":241}],245:[function(require,module,exports){
+},{"./hash":241,"inherits":184,"safe-buffer":240}],244:[function(require,module,exports){
 /*
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
  * in FIPS PUB 180-1
@@ -56423,7 +56299,7 @@ Sha1.prototype._hash = function () {
 
 module.exports = Sha1
 
-},{"./hash":242,"inherits":185,"safe-buffer":241}],246:[function(require,module,exports){
+},{"./hash":241,"inherits":184,"safe-buffer":240}],245:[function(require,module,exports){
 /**
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-256, as defined
  * in FIPS 180-2
@@ -56478,7 +56354,7 @@ Sha224.prototype._hash = function () {
 
 module.exports = Sha224
 
-},{"./hash":242,"./sha256":247,"inherits":185,"safe-buffer":241}],247:[function(require,module,exports){
+},{"./hash":241,"./sha256":246,"inherits":184,"safe-buffer":240}],246:[function(require,module,exports){
 /**
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-256, as defined
  * in FIPS 180-2
@@ -56615,7 +56491,7 @@ Sha256.prototype._hash = function () {
 
 module.exports = Sha256
 
-},{"./hash":242,"inherits":185,"safe-buffer":241}],248:[function(require,module,exports){
+},{"./hash":241,"inherits":184,"safe-buffer":240}],247:[function(require,module,exports){
 var inherits = require('inherits')
 var SHA512 = require('./sha512')
 var Hash = require('./hash')
@@ -56674,7 +56550,7 @@ Sha384.prototype._hash = function () {
 
 module.exports = Sha384
 
-},{"./hash":242,"./sha512":249,"inherits":185,"safe-buffer":241}],249:[function(require,module,exports){
+},{"./hash":241,"./sha512":248,"inherits":184,"safe-buffer":240}],248:[function(require,module,exports){
 var inherits = require('inherits')
 var Hash = require('./hash')
 var Buffer = require('safe-buffer').Buffer
@@ -56936,7 +56812,7 @@ Sha512.prototype._hash = function () {
 
 module.exports = Sha512
 
-},{"./hash":242,"inherits":185,"safe-buffer":241}],250:[function(require,module,exports){
+},{"./hash":241,"inherits":184,"safe-buffer":240}],249:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -57065,7 +56941,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":166,"inherits":185,"readable-stream/duplex.js":227,"readable-stream/passthrough.js":236,"readable-stream/readable.js":237,"readable-stream/transform.js":238,"readable-stream/writable.js":239}],251:[function(require,module,exports){
+},{"events":165,"inherits":184,"readable-stream/duplex.js":226,"readable-stream/passthrough.js":235,"readable-stream/readable.js":236,"readable-stream/transform.js":237,"readable-stream/writable.js":238}],250:[function(require,module,exports){
 (function (global){
 var ClientRequest = require('./lib/request')
 var extend = require('xtend')
@@ -57147,8 +57023,7 @@ http.METHODS = [
 	'UNSUBSCRIBE'
 ]
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./lib/request":253,"builtin-status-codes":130,"url":257,"xtend":264}],252:[function(require,module,exports){
+},{"./lib/request":252,"builtin-status-codes":129,"url":256,"xtend":263}],251:[function(require,module,exports){
 (function (global){
 exports.fetch = isFunction(global.fetch) && isFunction(global.ReadableStream)
 
@@ -57221,8 +57096,7 @@ function isFunction (value) {
 xhr = null // Help gc
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],253:[function(require,module,exports){
+},{}],252:[function(require,module,exports){
 (function (process,global,Buffer){
 var capability = require('./capability')
 var inherits = require('inherits')
@@ -57532,8 +57406,7 @@ var unsafeHeaders = [
 ]
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-
-},{"./capability":252,"./response":254,"_process":215,"buffer":129,"inherits":185,"readable-stream":237,"to-arraybuffer":256}],254:[function(require,module,exports){
+},{"./capability":251,"./response":253,"_process":214,"buffer":128,"inherits":184,"readable-stream":236,"to-arraybuffer":255}],253:[function(require,module,exports){
 (function (process,global,Buffer){
 var capability = require('./capability')
 var inherits = require('inherits')
@@ -57719,8 +57592,7 @@ IncomingMessage.prototype._onXHRProgress = function () {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-
-},{"./capability":252,"_process":215,"buffer":129,"inherits":185,"readable-stream":237}],255:[function(require,module,exports){
+},{"./capability":251,"_process":214,"buffer":128,"inherits":184,"readable-stream":236}],254:[function(require,module,exports){
 'use strict';
 
 var Buffer = require('safe-buffer').Buffer;
@@ -57993,7 +57865,7 @@ function simpleWrite(buf) {
 function simpleEnd(buf) {
   return buf && buf.length ? this.write(buf) : '';
 }
-},{"safe-buffer":241}],256:[function(require,module,exports){
+},{"safe-buffer":240}],255:[function(require,module,exports){
 var Buffer = require('buffer').Buffer
 
 module.exports = function (buf) {
@@ -58022,7 +57894,7 @@ module.exports = function (buf) {
 	}
 }
 
-},{"buffer":129}],257:[function(require,module,exports){
+},{"buffer":128}],256:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -58756,7 +58628,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":258,"punycode":222,"querystring":225}],258:[function(require,module,exports){
+},{"./util":257,"punycode":221,"querystring":224}],257:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -58774,7 +58646,7 @@ module.exports = {
   }
 };
 
-},{}],259:[function(require,module,exports){
+},{}],258:[function(require,module,exports){
 (function (global){
 
 /**
@@ -58845,17 +58717,16 @@ function config (name) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],260:[function(require,module,exports){
-arguments[4][185][0].apply(exports,arguments)
-},{"dup":185}],261:[function(require,module,exports){
+},{}],259:[function(require,module,exports){
+arguments[4][184][0].apply(exports,arguments)
+},{"dup":184}],260:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],262:[function(require,module,exports){
+},{}],261:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -59445,8 +59316,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"./support/isBuffer":261,"_process":215,"inherits":260}],263:[function(require,module,exports){
+},{"./support/isBuffer":260,"_process":214,"inherits":259}],262:[function(require,module,exports){
 var indexOf = require('indexof');
 
 var Object_keys = function (obj) {
@@ -59586,7 +59456,7 @@ exports.createContext = Script.createContext = function (context) {
     return copy;
 };
 
-},{"indexof":184}],264:[function(require,module,exports){
+},{"indexof":183}],263:[function(require,module,exports){
 module.exports = extend
 
 var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -59607,7 +59477,7 @@ function extend() {
     return target
 }
 
-},{}],265:[function(require,module,exports){
+},{}],264:[function(require,module,exports){
 (function (Buffer){
 var map = [
   [0x1, 0x8],
@@ -59733,8 +59603,7 @@ Canvas.prototype.frame = function frame(delimiter) {
 module.exports = Canvas;
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129}],266:[function(require,module,exports){
+},{"buffer":128}],265:[function(require,module,exports){
 var Canvas = require('drawille-blessed-contrib');
 var bresenham = require('bresenham');
 var glMatrix = require('gl-matrix');
@@ -60013,7 +59882,7 @@ module.exports.Canvas = function(width, height, canvasClass) {
 
 }
 
-},{"bresenham":78,"drawille-blessed-contrib":265,"gl-matrix":267,"x256":313}],267:[function(require,module,exports){
+},{"bresenham":77,"drawille-blessed-contrib":264,"gl-matrix":266,"x256":311}],266:[function(require,module,exports){
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
@@ -66902,7 +66771,7 @@ var forEach = exports.forEach = function () {
 /***/ })
 /******/ ]);
 });
-},{}],268:[function(require,module,exports){
+},{}],267:[function(require,module,exports){
 'use strict';
 
 
@@ -66911,7 +66780,7 @@ var yaml = require('./lib/js-yaml.js');
 
 module.exports = yaml;
 
-},{"./lib/js-yaml.js":269}],269:[function(require,module,exports){
+},{"./lib/js-yaml.js":268}],268:[function(require,module,exports){
 'use strict';
 
 
@@ -66952,7 +66821,7 @@ module.exports.parse          = deprecated('parse');
 module.exports.compose        = deprecated('compose');
 module.exports.addConstructor = deprecated('addConstructor');
 
-},{"./js-yaml/dumper":271,"./js-yaml/exception":272,"./js-yaml/loader":273,"./js-yaml/schema":275,"./js-yaml/schema/core":276,"./js-yaml/schema/default_full":277,"./js-yaml/schema/default_safe":278,"./js-yaml/schema/failsafe":279,"./js-yaml/schema/json":280,"./js-yaml/type":281}],270:[function(require,module,exports){
+},{"./js-yaml/dumper":270,"./js-yaml/exception":271,"./js-yaml/loader":272,"./js-yaml/schema":274,"./js-yaml/schema/core":275,"./js-yaml/schema/default_full":276,"./js-yaml/schema/default_safe":277,"./js-yaml/schema/failsafe":278,"./js-yaml/schema/json":279,"./js-yaml/type":280}],269:[function(require,module,exports){
 'use strict';
 
 
@@ -67013,7 +66882,7 @@ module.exports.repeat         = repeat;
 module.exports.isNegativeZero = isNegativeZero;
 module.exports.extend         = extend;
 
-},{}],271:[function(require,module,exports){
+},{}],270:[function(require,module,exports){
 'use strict';
 
 /*eslint-disable no-use-before-define*/
@@ -67816,7 +67685,7 @@ function safeDump(input, options) {
 module.exports.dump     = dump;
 module.exports.safeDump = safeDump;
 
-},{"./common":270,"./exception":272,"./schema/default_full":277,"./schema/default_safe":278}],272:[function(require,module,exports){
+},{"./common":269,"./exception":271,"./schema/default_full":276,"./schema/default_safe":277}],271:[function(require,module,exports){
 // YAML error class. http://stackoverflow.com/questions/8458984
 //
 'use strict';
@@ -67861,7 +67730,7 @@ YAMLException.prototype.toString = function toString(compact) {
 
 module.exports = YAMLException;
 
-},{}],273:[function(require,module,exports){
+},{}],272:[function(require,module,exports){
 'use strict';
 
 /*eslint-disable max-len,no-use-before-define*/
@@ -69450,7 +69319,7 @@ module.exports.load        = load;
 module.exports.safeLoadAll = safeLoadAll;
 module.exports.safeLoad    = safeLoad;
 
-},{"./common":270,"./exception":272,"./mark":274,"./schema/default_full":277,"./schema/default_safe":278}],274:[function(require,module,exports){
+},{"./common":269,"./exception":271,"./mark":273,"./schema/default_full":276,"./schema/default_safe":277}],273:[function(require,module,exports){
 'use strict';
 
 
@@ -69528,7 +69397,7 @@ Mark.prototype.toString = function toString(compact) {
 
 module.exports = Mark;
 
-},{"./common":270}],275:[function(require,module,exports){
+},{"./common":269}],274:[function(require,module,exports){
 'use strict';
 
 /*eslint-disable max-len*/
@@ -69638,7 +69507,7 @@ Schema.create = function createSchema() {
 
 module.exports = Schema;
 
-},{"./common":270,"./exception":272,"./type":281}],276:[function(require,module,exports){
+},{"./common":269,"./exception":271,"./type":280}],275:[function(require,module,exports){
 // Standard YAML's Core schema.
 // http://www.yaml.org/spec/1.2/spec.html#id2804923
 //
@@ -69658,7 +69527,7 @@ module.exports = new Schema({
   ]
 });
 
-},{"../schema":275,"./json":280}],277:[function(require,module,exports){
+},{"../schema":274,"./json":279}],276:[function(require,module,exports){
 // JS-YAML's default schema for `load` function.
 // It is not described in the YAML specification.
 //
@@ -69685,7 +69554,7 @@ module.exports = Schema.DEFAULT = new Schema({
   ]
 });
 
-},{"../schema":275,"../type/js/function":286,"../type/js/regexp":287,"../type/js/undefined":288,"./default_safe":278}],278:[function(require,module,exports){
+},{"../schema":274,"../type/js/function":285,"../type/js/regexp":286,"../type/js/undefined":287,"./default_safe":277}],277:[function(require,module,exports){
 // JS-YAML's default schema for `safeLoad` function.
 // It is not described in the YAML specification.
 //
@@ -69715,7 +69584,7 @@ module.exports = new Schema({
   ]
 });
 
-},{"../schema":275,"../type/binary":282,"../type/merge":290,"../type/omap":292,"../type/pairs":293,"../type/set":295,"../type/timestamp":297,"./core":276}],279:[function(require,module,exports){
+},{"../schema":274,"../type/binary":281,"../type/merge":289,"../type/omap":291,"../type/pairs":292,"../type/set":294,"../type/timestamp":296,"./core":275}],278:[function(require,module,exports){
 // Standard YAML's Failsafe schema.
 // http://www.yaml.org/spec/1.2/spec.html#id2802346
 
@@ -69734,7 +69603,7 @@ module.exports = new Schema({
   ]
 });
 
-},{"../schema":275,"../type/map":289,"../type/seq":294,"../type/str":296}],280:[function(require,module,exports){
+},{"../schema":274,"../type/map":288,"../type/seq":293,"../type/str":295}],279:[function(require,module,exports){
 // Standard YAML's JSON schema.
 // http://www.yaml.org/spec/1.2/spec.html#id2803231
 //
@@ -69761,7 +69630,7 @@ module.exports = new Schema({
   ]
 });
 
-},{"../schema":275,"../type/bool":283,"../type/float":284,"../type/int":285,"../type/null":291,"./failsafe":279}],281:[function(require,module,exports){
+},{"../schema":274,"../type/bool":282,"../type/float":283,"../type/int":284,"../type/null":290,"./failsafe":278}],280:[function(require,module,exports){
 'use strict';
 
 var YAMLException = require('./exception');
@@ -69824,7 +69693,7 @@ function Type(tag, options) {
 
 module.exports = Type;
 
-},{"./exception":272}],282:[function(require,module,exports){
+},{"./exception":271}],281:[function(require,module,exports){
 'use strict';
 
 /*eslint-disable no-bitwise*/
@@ -69961,7 +69830,7 @@ module.exports = new Type('tag:yaml.org,2002:binary', {
   represent: representYamlBinary
 });
 
-},{"../type":281}],283:[function(require,module,exports){
+},{"../type":280}],282:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -69998,7 +69867,7 @@ module.exports = new Type('tag:yaml.org,2002:bool', {
   defaultStyle: 'lowercase'
 });
 
-},{"../type":281}],284:[function(require,module,exports){
+},{"../type":280}],283:[function(require,module,exports){
 'use strict';
 
 var common = require('../common');
@@ -70105,7 +69974,7 @@ module.exports = new Type('tag:yaml.org,2002:float', {
   defaultStyle: 'lowercase'
 });
 
-},{"../common":270,"../type":281}],285:[function(require,module,exports){
+},{"../common":269,"../type":280}],284:[function(require,module,exports){
 'use strict';
 
 var common = require('../common');
@@ -70275,7 +70144,7 @@ module.exports = new Type('tag:yaml.org,2002:int', {
   }
 });
 
-},{"../common":270,"../type":281}],286:[function(require,module,exports){
+},{"../common":269,"../type":280}],285:[function(require,module,exports){
 'use strict';
 
 var esprima;
@@ -70361,7 +70230,7 @@ module.exports = new Type('tag:yaml.org,2002:js/function', {
   represent: representJavascriptFunction
 });
 
-},{"../../type":281}],287:[function(require,module,exports){
+},{"../../type":280}],286:[function(require,module,exports){
 'use strict';
 
 var Type = require('../../type');
@@ -70423,7 +70292,7 @@ module.exports = new Type('tag:yaml.org,2002:js/regexp', {
   represent: representJavascriptRegExp
 });
 
-},{"../../type":281}],288:[function(require,module,exports){
+},{"../../type":280}],287:[function(require,module,exports){
 'use strict';
 
 var Type = require('../../type');
@@ -70453,7 +70322,7 @@ module.exports = new Type('tag:yaml.org,2002:js/undefined', {
   represent: representJavascriptUndefined
 });
 
-},{"../../type":281}],289:[function(require,module,exports){
+},{"../../type":280}],288:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70463,7 +70332,7 @@ module.exports = new Type('tag:yaml.org,2002:map', {
   construct: function (data) { return data !== null ? data : {}; }
 });
 
-},{"../type":281}],290:[function(require,module,exports){
+},{"../type":280}],289:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70477,7 +70346,7 @@ module.exports = new Type('tag:yaml.org,2002:merge', {
   resolve: resolveYamlMerge
 });
 
-},{"../type":281}],291:[function(require,module,exports){
+},{"../type":280}],290:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70513,7 +70382,7 @@ module.exports = new Type('tag:yaml.org,2002:null', {
   defaultStyle: 'lowercase'
 });
 
-},{"../type":281}],292:[function(require,module,exports){
+},{"../type":280}],291:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70559,7 +70428,7 @@ module.exports = new Type('tag:yaml.org,2002:omap', {
   construct: constructYamlOmap
 });
 
-},{"../type":281}],293:[function(require,module,exports){
+},{"../type":280}],292:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70614,7 +70483,7 @@ module.exports = new Type('tag:yaml.org,2002:pairs', {
   construct: constructYamlPairs
 });
 
-},{"../type":281}],294:[function(require,module,exports){
+},{"../type":280}],293:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70624,7 +70493,7 @@ module.exports = new Type('tag:yaml.org,2002:seq', {
   construct: function (data) { return data !== null ? data : []; }
 });
 
-},{"../type":281}],295:[function(require,module,exports){
+},{"../type":280}],294:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70655,7 +70524,7 @@ module.exports = new Type('tag:yaml.org,2002:set', {
   construct: constructYamlSet
 });
 
-},{"../type":281}],296:[function(require,module,exports){
+},{"../type":280}],295:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70665,7 +70534,7 @@ module.exports = new Type('tag:yaml.org,2002:str', {
   construct: function (data) { return data !== null ? data : ''; }
 });
 
-},{"../type":281}],297:[function(require,module,exports){
+},{"../type":280}],296:[function(require,module,exports){
 'use strict';
 
 var Type = require('../type');
@@ -70755,7 +70624,7 @@ module.exports = new Type('tag:yaml.org,2002:timestamp', {
   represent: representYamlTimestamp
 });
 
-},{"../type":281}],298:[function(require,module,exports){
+},{"../type":280}],297:[function(require,module,exports){
 (function (global){
 /**
  * lodash (Custom Build) <https://lodash.com/>
@@ -71136,8 +71005,7 @@ function toNumber(value) {
 module.exports = debounce;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],299:[function(require,module,exports){
+},{}],298:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 var inherits = require('inherits')
@@ -71286,8 +71154,7 @@ function fnI (a, b, c, d, m, k, s) {
 module.exports = MD5
 
 }).call(this,require("buffer").Buffer)
-
-},{"buffer":129,"hash-base":300,"inherits":301}],300:[function(require,module,exports){
+},{"buffer":128,"hash-base":299,"inherits":300}],299:[function(require,module,exports){
 'use strict'
 var Buffer = require('safe-buffer').Buffer
 var Transform = require('stream').Transform
@@ -71384,11 +71251,11 @@ HashBase.prototype._digest = function () {
 
 module.exports = HashBase
 
-},{"inherits":301,"safe-buffer":302,"stream":250}],301:[function(require,module,exports){
-arguments[4][185][0].apply(exports,arguments)
-},{"dup":185}],302:[function(require,module,exports){
-arguments[4][241][0].apply(exports,arguments)
-},{"buffer":129,"dup":241}],303:[function(require,module,exports){
+},{"inherits":300,"safe-buffer":301,"stream":249}],300:[function(require,module,exports){
+arguments[4][184][0].apply(exports,arguments)
+},{"dup":184}],301:[function(require,module,exports){
+arguments[4][240][0].apply(exports,arguments)
+},{"buffer":128,"dup":240}],302:[function(require,module,exports){
 /*! Moment Duration Format v1.3.0
  *  https://github.com/jsmreese/moment-duration-format 
  *  Date: 2014-07-15
@@ -71872,7 +71739,7 @@ arguments[4][241][0].apply(exports,arguments)
 
 })(this);
 
-},{"moment":304}],304:[function(require,module,exports){
+},{"moment":303}],303:[function(require,module,exports){
 //! moment.js
 //! version : 2.16.0
 //! authors : Tim Wood, Iskren Chernev, Moment.js contributors
@@ -76172,7 +76039,7 @@ return hooks;
 
 })));
 
-},{}],305:[function(require,module,exports){
+},{}],304:[function(require,module,exports){
 (function (process,global){
 'use strict'
 
@@ -76284,6094 +76151,11 @@ function randomFillSync (buf, offset, size) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"_process":215,"randombytes":306,"safe-buffer":307}],306:[function(require,module,exports){
-(function (process,global){
-'use strict'
-
-function oldBrowser () {
-  throw new Error('secure random number generation not supported by this browser\nuse chrome, FireFox or Internet Explorer 11')
-}
-
-var Buffer = require('safe-buffer').Buffer
-var crypto = global.crypto || global.msCrypto
-
-if (crypto && crypto.getRandomValues) {
-  module.exports = randomBytes
-} else {
-  module.exports = oldBrowser
-}
-
-function randomBytes (size, cb) {
-  // phantomjs needs to throw
-  if (size > 65536) throw new Error('requested too many random bytes')
-  // in case browserify  isn't using the Uint8Array version
-  var rawBytes = new global.Uint8Array(size)
-
-  // This will not work in older browsers.
-  // See https://developer.mozilla.org/en-US/docs/Web/API/window.crypto.getRandomValues
-  if (size > 0) {  // getRandomValues fails on IE if size == 0
-    crypto.getRandomValues(rawBytes)
-  }
-
-  // XXX: phantomjs doesn't like a buffer being passed here
-  var bytes = Buffer.from(rawBytes.buffer)
-
-  if (typeof cb === 'function') {
-    return process.nextTick(function () {
-      cb(null, bytes)
-    })
-  }
-
-  return bytes
-}
-
-}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{"_process":215,"safe-buffer":307}],307:[function(require,module,exports){
-arguments[4][241][0].apply(exports,arguments)
-},{"buffer":129,"dup":241}],308:[function(require,module,exports){
-module.exports = require('./lib/index.js');
-
-},{"./lib/index.js":309}],309:[function(require,module,exports){
-(function (Buffer,__dirname){
-/**
- * term.js - an xterm emulator
- * Copyright (c) 2012-2013, Christopher Jeffrey (MIT License)
- * https://github.com/chjj/term.js
- */
-
-function term(options) {
-  return new term.Terminal(options);
-}
-
-term.middleware = function(options) {
-  var url = require('url');
-
-  options = options || {};
-  options.path = options.path || '/term.js';
-
-  return function(req, res, next) {
-    if (url.parse(req.url).pathname !== options.path) {
-      return next();
-    }
-
-    if (+new Date(req.headers['if-modified-since']) === term.last) {
-      res.statusCode = 304;
-      res.end();
-      return;
-    }
-
-    res.writeHead(200, {
-      'Content-Type': 'application/javascript; charset=utf-8',
-      'Content-Length': Buffer.byteLength(term.script),
-      'Last-Modified': term.last
-    });
-
-    res.end(term.script);
-  };
-};
-
-term.path = __dirname + '/../src/term.js';
-
-term.__defineGetter__('script', function() {
-  if (term._script) return term._script;
-  term.last = +new Date;
-  return term._script = require('fs').readFileSync(term.path, 'utf8');
-});
-
-term.__defineGetter__('Terminal', function() {
-  if (term._Terminal) return term._Terminal;
-  return term._Terminal = require('../src/term');
-});
-
-/**
- * Expose
- */
-
-module.exports = term;
-
-}).call(this,require("buffer").Buffer,"/node_modules/term.js/lib")
-
-},{"../src/term":310,"buffer":129,"fs":79,"url":257}],310:[function(require,module,exports){
-(function (global){
-/**
- * term.js - an xterm emulator
- * Copyright (c) 2012-2013, Christopher Jeffrey (MIT License)
- * https://github.com/chjj/term.js
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
- * Originally forked from (with the author's permission):
- *   Fabrice Bellard's javascript vt100 for jslinux:
- *   http://bellard.org/jslinux/
- *   Copyright (c) 2011 Fabrice Bellard
- *   The original design remains. The terminal itself
- *   has been extended to include xterm CSI codes, among
- *   other features.
- */
-
-;(function() {
-
-/**
- * Terminal Emulation References:
- *   http://vt100.net/
- *   http://invisible-island.net/xterm/ctlseqs/ctlseqs.txt
- *   http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
- *   http://invisible-island.net/vttest/
- *   http://www.inwap.com/pdp10/ansicode.txt
- *   http://linux.die.net/man/4/console_codes
- *   http://linux.die.net/man/7/urxvt
- */
-
-'use strict';
-
-/**
- * Shared
- */
-
-var window = this
-  , document = this.document;
-
-/**
- * EventEmitter
- */
-
-function EventEmitter() {
-  this._events = this._events || {};
-}
-
-EventEmitter.prototype.addListener = function(type, listener) {
-  this._events[type] = this._events[type] || [];
-  this._events[type].push(listener);
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.removeListener = function(type, listener) {
-  if (!this._events[type]) return;
-
-  var obj = this._events[type]
-    , i = obj.length;
-
-  while (i--) {
-    if (obj[i] === listener || obj[i].listener === listener) {
-      obj.splice(i, 1);
-      return;
-    }
-  }
-};
-
-EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  if (this._events[type]) delete this._events[type];
-};
-
-EventEmitter.prototype.once = function(type, listener) {
-  function on() {
-    var args = Array.prototype.slice.call(arguments);
-    this.removeListener(type, on);
-    return listener.apply(this, args);
-  }
-  on.listener = listener;
-  return this.on(type, on);
-};
-
-EventEmitter.prototype.emit = function(type) {
-  if (!this._events[type]) return;
-
-  var args = Array.prototype.slice.call(arguments, 1)
-    , obj = this._events[type]
-    , l = obj.length
-    , i = 0;
-
-  for (; i < l; i++) {
-    obj[i].apply(this, args);
-  }
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  return this._events[type] = this._events[type] || [];
-};
-
-/**
- * Stream
- */
-
-function Stream() {
-  EventEmitter.call(this);
-}
-
-inherits(Stream, EventEmitter);
-
-Stream.prototype.pipe = function(dest, options) {
-  var src = this
-    , ondata
-    , onerror
-    , onend;
-
-  function unbind() {
-    src.removeListener('data', ondata);
-    src.removeListener('error', onerror);
-    src.removeListener('end', onend);
-    dest.removeListener('error', onerror);
-    dest.removeListener('close', unbind);
-  }
-
-  src.on('data', ondata = function(data) {
-    dest.write(data);
-  });
-
-  src.on('error', onerror = function(err) {
-    unbind();
-    if (!this.listeners('error').length) {
-      throw err;
-    }
-  });
-
-  src.on('end', onend = function() {
-    dest.end();
-    unbind();
-  });
-
-  dest.on('error', onerror);
-  dest.on('close', unbind);
-
-  dest.emit('pipe', src);
-
-  return dest;
-};
-
-/**
- * States
- */
-
-var normal = 0
-  , escaped = 1
-  , csi = 2
-  , osc = 3
-  , charset = 4
-  , dcs = 5
-  , ignore = 6
-  , UDK = { type: 'udk' };
-
-/**
- * Terminal
- */
-
-function Terminal(options) {
-  var self = this;
-
-  if (!(this instanceof Terminal)) {
-    return new Terminal(arguments[0], arguments[1], arguments[2]);
-  }
-
-  Stream.call(this);
-
-  if (typeof options === 'number') {
-    options = {
-      cols: arguments[0],
-      rows: arguments[1],
-      handler: arguments[2]
-    };
-  }
-
-  options = options || {};
-
-  each(keys(Terminal.defaults), function(key) {
-    if (options[key] == null) {
-      options[key] = Terminal.options[key];
-      // Legacy:
-      if (Terminal[key] !== Terminal.defaults[key]) {
-        options[key] = Terminal[key];
-      }
-    }
-    self[key] = options[key];
-  });
-
-  if (options.colors.length === 8) {
-    options.colors = options.colors.concat(Terminal._colors.slice(8));
-  } else if (options.colors.length === 16) {
-    options.colors = options.colors.concat(Terminal._colors.slice(16));
-  } else if (options.colors.length === 10) {
-    options.colors = options.colors.slice(0, -2).concat(
-      Terminal._colors.slice(8, -2), options.colors.slice(-2));
-  } else if (options.colors.length === 18) {
-    options.colors = options.colors.slice(0, -2).concat(
-      Terminal._colors.slice(16, -2), options.colors.slice(-2));
-  }
-  this.colors = options.colors;
-
-  this.options = options;
-
-  // this.context = options.context || window;
-  // this.document = options.document || document;
-  this.parent = options.body || options.parent
-    || (document ? document.getElementsByTagName('body')[0] : null);
-
-  this.cols = options.cols || options.geometry[0];
-  this.rows = options.rows || options.geometry[1];
-
-  // Act as though we are a node TTY stream:
-  this.setRawMode;
-  this.isTTY = true;
-  this.isRaw = true;
-  this.columns = this.cols;
-  this.rows = this.rows;
-
-  if (options.handler) {
-    this.on('data', options.handler);
-  }
-
-  this.ybase = 0;
-  this.ydisp = 0;
-  this.x = 0;
-  this.y = 0;
-  this.cursorState = 0;
-  this.cursorHidden = false;
-  this.convertEol;
-  this.state = 0;
-  this.queue = '';
-  this.scrollTop = 0;
-  this.scrollBottom = this.rows - 1;
-
-  // modes
-  this.applicationKeypad = false;
-  this.applicationCursor = false;
-  this.originMode = false;
-  this.insertMode = false;
-  this.wraparoundMode = false;
-  this.normal = null;
-
-  // select modes
-  this.prefixMode = false;
-  this.selectMode = false;
-  this.visualMode = false;
-  this.searchMode = false;
-  this.searchDown;
-  this.entry = '';
-  this.entryPrefix = 'Search: ';
-  this._real;
-  this._selected;
-  this._textarea;
-
-  // charset
-  this.charset = null;
-  this.gcharset = null;
-  this.glevel = 0;
-  this.charsets = [null];
-
-  // mouse properties
-  this.decLocator;
-  this.x10Mouse;
-  this.vt200Mouse;
-  this.vt300Mouse;
-  this.normalMouse;
-  this.mouseEvents;
-  this.sendFocus;
-  this.utfMouse;
-  this.sgrMouse;
-  this.urxvtMouse;
-
-  // misc
-  this.element;
-  this.children;
-  this.refreshStart;
-  this.refreshEnd;
-  this.savedX;
-  this.savedY;
-  this.savedCols;
-
-  // stream
-  this.readable = true;
-  this.writable = true;
-
-  this.defAttr = (0 << 18) | (257 << 9) | (256 << 0);
-  this.curAttr = this.defAttr;
-
-  this.params = [];
-  this.currentParam = 0;
-  this.prefix = '';
-  this.postfix = '';
-
-  this.lines = [];
-  var i = this.rows;
-  while (i--) {
-    this.lines.push(this.blankLine());
-  }
-
-  this.tabs;
-  this.setupStops();
-}
-
-inherits(Terminal, Stream);
-
-/**
- * Colors
- */
-
-// Colors 0-15
-Terminal.tangoColors = [
-  // dark:
-  '#2e3436',
-  '#cc0000',
-  '#4e9a06',
-  '#c4a000',
-  '#3465a4',
-  '#75507b',
-  '#06989a',
-  '#d3d7cf',
-  // bright:
-  '#555753',
-  '#ef2929',
-  '#8ae234',
-  '#fce94f',
-  '#729fcf',
-  '#ad7fa8',
-  '#34e2e2',
-  '#eeeeec'
-];
-
-Terminal.xtermColors = [
-  // dark:
-  '#000000', // black
-  '#cd0000', // red3
-  '#00cd00', // green3
-  '#cdcd00', // yellow3
-  '#0000ee', // blue2
-  '#cd00cd', // magenta3
-  '#00cdcd', // cyan3
-  '#e5e5e5', // gray90
-  // bright:
-  '#7f7f7f', // gray50
-  '#ff0000', // red
-  '#00ff00', // green
-  '#ffff00', // yellow
-  '#5c5cff', // rgb:5c/5c/ff
-  '#ff00ff', // magenta
-  '#00ffff', // cyan
-  '#ffffff'  // white
-];
-
-// Colors 0-15 + 16-255
-// Much thanks to TooTallNate for writing this.
-Terminal.colors = (function() {
-  var colors = Terminal.tangoColors.slice()
-    , r = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff]
-    , i;
-
-  // 16-231
-  i = 0;
-  for (; i < 216; i++) {
-    out(r[(i / 36) % 6 | 0], r[(i / 6) % 6 | 0], r[i % 6]);
-  }
-
-  // 232-255 (grey)
-  i = 0;
-  for (; i < 24; i++) {
-    r = 8 + i * 10;
-    out(r, r, r);
-  }
-
-  function out(r, g, b) {
-    colors.push('#' + hex(r) + hex(g) + hex(b));
-  }
-
-  function hex(c) {
-    c = c.toString(16);
-    return c.length < 2 ? '0' + c : c;
-  }
-
-  return colors;
-})();
-
-// Default BG/FG
-Terminal.colors[256] = '#000000';
-Terminal.colors[257] = '#f0f0f0';
-
-Terminal._colors = Terminal.colors.slice();
-
-Terminal.vcolors = (function() {
-  var out = []
-    , colors = Terminal.colors
-    , i = 0
-    , color;
-
-  for (; i < 256; i++) {
-    color = parseInt(colors[i].substring(1), 16);
-    out.push([
-      (color >> 16) & 0xff,
-      (color >> 8) & 0xff,
-      color & 0xff
-    ]);
-  }
-
-  return out;
-})();
-
-/**
- * Options
- */
-
-Terminal.defaults = {
-  colors: Terminal.colors,
-  convertEol: false,
-  termName: 'xterm',
-  geometry: [80, 24],
-  cursorBlink: true,
-  visualBell: false,
-  popOnBell: false,
-  scrollback: 1000,
-  screenKeys: false,
-  debug: false,
-  useStyle: false
-  // programFeatures: false,
-  // focusKeys: false,
-};
-
-Terminal.options = {};
-
-each(keys(Terminal.defaults), function(key) {
-  Terminal[key] = Terminal.defaults[key];
-  Terminal.options[key] = Terminal.defaults[key];
-});
-
-/**
- * Focused Terminal
- */
-
-Terminal.focus = null;
-
-Terminal.prototype.focus = function() {
-  if (Terminal.focus === this) return;
-
-  if (Terminal.focus) {
-    Terminal.focus.blur();
-  }
-
-  if (this.sendFocus) this.send('\x1b[I');
-  this.showCursor();
-
-  // try {
-  //   this.element.focus();
-  // } catch (e) {
-  //   ;
-  // }
-
-  // this.emit('focus');
-
-  Terminal.focus = this;
-};
-
-Terminal.prototype.blur = function() {
-  if (Terminal.focus !== this) return;
-
-  this.cursorState = 0;
-  this.refresh(this.y, this.y);
-  if (this.sendFocus) this.send('\x1b[O');
-
-  // try {
-  //   this.element.blur();
-  // } catch (e) {
-  //   ;
-  // }
-
-  // this.emit('blur');
-
-  Terminal.focus = null;
-};
-
-/**
- * Initialize global behavior
- */
-
-Terminal.prototype.initGlobal = function() {
-  var document = this.document;
-
-  Terminal._boundDocs = Terminal._boundDocs || [];
-  if (~indexOf(Terminal._boundDocs, document)) {
-    return;
-  }
-  Terminal._boundDocs.push(document);
-
-  Terminal.bindPaste(document);
-
-  Terminal.bindKeys(document);
-
-  Terminal.bindCopy(document);
-
-  if (this.isMobile) {
-    this.fixMobile(document);
-  }
-
-  if (this.useStyle) {
-    Terminal.insertStyle(document, this.colors[256], this.colors[257]);
-  }
-};
-
-/**
- * Bind to paste event
- */
-
-Terminal.bindPaste = function(document) {
-  // This seems to work well for ctrl-V and middle-click,
-  // even without the contentEditable workaround.
-  var window = document.defaultView;
-  on(window, 'paste', function(ev) {
-    var term = Terminal.focus;
-    if (!term) return;
-    if (ev.clipboardData) {
-      term.send(ev.clipboardData.getData('text/plain'));
-    } else if (term.context.clipboardData) {
-      term.send(term.context.clipboardData.getData('Text'));
-    }
-    // Not necessary. Do it anyway for good measure.
-    term.element.contentEditable = 'inherit';
-    return cancel(ev);
-  });
-};
-
-/**
- * Global Events for key handling
- */
-
-Terminal.bindKeys = function(document) {
-  // We should only need to check `target === body` below,
-  // but we can check everything for good measure.
-  on(document, 'keydown', function(ev) {
-    if (!Terminal.focus) return;
-    var target = ev.target || ev.srcElement;
-    if (!target) return;
-    if (target === Terminal.focus.element
-        || target === Terminal.focus.context
-        || target === Terminal.focus.document
-        || target === Terminal.focus.body
-        || target === Terminal._textarea
-        || target === Terminal.focus.parent) {
-      return Terminal.focus.keyDown(ev);
-    }
-  }, true);
-
-  on(document, 'keypress', function(ev) {
-    if (!Terminal.focus) return;
-    var target = ev.target || ev.srcElement;
-    if (!target) return;
-    if (target === Terminal.focus.element
-        || target === Terminal.focus.context
-        || target === Terminal.focus.document
-        || target === Terminal.focus.body
-        || target === Terminal._textarea
-        || target === Terminal.focus.parent) {
-      return Terminal.focus.keyPress(ev);
-    }
-  }, true);
-
-  // If we click somewhere other than a
-  // terminal, unfocus the terminal.
-  on(document, 'mousedown', function(ev) {
-    if (!Terminal.focus) return;
-
-    var el = ev.target || ev.srcElement;
-    if (!el) return;
-
-    do {
-      if (el === Terminal.focus.element) return;
-    } while (el = el.parentNode);
-
-    Terminal.focus.blur();
-  });
-};
-
-/**
- * Copy Selection w/ Ctrl-C (Select Mode)
- */
-
-Terminal.bindCopy = function(document) {
-  var window = document.defaultView;
-
-  // if (!('onbeforecopy' in document)) {
-  //   // Copies to *only* the clipboard.
-  //   on(window, 'copy', function fn(ev) {
-  //     var term = Terminal.focus;
-  //     if (!term) return;
-  //     if (!term._selected) return;
-  //     var text = term.grabText(
-  //       term._selected.x1, term._selected.x2,
-  //       term._selected.y1, term._selected.y2);
-  //     term.emit('copy', text);
-  //     ev.clipboardData.setData('text/plain', text);
-  //   });
-  //   return;
-  // }
-
-  // Copies to primary selection *and* clipboard.
-  // NOTE: This may work better on capture phase,
-  // or using the `beforecopy` event.
-  on(window, 'copy', function(ev) {
-    var term = Terminal.focus;
-    if (!term) return;
-    if (!term._selected) return;
-    var textarea = term.getCopyTextarea();
-    var text = term.grabText(
-      term._selected.x1, term._selected.x2,
-      term._selected.y1, term._selected.y2);
-    term.emit('copy', text);
-    textarea.focus();
-    textarea.textContent = text;
-    textarea.value = text;
-    textarea.setSelectionRange(0, text.length);
-    setTimeout(function() {
-      term.element.focus();
-      term.focus();
-    }, 1);
-  });
-};
-
-/**
- * Fix Mobile
- */
-
-Terminal.prototype.fixMobile = function(document) {
-  var self = this;
-
-  var textarea = document.createElement('textarea');
-  textarea.style.position = 'absolute';
-  textarea.style.left = '-32000px';
-  textarea.style.top = '-32000px';
-  textarea.style.width = '0px';
-  textarea.style.height = '0px';
-  textarea.style.opacity = '0';
-  textarea.style.backgroundColor = 'transparent';
-  textarea.style.borderStyle = 'none';
-  textarea.style.outlineStyle = 'none';
-  textarea.autocapitalize = 'none';
-  textarea.autocorrect = 'off';
-
-  document.getElementsByTagName('body')[0].appendChild(textarea);
-
-  Terminal._textarea = textarea;
-
-  setTimeout(function() {
-    textarea.focus();
-  }, 1000);
-
-  if (this.isAndroid) {
-    on(textarea, 'change', function() {
-      var value = textarea.textContent || textarea.value;
-      textarea.value = '';
-      textarea.textContent = '';
-      self.send(value + '\r');
-    });
-  }
-};
-
-/**
- * Insert a default style
- */
-
-Terminal.insertStyle = function(document, bg, fg) {
-  var style = document.getElementById('term-style');
-  if (style) return;
-
-  var head = document.getElementsByTagName('head')[0];
-  if (!head) return;
-
-  var style = document.createElement('style');
-  style.id = 'term-style';
-
-  // textContent doesn't work well with IE for <style> elements.
-  style.innerHTML = ''
-    + '.terminal {\n'
-    + '  float: left;\n'
-    + '  border: ' + bg + ' solid 5px;\n'
-    + '  font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;\n'
-    + '  font-size: 11px;\n'
-    + '  color: ' + fg + ';\n'
-    + '  background: ' + bg + ';\n'
-    + '}\n'
-    + '\n'
-    + '.terminal-cursor {\n'
-    + '  color: ' + bg + ';\n'
-    + '  background: ' + fg + ';\n'
-    + '}\n';
-
-  // var out = '';
-  // each(Terminal.colors, function(color, i) {
-  //   if (i === 256) {
-  //     out += '\n.term-bg-color-default { background-color: ' + color + '; }';
-  //   }
-  //   if (i === 257) {
-  //     out += '\n.term-fg-color-default { color: ' + color + '; }';
-  //   }
-  //   out += '\n.term-bg-color-' + i + ' { background-color: ' + color + '; }';
-  //   out += '\n.term-fg-color-' + i + ' { color: ' + color + '; }';
-  // });
-  // style.innerHTML += out + '\n';
-
-  head.insertBefore(style, head.firstChild);
-};
-
-/**
- * Open Terminal
- */
-
-Terminal.prototype.open = function(parent) {
-  var self = this
-    , i = 0
-    , div;
-
-  this.parent = parent || this.parent;
-
-  if (!this.parent) {
-    throw new Error('Terminal requires a parent element.');
-  }
-
-  // Grab global elements.
-  this.context = this.parent.ownerDocument.defaultView;
-  this.document = this.parent.ownerDocument;
-  this.body = this.document.getElementsByTagName('body')[0];
-
-  // Parse user-agent strings.
-  if (this.context.navigator && this.context.navigator.userAgent) {
-    this.isMac = !!~this.context.navigator.userAgent.indexOf('Mac');
-    this.isIpad = !!~this.context.navigator.userAgent.indexOf('iPad');
-    this.isIphone = !!~this.context.navigator.userAgent.indexOf('iPhone');
-    this.isAndroid = !!~this.context.navigator.userAgent.indexOf('Android');
-    this.isMobile = this.isIpad || this.isIphone || this.isAndroid;
-    this.isMSIE = !!~this.context.navigator.userAgent.indexOf('MSIE');
-  }
-
-  // Create our main terminal element.
-  this.element = this.document.createElement('div');
-  this.element.className = 'terminal';
-  this.element.style.outline = 'none';
-  this.element.setAttribute('tabindex', 0);
-  this.element.setAttribute('spellcheck', 'false');
-  this.element.style.backgroundColor = this.colors[256];
-  this.element.style.color = this.colors[257];
-
-  // Create the lines for our terminal.
-  this.children = [];
-  for (; i < this.rows; i++) {
-    div = this.document.createElement('div');
-    this.element.appendChild(div);
-    this.children.push(div);
-  }
-  this.parent.appendChild(this.element);
-
-  // Draw the screen.
-  this.refresh(0, this.rows - 1);
-
-  if (!('useEvents' in this.options) || this.options.useEvents) {
-    // Initialize global actions that
-    // need to be taken on the document.
-    this.initGlobal();
-  }
-
-  if (!('useFocus' in this.options) || this.options.useFocus) {
-    // Ensure there is a Terminal.focus.
-    this.focus();
-
-    // Start blinking the cursor.
-    this.startBlink();
-
-    // Bind to DOM events related
-    // to focus and paste behavior.
-    on(this.element, 'focus', function() {
-      self.focus();
-      if (self.isMobile) {
-        Terminal._textarea.focus();
-      }
-    });
-
-    // This causes slightly funky behavior.
-    // on(this.element, 'blur', function() {
-    //   self.blur();
-    // });
-
-    on(this.element, 'mousedown', function() {
-      self.focus();
-    });
-
-    // Clickable paste workaround, using contentEditable.
-    // This probably shouldn't work,
-    // ... but it does. Firefox's paste
-    // event seems to only work for textareas?
-    on(this.element, 'mousedown', function(ev) {
-      var button = ev.button != null
-        ? +ev.button
-        : ev.which != null
-          ? ev.which - 1
-          : null;
-
-      // Does IE9 do this?
-      if (self.isMSIE) {
-        button = button === 1 ? 0 : button === 4 ? 1 : button;
-      }
-
-      if (button !== 2) return;
-
-      self.element.contentEditable = 'true';
-      setTimeout(function() {
-        self.element.contentEditable = 'inherit'; // 'false';
-      }, 1);
-    }, true);
-  }
-
-  if (!('useMouse' in this.options) || this.options.useMouse) {
-    // Listen for mouse events and translate
-    // them into terminal mouse protocols.
-    this.bindMouse();
-  }
-
-  // this.emit('open');
-
-  if (!('useFocus' in this.options) || this.options.useFocus) {
-      // This can be useful for pasting,
-      // as well as the iPad fix.
-      setTimeout(function() {
-        self.element.focus();
-      }, 100);
-  }
-
-  // Figure out whether boldness affects
-  // the character width of monospace fonts.
-  if (Terminal.brokenBold == null) {
-    Terminal.brokenBold = isBoldBroken(this.document);
-  }
-
-  this.emit('open');
-};
-
-Terminal.prototype.setRawMode = function(value) {
-  this.isRaw = !!value;
-};
-
-// XTerm mouse events
-// http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#Mouse%20Tracking
-// To better understand these
-// the xterm code is very helpful:
-// Relevant files:
-//   button.c, charproc.c, misc.c
-// Relevant functions in xterm/button.c:
-//   BtnCode, EmitButtonCode, EditorButton, SendMousePosition
-Terminal.prototype.bindMouse = function() {
-  var el = this.element
-    , self = this
-    , pressed = 32;
-
-  var wheelEvent = 'onmousewheel' in this.context
-    ? 'mousewheel'
-    : 'DOMMouseScroll';
-
-  // mouseup, mousedown, mousewheel
-  // left click: ^[[M 3<^[[M#3<
-  // mousewheel up: ^[[M`3>
-  function sendButton(ev) {
-    var button
-      , pos;
-
-    // get the xterm-style button
-    button = getButton(ev);
-
-    // get mouse coordinates
-    pos = getCoords(ev);
-    if (!pos) return;
-
-    sendEvent(button, pos);
-
-    switch (ev.type) {
-      case 'mousedown':
-        pressed = button;
-        break;
-      case 'mouseup':
-        // keep it at the left
-        // button, just in case.
-        pressed = 32;
-        break;
-      case wheelEvent:
-        // nothing. don't
-        // interfere with
-        // `pressed`.
-        break;
-    }
-  }
-
-  // motion example of a left click:
-  // ^[[M 3<^[[M@4<^[[M@5<^[[M@6<^[[M@7<^[[M#7<
-  function sendMove(ev) {
-    var button = pressed
-      , pos;
-
-    pos = getCoords(ev);
-    if (!pos) return;
-
-    // buttons marked as motions
-    // are incremented by 32
-    button += 32;
-
-    sendEvent(button, pos);
-  }
-
-  // encode button and
-  // position to characters
-  function encode(data, ch) {
-    if (!self.utfMouse) {
-      if (ch === 255) return data.push(0);
-      if (ch > 127) ch = 127;
-      data.push(ch);
-    } else {
-      if (ch === 2047) return data.push(0);
-      if (ch < 127) {
-        data.push(ch);
-      } else {
-        if (ch > 2047) ch = 2047;
-        data.push(0xC0 | (ch >> 6));
-        data.push(0x80 | (ch & 0x3F));
-      }
-    }
-  }
-
-  // send a mouse event:
-  // regular/utf8: ^[[M Cb Cx Cy
-  // urxvt: ^[[ Cb ; Cx ; Cy M
-  // sgr: ^[[ Cb ; Cx ; Cy M/m
-  // vt300: ^[[ 24(1/3/5)~ [ Cx , Cy ] \r
-  // locator: CSI P e ; P b ; P r ; P c ; P p & w
-  function sendEvent(button, pos) {
-    // self.emit('mouse', {
-    //   x: pos.x - 32,
-    //   y: pos.x - 32,
-    //   button: button
-    // });
-
-    if (self.vt300Mouse) {
-      // NOTE: Unstable.
-      // http://www.vt100.net/docs/vt3xx-gp/chapter15.html
-      button &= 3;
-      pos.x -= 32;
-      pos.y -= 32;
-      var data = '\x1b[24';
-      if (button === 0) data += '1';
-      else if (button === 1) data += '3';
-      else if (button === 2) data += '5';
-      else if (button === 3) return;
-      else data += '0';
-      data += '~[' + pos.x + ',' + pos.y + ']\r';
-      self.send(data);
-      return;
-    }
-
-    if (self.decLocator) {
-      // NOTE: Unstable.
-      button &= 3;
-      pos.x -= 32;
-      pos.y -= 32;
-      if (button === 0) button = 2;
-      else if (button === 1) button = 4;
-      else if (button === 2) button = 6;
-      else if (button === 3) button = 3;
-      self.send('\x1b['
-        + button
-        + ';'
-        + (button === 3 ? 4 : 0)
-        + ';'
-        + pos.y
-        + ';'
-        + pos.x
-        + ';'
-        + (pos.page || 0)
-        + '&w');
-      return;
-    }
-
-    if (self.urxvtMouse) {
-      pos.x -= 32;
-      pos.y -= 32;
-      pos.x++;
-      pos.y++;
-      self.send('\x1b[' + button + ';' + pos.x + ';' + pos.y + 'M');
-      return;
-    }
-
-    if (self.sgrMouse) {
-      pos.x -= 32;
-      pos.y -= 32;
-      self.send('\x1b[<'
-        + ((button & 3) === 3 ? button & ~3 : button)
-        + ';'
-        + pos.x
-        + ';'
-        + pos.y
-        + ((button & 3) === 3 ? 'm' : 'M'));
-      return;
-    }
-
-    var data = [];
-
-    encode(data, button);
-    encode(data, pos.x);
-    encode(data, pos.y);
-
-    self.send('\x1b[M' + String.fromCharCode.apply(String, data));
-  }
-
-  function getButton(ev) {
-    var button
-      , shift
-      , meta
-      , ctrl
-      , mod;
-
-    // two low bits:
-    // 0 = left
-    // 1 = middle
-    // 2 = right
-    // 3 = release
-    // wheel up/down:
-    // 1, and 2 - with 64 added
-    switch (ev.type) {
-      case 'mousedown':
-        button = ev.button != null
-          ? +ev.button
-          : ev.which != null
-            ? ev.which - 1
-            : null;
-
-        if (self.isMSIE) {
-          button = button === 1 ? 0 : button === 4 ? 1 : button;
-        }
-        break;
-      case 'mouseup':
-        button = 3;
-        break;
-      case 'DOMMouseScroll':
-        button = ev.detail < 0
-          ? 64
-          : 65;
-        break;
-      case 'mousewheel':
-        button = ev.wheelDeltaY > 0
-          ? 64
-          : 65;
-        break;
-    }
-
-    // next three bits are the modifiers:
-    // 4 = shift, 8 = meta, 16 = control
-    shift = ev.shiftKey ? 4 : 0;
-    meta = ev.metaKey ? 8 : 0;
-    ctrl = ev.ctrlKey ? 16 : 0;
-    mod = shift | meta | ctrl;
-
-    // no mods
-    if (self.vt200Mouse) {
-      // ctrl only
-      mod &= ctrl;
-    } else if (!self.normalMouse) {
-      mod = 0;
-    }
-
-    // increment to SP
-    button = (32 + (mod << 2)) + button;
-
-    return button;
-  }
-
-  // mouse coordinates measured in cols/rows
-  function getCoords(ev) {
-    var x, y, w, h, el;
-
-    // ignore browsers without pageX for now
-    if (ev.pageX == null) return;
-
-    x = ev.pageX;
-    y = ev.pageY;
-    el = self.element;
-
-    // should probably check offsetParent
-    // but this is more portable
-    while (el && el !== self.document.documentElement) {
-      x -= el.offsetLeft;
-      y -= el.offsetTop;
-      el = 'offsetParent' in el
-        ? el.offsetParent
-        : el.parentNode;
-    }
-
-    // convert to cols/rows
-    w = self.element.clientWidth;
-    h = self.element.clientHeight;
-    x = Math.round((x / w) * self.cols);
-    y = Math.round((y / h) * self.rows);
-
-    // be sure to avoid sending
-    // bad positions to the program
-    if (x < 0) x = 0;
-    if (x > self.cols) x = self.cols;
-    if (y < 0) y = 0;
-    if (y > self.rows) y = self.rows;
-
-    // xterm sends raw bytes and
-    // starts at 32 (SP) for each.
-    x += 32;
-    y += 32;
-
-    return {
-      x: x,
-      y: y,
-      type: ev.type === wheelEvent
-        ? 'mousewheel'
-        : ev.type
-    };
-  }
-
-  on(el, 'mousedown', function(ev) {
-    if (!self.mouseEvents) return;
-
-    // send the button
-    sendButton(ev);
-
-    // ensure focus
-    self.focus();
-
-    // fix for odd bug
-    //if (self.vt200Mouse && !self.normalMouse) {
-    // XXX This seems to break certain programs.
-    // if (self.vt200Mouse) {
-    //   sendButton({ __proto__: ev, type: 'mouseup' });
-    //   return cancel(ev);
-    // }
-
-    // bind events
-    if (self.normalMouse) on(self.document, 'mousemove', sendMove);
-
-    // x10 compatibility mode can't send button releases
-    if (!self.x10Mouse) {
-      on(self.document, 'mouseup', function up(ev) {
-        sendButton(ev);
-        if (self.normalMouse) off(self.document, 'mousemove', sendMove);
-        off(self.document, 'mouseup', up);
-        return cancel(ev);
-      });
-    }
-
-    return cancel(ev);
-  });
-
-  //if (self.normalMouse) {
-  //  on(self.document, 'mousemove', sendMove);
-  //}
-
-  on(el, wheelEvent, function(ev) {
-    if (!self.mouseEvents) return;
-    if (self.x10Mouse
-        || self.vt300Mouse
-        || self.decLocator) return;
-    sendButton(ev);
-    return cancel(ev);
-  });
-
-  // allow mousewheel scrolling in
-  // the shell for example
-  on(el, wheelEvent, function(ev) {
-    if (self.mouseEvents) return;
-    if (self.applicationKeypad) return;
-    if (ev.type === 'DOMMouseScroll') {
-      self.scrollDisp(ev.detail < 0 ? -5 : 5);
-    } else {
-      self.scrollDisp(ev.wheelDeltaY > 0 ? -5 : 5);
-    }
-    return cancel(ev);
-  });
-};
-
-/**
- * Destroy Terminal
- */
-
-Terminal.prototype.close =
-Terminal.prototype.destroySoon =
-Terminal.prototype.destroy = function() {
-  if (this.destroyed) {
-    return;
-  }
-
-  if (this._blink) {
-    clearInterval(this._blink);
-    delete this._blink;
-  }
-
-  this.readable = false;
-  this.writable = false;
-  this.destroyed = true;
-  this._events = {};
-
-  this.handler = function() {};
-  this.write = function() {};
-  this.end = function() {};
-
-  if (this.element.parentNode) {
-    this.element.parentNode.removeChild(this.element);
-  }
-
-  this.emit('end');
-  this.emit('close');
-  this.emit('finish');
-  this.emit('destroy');
-};
-
-/**
- * Rendering Engine
- */
-
-// In the screen buffer, each character
-// is stored as a an array with a character
-// and a 32-bit integer.
-// First value: a utf-16 character.
-// Second value:
-// Next 9 bits: background color (0-511).
-// Next 9 bits: foreground color (0-511).
-// Next 14 bits: a mask for misc. flags:
-//   1=bold, 2=underline, 4=blink, 8=inverse, 16=invisible
-
-Terminal.prototype.refresh = function(start, end) {
-  var x
-    , y
-    , i
-    , line
-    , out
-    , ch
-    , width
-    , data
-    , attr
-    , bg
-    , fg
-    , flags
-    , row
-    , parent;
-
-  if (end - start >= this.rows / 2) {
-    parent = this.element.parentNode;
-    if (parent) parent.removeChild(this.element);
-  }
-
-  width = this.cols;
-  y = start;
-
-  if (end >= this.lines.length) {
-    this.log('`end` is too large. Most likely a bad CSR.');
-    end = this.lines.length - 1;
-  }
-
-  for (; y <= end; y++) {
-    row = y + this.ydisp;
-
-    line = this.lines[row];
-    out = '';
-
-    if (y === this.y
-        && this.cursorState
-        && (this.ydisp === this.ybase || this.selectMode)
-        && !this.cursorHidden) {
-      x = this.x;
-    } else {
-      x = -1;
-    }
-
-    attr = this.defAttr;
-    i = 0;
-
-    for (; i < width; i++) {
-      data = line[i][0];
-      ch = line[i][1];
-
-      if (i === x) data = -1;
-
-      if (data !== attr) {
-        if (attr !== this.defAttr) {
-          out += '</span>';
-        }
-        if (data !== this.defAttr) {
-          if (data === -1) {
-            out += '<span class="reverse-video terminal-cursor">';
-          } else {
-            out += '<span style="';
-
-            bg = data & 0x1ff;
-            fg = (data >> 9) & 0x1ff;
-            flags = data >> 18;
-
-            // bold
-            if (flags & 1) {
-              if (!Terminal.brokenBold) {
-                out += 'font-weight:bold;';
-              }
-              // See: XTerm*boldColors
-              if (fg < 8) fg += 8;
-            }
-
-            // underline
-            if (flags & 2) {
-              out += 'text-decoration:underline;';
-            }
-
-            // blink
-            if (flags & 4) {
-              if (flags & 2) {
-                out = out.slice(0, -1);
-                out += ' blink;';
-              } else {
-                out += 'text-decoration:blink;';
-              }
-            }
-
-            // inverse
-            if (flags & 8) {
-              bg = (data >> 9) & 0x1ff;
-              fg = data & 0x1ff;
-              // Should inverse just be before the
-              // above boldColors effect instead?
-              if ((flags & 1) && fg < 8) fg += 8;
-            }
-
-            // invisible
-            if (flags & 16) {
-              out += 'visibility:hidden;';
-            }
-
-            // out += '" class="'
-            //   + 'term-bg-color-' + bg
-            //   + ' '
-            //   + 'term-fg-color-' + fg
-            //   + '">';
-
-            if (bg !== 256) {
-              out += 'background-color:'
-                + this.colors[bg]
-                + ';';
-            }
-
-            if (fg !== 257) {
-              out += 'color:'
-                + this.colors[fg]
-                + ';';
-            }
-
-            out += '">';
-          }
-        }
-      }
-
-      switch (ch) {
-        case '&':
-          out += '&amp;';
-          break;
-        case '<':
-          out += '&lt;';
-          break;
-        case '>':
-          out += '&gt;';
-          break;
-        default:
-          if (ch <= ' ') {
-            out += '&nbsp;';
-          } else {
-            if (isWide(ch)) i++;
-            out += ch;
-          }
-          break;
-      }
-
-      attr = data;
-    }
-
-    if (attr !== this.defAttr) {
-      out += '</span>';
-    }
-
-    this.children[y].innerHTML = out;
-  }
-
-  if (parent) parent.appendChild(this.element);
-};
-
-Terminal.prototype._cursorBlink = function() {
-  if (Terminal.focus !== this) return;
-  this.cursorState ^= 1;
-  this.refresh(this.y, this.y);
-};
-
-Terminal.prototype.showCursor = function() {
-  if (!this.cursorState) {
-    this.cursorState = 1;
-    this.refresh(this.y, this.y);
-  } else {
-    // Temporarily disabled:
-    // this.refreshBlink();
-  }
-};
-
-Terminal.prototype.startBlink = function() {
-  if (!this.cursorBlink) return;
-  var self = this;
-  this._blinker = function() {
-    self._cursorBlink();
-  };
-  this._blink = setInterval(this._blinker, 500);
-};
-
-Terminal.prototype.refreshBlink = function() {
-  if (!this.cursorBlink || !this._blink) return;
-  clearInterval(this._blink);
-  this._blink = setInterval(this._blinker, 500);
-};
-
-Terminal.prototype.scroll = function() {
-  var row;
-
-  if (++this.ybase === this.scrollback) {
-    this.ybase = this.ybase / 2 | 0;
-    this.lines = this.lines.slice(-(this.ybase + this.rows) + 1);
-  }
-
-  this.ydisp = this.ybase;
-
-  // last line
-  row = this.ybase + this.rows - 1;
-
-  // subtract the bottom scroll region
-  row -= this.rows - 1 - this.scrollBottom;
-
-  if (row === this.lines.length) {
-    // potential optimization:
-    // pushing is faster than splicing
-    // when they amount to the same
-    // behavior.
-    this.lines.push(this.blankLine());
-  } else {
-    // add our new line
-    this.lines.splice(row, 0, this.blankLine());
-  }
-
-  if (this.scrollTop !== 0) {
-    if (this.ybase !== 0) {
-      this.ybase--;
-      this.ydisp = this.ybase;
-    }
-    this.lines.splice(this.ybase + this.scrollTop, 1);
-  }
-
-  // this.maxRange();
-  this.updateRange(this.scrollTop);
-  this.updateRange(this.scrollBottom);
-};
-
-Terminal.prototype.scrollDisp = function(disp) {
-  this.ydisp += disp;
-
-  if (this.ydisp > this.ybase) {
-    this.ydisp = this.ybase;
-  } else if (this.ydisp < 0) {
-    this.ydisp = 0;
-  }
-
-  this.refresh(0, this.rows - 1);
-};
-
-Terminal.prototype.write = function(data) {
-  var l = data.length
-    , i = 0
-    , j
-    , cs
-    , ch;
-
-  this.refreshStart = this.y;
-  this.refreshEnd = this.y;
-
-  if (this.ybase !== this.ydisp) {
-    this.ydisp = this.ybase;
-    this.maxRange();
-  }
-
-  // this.log(JSON.stringify(data.replace(/\x1b/g, '^[')));
-
-  for (; i < l; i++, this.lch = ch) {
-    ch = data[i];
-    switch (this.state) {
-      case normal:
-        switch (ch) {
-          // '\0'
-          // case '\0':
-          // case '\200':
-          //   break;
-
-          // '\a'
-          case '\x07':
-            this.bell();
-            break;
-
-          // '\n', '\v', '\f'
-          case '\n':
-          case '\x0b':
-          case '\x0c':
-            if (this.convertEol) {
-              this.x = 0;
-            }
-            // TODO: Implement eat_newline_glitch.
-            // if (this.realX >= this.cols) break;
-            // this.realX = 0;
-            this.y++;
-            if (this.y > this.scrollBottom) {
-              this.y--;
-              this.scroll();
-            }
-            break;
-
-          // '\r'
-          case '\r':
-            this.x = 0;
-            break;
-
-          // '\b'
-          case '\x08':
-            if (this.x > 0) {
-              this.x--;
-            }
-            break;
-
-          // '\t'
-          case '\t':
-            this.x = this.nextStop();
-            break;
-
-          // shift out
-          case '\x0e':
-            this.setgLevel(1);
-            break;
-
-          // shift in
-          case '\x0f':
-            this.setgLevel(0);
-            break;
-
-          // '\e'
-          case '\x1b':
-            this.state = escaped;
-            break;
-
-          default:
-            // ' '
-            if (ch >= ' ') {
-              if (this.charset && this.charset[ch]) {
-                ch = this.charset[ch];
-              }
-
-              if (this.x >= this.cols) {
-                this.x = 0;
-                this.y++;
-                if (this.y > this.scrollBottom) {
-                  this.y--;
-                  this.scroll();
-                }
-              }
-
-              this.lines[this.y + this.ybase][this.x] = [this.curAttr, ch];
-              this.x++;
-              this.updateRange(this.y);
-
-              if (isWide(ch)) {
-                j = this.y + this.ybase;
-                if (this.cols < 2 || this.x >= this.cols) {
-                  this.lines[j][this.x - 1] = [this.curAttr, ' '];
-                  break;
-                }
-                this.lines[j][this.x] = [this.curAttr, ' '];
-                this.x++;
-              }
-            }
-            break;
-        }
-        break;
-      case escaped:
-        switch (ch) {
-          // ESC [ Control Sequence Introducer ( CSI is 0x9b).
-          case '[':
-            this.params = [];
-            this.currentParam = 0;
-            this.state = csi;
-            break;
-
-          // ESC ] Operating System Command ( OSC is 0x9d).
-          case ']':
-            this.params = [];
-            this.currentParam = 0;
-            this.state = osc;
-            break;
-
-          // ESC P Device Control String ( DCS is 0x90).
-          case 'P':
-            this.params = [];
-            this.prefix = '';
-            this.currentParam = '';
-            this.state = dcs;
-            break;
-
-          // ESC _ Application Program Command ( APC is 0x9f).
-          case '_':
-            this.state = ignore;
-            break;
-
-          // ESC ^ Privacy Message ( PM is 0x9e).
-          case '^':
-            this.state = ignore;
-            break;
-
-          // ESC c Full Reset (RIS).
-          case 'c':
-            this.reset();
-            break;
-
-          // ESC E Next Line ( NEL is 0x85).
-          // ESC D Index ( IND is 0x84).
-          case 'E':
-            this.x = 0;
-            ;
-          case 'D':
-            this.index();
-            break;
-
-          // ESC M Reverse Index ( RI is 0x8d).
-          case 'M':
-            this.reverseIndex();
-            break;
-
-          // ESC % Select default/utf-8 character set.
-          // @ = default, G = utf-8
-          case '%':
-            //this.charset = null;
-            this.setgLevel(0);
-            this.setgCharset(0, Terminal.charsets.US);
-            this.state = normal;
-            i++;
-            break;
-
-          // ESC (,),*,+,-,. Designate G0-G2 Character Set.
-          case '(': // <-- this seems to get all the attention
-          case ')':
-          case '*':
-          case '+':
-          case '-':
-          case '.':
-            switch (ch) {
-              case '(':
-                this.gcharset = 0;
-                break;
-              case ')':
-                this.gcharset = 1;
-                break;
-              case '*':
-                this.gcharset = 2;
-                break;
-              case '+':
-                this.gcharset = 3;
-                break;
-              case '-':
-                this.gcharset = 1;
-                break;
-              case '.':
-                this.gcharset = 2;
-                break;
-            }
-            this.state = charset;
-            break;
-
-          // Designate G3 Character Set (VT300).
-          // A = ISO Latin-1 Supplemental.
-          // Not implemented.
-          case '/':
-            this.gcharset = 3;
-            this.state = charset;
-            i--;
-            break;
-
-          // ESC N
-          // Single Shift Select of G2 Character Set
-          // ( SS2 is 0x8e). This affects next character only.
-          case 'N':
-            break;
-          // ESC O
-          // Single Shift Select of G3 Character Set
-          // ( SS3 is 0x8f). This affects next character only.
-          case 'O':
-            break;
-          // ESC n
-          // Invoke the G2 Character Set as GL (LS2).
-          case 'n':
-            this.setgLevel(2);
-            break;
-          // ESC o
-          // Invoke the G3 Character Set as GL (LS3).
-          case 'o':
-            this.setgLevel(3);
-            break;
-          // ESC |
-          // Invoke the G3 Character Set as GR (LS3R).
-          case '|':
-            this.setgLevel(3);
-            break;
-          // ESC }
-          // Invoke the G2 Character Set as GR (LS2R).
-          case '}':
-            this.setgLevel(2);
-            break;
-          // ESC ~
-          // Invoke the G1 Character Set as GR (LS1R).
-          case '~':
-            this.setgLevel(1);
-            break;
-
-          // ESC 7 Save Cursor (DECSC).
-          case '7':
-            this.saveCursor();
-            this.state = normal;
-            break;
-
-          // ESC 8 Restore Cursor (DECRC).
-          case '8':
-            this.restoreCursor();
-            this.state = normal;
-            break;
-
-          // ESC # 3 DEC line height/width
-          case '#':
-            this.state = normal;
-            i++;
-            break;
-
-          // ESC H Tab Set (HTS is 0x88).
-          case 'H':
-            this.tabSet();
-            break;
-
-          // ESC = Application Keypad (DECPAM).
-          case '=':
-            this.log('Serial port requested application keypad.');
-            this.applicationKeypad = true;
-            this.state = normal;
-            break;
-
-          // ESC > Normal Keypad (DECPNM).
-          case '>':
-            this.log('Switching back to normal keypad.');
-            this.applicationKeypad = false;
-            this.state = normal;
-            break;
-
-          default:
-            this.state = normal;
-            this.error('Unknown ESC control: %s.', ch);
-            break;
-        }
-        break;
-
-      case charset:
-        switch (ch) {
-          case '0': // DEC Special Character and Line Drawing Set.
-            cs = Terminal.charsets.SCLD;
-            break;
-          case 'A': // UK
-            cs = Terminal.charsets.UK;
-            break;
-          case 'B': // United States (USASCII).
-            cs = Terminal.charsets.US;
-            break;
-          case '4': // Dutch
-            cs = Terminal.charsets.Dutch;
-            break;
-          case 'C': // Finnish
-          case '5':
-            cs = Terminal.charsets.Finnish;
-            break;
-          case 'R': // French
-            cs = Terminal.charsets.French;
-            break;
-          case 'Q': // FrenchCanadian
-            cs = Terminal.charsets.FrenchCanadian;
-            break;
-          case 'K': // German
-            cs = Terminal.charsets.German;
-            break;
-          case 'Y': // Italian
-            cs = Terminal.charsets.Italian;
-            break;
-          case 'E': // NorwegianDanish
-          case '6':
-            cs = Terminal.charsets.NorwegianDanish;
-            break;
-          case 'Z': // Spanish
-            cs = Terminal.charsets.Spanish;
-            break;
-          case 'H': // Swedish
-          case '7':
-            cs = Terminal.charsets.Swedish;
-            break;
-          case '=': // Swiss
-            cs = Terminal.charsets.Swiss;
-            break;
-          case '/': // ISOLatin (actually /A)
-            cs = Terminal.charsets.ISOLatin;
-            i++;
-            break;
-          default: // Default
-            cs = Terminal.charsets.US;
-            break;
-        }
-        this.setgCharset(this.gcharset, cs);
-        this.gcharset = null;
-        this.state = normal;
-        break;
-
-      case osc:
-        // OSC Ps ; Pt ST
-        // OSC Ps ; Pt BEL
-        //   Set Text Parameters.
-        if ((this.lch === '\x1b' && ch === '\\') || ch === '\x07') {
-          if (this.lch === '\x1b') {
-            if (typeof this.currentParam === 'string') {
-              this.currentParam = this.currentParam.slice(0, -1);
-            } else if (typeof this.currentParam == 'number') {
-              this.currentParam = (this.currentParam - ('\x1b'.charCodeAt(0) - 48)) / 10;
-            }
-          }
-
-          this.params.push(this.currentParam);
-
-          switch (this.params[0]) {
-            case 0:
-            case 1:
-            case 2:
-              if (this.params[1]) {
-                this.title = this.params[1];
-                this.handleTitle(this.title);
-              }
-              break;
-            case 3:
-              // set X property
-              break;
-            case 4:
-            case 5:
-              // change dynamic colors
-              break;
-            case 10:
-            case 11:
-            case 12:
-            case 13:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
-            case 18:
-            case 19:
-              // change dynamic ui colors
-              break;
-            case 46:
-              // change log file
-              break;
-            case 50:
-              // dynamic font
-              break;
-            case 51:
-              // emacs shell
-              break;
-            case 52:
-              // manipulate selection data
-              break;
-            case 104:
-            case 105:
-            case 110:
-            case 111:
-            case 112:
-            case 113:
-            case 114:
-            case 115:
-            case 116:
-            case 117:
-            case 118:
-              // reset colors
-              break;
-          }
-
-          this.params = [];
-          this.currentParam = 0;
-          this.state = normal;
-        } else {
-          if (!this.params.length) {
-            if (ch >= '0' && ch <= '9') {
-              this.currentParam =
-                this.currentParam * 10 + ch.charCodeAt(0) - 48;
-            } else if (ch === ';') {
-              this.params.push(this.currentParam);
-              this.currentParam = '';
-            }
-          } else {
-            this.currentParam += ch;
-          }
-        }
-        break;
-
-      case csi:
-        // '?', '>', '!'
-        if (ch === '?' || ch === '>' || ch === '!') {
-          this.prefix = ch;
-          break;
-        }
-
-        // 0 - 9
-        if (ch >= '0' && ch <= '9') {
-          this.currentParam = this.currentParam * 10 + ch.charCodeAt(0) - 48;
-          break;
-        }
-
-        // '$', '"', ' ', '\''
-        if (ch === '$' || ch === '"' || ch === ' ' || ch === '\'') {
-          this.postfix = ch;
-          break;
-        }
-
-        this.params.push(this.currentParam);
-        this.currentParam = 0;
-
-        // ';'
-        if (ch === ';') break;
-
-        this.state = normal;
-
-        switch (ch) {
-          // CSI Ps A
-          // Cursor Up Ps Times (default = 1) (CUU).
-          case 'A':
-            this.cursorUp(this.params);
-            break;
-
-          // CSI Ps B
-          // Cursor Down Ps Times (default = 1) (CUD).
-          case 'B':
-            this.cursorDown(this.params);
-            break;
-
-          // CSI Ps C
-          // Cursor Forward Ps Times (default = 1) (CUF).
-          case 'C':
-            this.cursorForward(this.params);
-            break;
-
-          // CSI Ps D
-          // Cursor Backward Ps Times (default = 1) (CUB).
-          case 'D':
-            this.cursorBackward(this.params);
-            break;
-
-          // CSI Ps ; Ps H
-          // Cursor Position [row;column] (default = [1,1]) (CUP).
-          case 'H':
-            this.cursorPos(this.params);
-            break;
-
-          // CSI Ps J  Erase in Display (ED).
-          case 'J':
-            this.eraseInDisplay(this.params);
-            break;
-
-          // CSI Ps K  Erase in Line (EL).
-          case 'K':
-            this.eraseInLine(this.params);
-            break;
-
-          // CSI Pm m  Character Attributes (SGR).
-          case 'm':
-            if (!this.prefix) {
-              this.charAttributes(this.params);
-            }
-            break;
-
-          // CSI Ps n  Device Status Report (DSR).
-          case 'n':
-            if (!this.prefix) {
-              this.deviceStatus(this.params);
-            }
-            break;
-
-          /**
-           * Additions
-           */
-
-          // CSI Ps @
-          // Insert Ps (Blank) Character(s) (default = 1) (ICH).
-          case '@':
-            this.insertChars(this.params);
-            break;
-
-          // CSI Ps E
-          // Cursor Next Line Ps Times (default = 1) (CNL).
-          case 'E':
-            this.cursorNextLine(this.params);
-            break;
-
-          // CSI Ps F
-          // Cursor Preceding Line Ps Times (default = 1) (CNL).
-          case 'F':
-            this.cursorPrecedingLine(this.params);
-            break;
-
-          // CSI Ps G
-          // Cursor Character Absolute  [column] (default = [row,1]) (CHA).
-          case 'G':
-            this.cursorCharAbsolute(this.params);
-            break;
-
-          // CSI Ps L
-          // Insert Ps Line(s) (default = 1) (IL).
-          case 'L':
-            this.insertLines(this.params);
-            break;
-
-          // CSI Ps M
-          // Delete Ps Line(s) (default = 1) (DL).
-          case 'M':
-            this.deleteLines(this.params);
-            break;
-
-          // CSI Ps P
-          // Delete Ps Character(s) (default = 1) (DCH).
-          case 'P':
-            this.deleteChars(this.params);
-            break;
-
-          // CSI Ps X
-          // Erase Ps Character(s) (default = 1) (ECH).
-          case 'X':
-            this.eraseChars(this.params);
-            break;
-
-          // CSI Pm `  Character Position Absolute
-          //   [column] (default = [row,1]) (HPA).
-          case '`':
-            this.charPosAbsolute(this.params);
-            break;
-
-          // 141 61 a * HPR -
-          // Horizontal Position Relative
-          case 'a':
-            this.HPositionRelative(this.params);
-            break;
-
-          // CSI P s c
-          // Send Device Attributes (Primary DA).
-          // CSI > P s c
-          // Send Device Attributes (Secondary DA)
-          case 'c':
-            this.sendDeviceAttributes(this.params);
-            break;
-
-          // CSI Pm d
-          // Line Position Absolute  [row] (default = [1,column]) (VPA).
-          case 'd':
-            this.linePosAbsolute(this.params);
-            break;
-
-          // 145 65 e * VPR - Vertical Position Relative
-          case 'e':
-            this.VPositionRelative(this.params);
-            break;
-
-          // CSI Ps ; Ps f
-          //   Horizontal and Vertical Position [row;column] (default =
-          //   [1,1]) (HVP).
-          case 'f':
-            this.HVPosition(this.params);
-            break;
-
-          // CSI Pm h  Set Mode (SM).
-          // CSI ? Pm h - mouse escape codes, cursor escape codes
-          case 'h':
-            this.setMode(this.params);
-            break;
-
-          // CSI Pm l  Reset Mode (RM).
-          // CSI ? Pm l
-          case 'l':
-            this.resetMode(this.params);
-            break;
-
-          // CSI Ps ; Ps r
-          //   Set Scrolling Region [top;bottom] (default = full size of win-
-          //   dow) (DECSTBM).
-          // CSI ? Pm r
-          case 'r':
-            this.setScrollRegion(this.params);
-            break;
-
-          // CSI s
-          //   Save cursor (ANSI.SYS).
-          case 's':
-            this.saveCursor(this.params);
-            break;
-
-          // CSI u
-          //   Restore cursor (ANSI.SYS).
-          case 'u':
-            this.restoreCursor(this.params);
-            break;
-
-          /**
-           * Lesser Used
-           */
-
-          // CSI Ps I
-          // Cursor Forward Tabulation Ps tab stops (default = 1) (CHT).
-          case 'I':
-            this.cursorForwardTab(this.params);
-            break;
-
-          // CSI Ps S  Scroll up Ps lines (default = 1) (SU).
-          case 'S':
-            this.scrollUp(this.params);
-            break;
-
-          // CSI Ps T  Scroll down Ps lines (default = 1) (SD).
-          // CSI Ps ; Ps ; Ps ; Ps ; Ps T
-          // CSI > Ps; Ps T
-          case 'T':
-            // if (this.prefix === '>') {
-            //   this.resetTitleModes(this.params);
-            //   break;
-            // }
-            // if (this.params.length > 2) {
-            //   this.initMouseTracking(this.params);
-            //   break;
-            // }
-            if (this.params.length < 2 && !this.prefix) {
-              this.scrollDown(this.params);
-            }
-            break;
-
-          // CSI Ps Z
-          // Cursor Backward Tabulation Ps tab stops (default = 1) (CBT).
-          case 'Z':
-            this.cursorBackwardTab(this.params);
-            break;
-
-          // CSI Ps b  Repeat the preceding graphic character Ps times (REP).
-          case 'b':
-            this.repeatPrecedingCharacter(this.params);
-            break;
-
-          // CSI Ps g  Tab Clear (TBC).
-          case 'g':
-            this.tabClear(this.params);
-            break;
-
-          // CSI Pm i  Media Copy (MC).
-          // CSI ? Pm i
-          // case 'i':
-          //   this.mediaCopy(this.params);
-          //   break;
-
-          // CSI Pm m  Character Attributes (SGR).
-          // CSI > Ps; Ps m
-          // case 'm': // duplicate
-          //   if (this.prefix === '>') {
-          //     this.setResources(this.params);
-          //   } else {
-          //     this.charAttributes(this.params);
-          //   }
-          //   break;
-
-          // CSI Ps n  Device Status Report (DSR).
-          // CSI > Ps n
-          // case 'n': // duplicate
-          //   if (this.prefix === '>') {
-          //     this.disableModifiers(this.params);
-          //   } else {
-          //     this.deviceStatus(this.params);
-          //   }
-          //   break;
-
-          // CSI > Ps p  Set pointer mode.
-          // CSI ! p   Soft terminal reset (DECSTR).
-          // CSI Ps$ p
-          //   Request ANSI mode (DECRQM).
-          // CSI ? Ps$ p
-          //   Request DEC private mode (DECRQM).
-          // CSI Ps ; Ps " p
-          case 'p':
-            switch (this.prefix) {
-              // case '>':
-              //   this.setPointerMode(this.params);
-              //   break;
-              case '!':
-                this.softReset(this.params);
-                break;
-              // case '?':
-              //   if (this.postfix === '$') {
-              //     this.requestPrivateMode(this.params);
-              //   }
-              //   break;
-              // default:
-              //   if (this.postfix === '"') {
-              //     this.setConformanceLevel(this.params);
-              //   } else if (this.postfix === '$') {
-              //     this.requestAnsiMode(this.params);
-              //   }
-              //   break;
-            }
-            break;
-
-          // CSI Ps q  Load LEDs (DECLL).
-          // CSI Ps SP q
-          // CSI Ps " q
-          // case 'q':
-          //   if (this.postfix === ' ') {
-          //     this.setCursorStyle(this.params);
-          //     break;
-          //   }
-          //   if (this.postfix === '"') {
-          //     this.setCharProtectionAttr(this.params);
-          //     break;
-          //   }
-          //   this.loadLEDs(this.params);
-          //   break;
-
-          // CSI Ps ; Ps r
-          //   Set Scrolling Region [top;bottom] (default = full size of win-
-          //   dow) (DECSTBM).
-          // CSI ? Pm r
-          // CSI Pt; Pl; Pb; Pr; Ps$ r
-          // case 'r': // duplicate
-          //   if (this.prefix === '?') {
-          //     this.restorePrivateValues(this.params);
-          //   } else if (this.postfix === '$') {
-          //     this.setAttrInRectangle(this.params);
-          //   } else {
-          //     this.setScrollRegion(this.params);
-          //   }
-          //   break;
-
-          // CSI s     Save cursor (ANSI.SYS).
-          // CSI ? Pm s
-          // case 's': // duplicate
-          //   if (this.prefix === '?') {
-          //     this.savePrivateValues(this.params);
-          //   } else {
-          //     this.saveCursor(this.params);
-          //   }
-          //   break;
-
-          // CSI Ps ; Ps ; Ps t
-          // CSI Pt; Pl; Pb; Pr; Ps$ t
-          // CSI > Ps; Ps t
-          // CSI Ps SP t
-          // case 't':
-          //   if (this.postfix === '$') {
-          //     this.reverseAttrInRectangle(this.params);
-          //   } else if (this.postfix === ' ') {
-          //     this.setWarningBellVolume(this.params);
-          //   } else {
-          //     if (this.prefix === '>') {
-          //       this.setTitleModeFeature(this.params);
-          //     } else {
-          //       this.manipulateWindow(this.params);
-          //     }
-          //   }
-          //   break;
-
-          // CSI u     Restore cursor (ANSI.SYS).
-          // CSI Ps SP u
-          // case 'u': // duplicate
-          //   if (this.postfix === ' ') {
-          //     this.setMarginBellVolume(this.params);
-          //   } else {
-          //     this.restoreCursor(this.params);
-          //   }
-          //   break;
-
-          // CSI Pt; Pl; Pb; Pr; Pp; Pt; Pl; Pp$ v
-          // case 'v':
-          //   if (this.postfix === '$') {
-          //     this.copyRectagle(this.params);
-          //   }
-          //   break;
-
-          // CSI Pt ; Pl ; Pb ; Pr ' w
-          // case 'w':
-          //   if (this.postfix === '\'') {
-          //     this.enableFilterRectangle(this.params);
-          //   }
-          //   break;
-
-          // CSI Ps x  Request Terminal Parameters (DECREQTPARM).
-          // CSI Ps x  Select Attribute Change Extent (DECSACE).
-          // CSI Pc; Pt; Pl; Pb; Pr$ x
-          // case 'x':
-          //   if (this.postfix === '$') {
-          //     this.fillRectangle(this.params);
-          //   } else {
-          //     this.requestParameters(this.params);
-          //     //this.__(this.params);
-          //   }
-          //   break;
-
-          // CSI Ps ; Pu ' z
-          // CSI Pt; Pl; Pb; Pr$ z
-          // case 'z':
-          //   if (this.postfix === '\'') {
-          //     this.enableLocatorReporting(this.params);
-          //   } else if (this.postfix === '$') {
-          //     this.eraseRectangle(this.params);
-          //   }
-          //   break;
-
-          // CSI Pm ' {
-          // CSI Pt; Pl; Pb; Pr$ {
-          // case '{':
-          //   if (this.postfix === '\'') {
-          //     this.setLocatorEvents(this.params);
-          //   } else if (this.postfix === '$') {
-          //     this.selectiveEraseRectangle(this.params);
-          //   }
-          //   break;
-
-          // CSI Ps ' |
-          // case '|':
-          //   if (this.postfix === '\'') {
-          //     this.requestLocatorPosition(this.params);
-          //   }
-          //   break;
-
-          // CSI P m SP }
-          // Insert P s Column(s) (default = 1) (DECIC), VT420 and up.
-          // case '}':
-          //   if (this.postfix === ' ') {
-          //     this.insertColumns(this.params);
-          //   }
-          //   break;
-
-          // CSI P m SP ~
-          // Delete P s Column(s) (default = 1) (DECDC), VT420 and up
-          // case '~':
-          //   if (this.postfix === ' ') {
-          //     this.deleteColumns(this.params);
-          //   }
-          //   break;
-
-          default:
-            this.error('Unknown CSI code: %s.', ch);
-            break;
-        }
-
-        this.prefix = '';
-        this.postfix = '';
-        break;
-
-      case dcs:
-        if ((this.lch === '\x1b' && ch === '\\') || ch === '\x07') {
-          // Workarounds:
-          if (this.prefix === 'tmux;\x1b') {
-            // `DCS tmux; Pt ST` may contain a Pt with an ST
-            // XXX Does tmux work this way?
-            // if (this.lch === '\x1b' & data[i + 1] === '\x1b' && data[i + 2] === '\\') {
-            //   this.currentParam += ch;
-            //   continue;
-            // }
-            // Tmux only accepts ST, not BEL:
-            if (ch === '\x07') {
-              this.currentParam += ch;
-              continue;
-            }
-          }
-
-          if (this.lch === '\x1b') {
-            if (typeof this.currentParam === 'string') {
-              this.currentParam = this.currentParam.slice(0, -1);
-            } else if (typeof this.currentParam == 'number') {
-              this.currentParam = (this.currentParam - ('\x1b'.charCodeAt(0) - 48)) / 10;
-            }
-          }
-
-          this.params.push(this.currentParam);
-
-          var pt = this.params[this.params.length - 1];
-
-          switch (this.prefix) {
-            // User-Defined Keys (DECUDK).
-            // DCS Ps; Ps| Pt ST
-            case UDK:
-              this.emit('udk', {
-                clearAll: this.params[0] === 0,
-                eraseBelow: this.params[0] === 1,
-                lockKeys: this.params[1] === 0,
-                dontLockKeys: this.params[1] === 1,
-                keyList: (this.params[2] + '').split(';').map(function(part) {
-                  part = part.split('/');
-                  return {
-                    keyCode: part[0],
-                    hexKeyValue: part[1]
-                  };
-                })
-              });
-              break;
-
-            // Request Status String (DECRQSS).
-            // DCS $ q Pt ST
-            // test: echo -e '\eP$q"p\e\\'
-            case '$q':
-              var valid = 0;
-
-              switch (pt) {
-                // DECSCA
-                // CSI Ps " q
-                case '"q':
-                  pt = '0"q';
-                  valid = 1;
-                  break;
-
-                // DECSCL
-                // CSI Ps ; Ps " p
-                case '"p':
-                  pt = '61;0"p';
-                  valid = 1;
-                  break;
-
-                // DECSTBM
-                // CSI Ps ; Ps r
-                case 'r':
-                  pt = ''
-                    + (this.scrollTop + 1)
-                    + ';'
-                    + (this.scrollBottom + 1)
-                    + 'r';
-                  valid = 1;
-                  break;
-
-                // SGR
-                // CSI Pm m
-                case 'm':
-                  // TODO: Parse this.curAttr here.
-                  // pt = '0m';
-                  // valid = 1;
-                  valid = 0; // Not implemented.
-                  break;
-
-                default:
-                  this.error('Unknown DCS Pt: %s.', pt);
-                  valid = 0; // unimplemented
-                  break;
-              }
-
-              this.send('\x1bP' + valid + '$r' + pt + '\x1b\\');
-              break;
-
-            // Set Termcap/Terminfo Data (xterm, experimental).
-            // DCS + p Pt ST
-            case '+p':
-              this.emit('set terminfo', {
-                name: this.params[0]
-              });
-              break;
-
-            // Request Termcap/Terminfo String (xterm, experimental)
-            // Regular xterm does not even respond to this sequence.
-            // This can cause a small glitch in vim.
-            // DCS + q Pt ST
-            // test: echo -ne '\eP+q6b64\e\\'
-            case '+q':
-              var valid = false;
-              this.send('\x1bP' + +valid + '+r' + pt + '\x1b\\');
-              break;
-
-            // Implement tmux sequence forwarding is
-            // someone uses term.js for a multiplexer.
-            // DCS tmux; ESC Pt ST
-            case 'tmux;\x1b':
-              this.emit('passthrough', pt);
-              break;
-
-            default:
-              this.error('Unknown DCS prefix: %s.', pt);
-              break;
-          }
-
-          this.currentParam = 0;
-          this.prefix = '';
-          this.state = normal;
-        } else {
-          this.currentParam += ch;
-          if (!this.prefix) {
-            if (/^\d*;\d*\|/.test(this.currentParam)) {
-              this.prefix = UDK;
-              this.params = this.currentParam.split(/[;|]/).map(function(n) {
-                if (!n.length) return 0;
-                return +n;
-              }).slice(0, -1);
-              this.currentParam = '';
-            } else if (/^[$+][a-zA-Z]/.test(this.currentParam)
-                || /^\w+;\x1b/.test(this.currentParam)) {
-              this.prefix = this.currentParam;
-              this.currentParam = '';
-            }
-          }
-        }
-        break;
-
-      case ignore:
-        // For PM and APC.
-        if ((this.lch === '\x1b' && ch === '\\') || ch === '\x07') {
-          this.state = normal;
-        }
-        break;
-    }
-  }
-
-  this.updateRange(this.y);
-  this.refresh(this.refreshStart, this.refreshEnd);
-
-  return true;
-};
-
-Terminal.prototype.writeln = function(data) {
-  return this.write(data + '\r\n');
-};
-
-Terminal.prototype.end = function(data) {
-  var ret = true;
-  if (data) {
-    ret = this.write(data);
-  }
-  this.destroySoon();
-  return ret;
-};
-
-Terminal.prototype.resume = function() {
-  ;
-};
-
-Terminal.prototype.pause = function() {
-  ;
-};
-
-// Key Resources:
-// https://developer.mozilla.org/en-US/docs/DOM/KeyboardEvent
-Terminal.prototype.keyDown = function(ev) {
-  var self = this
-    , key;
-
-  switch (ev.keyCode) {
-    // backspace
-    case 8:
-      if (ev.altKey) {
-        key = '\x17';
-        break;
-      }
-      if (ev.shiftKey) {
-        key = '\x08'; // ^H
-        break;
-      }
-      key = '\x7f'; // ^?
-      break;
-    // tab
-    case 9:
-      if (ev.shiftKey) {
-        key = '\x1b[Z';
-        break;
-      }
-      key = '\t';
-      break;
-    // return/enter
-    case 13:
-      key = '\r';
-      break;
-    // escape
-    case 27:
-      key = '\x1b';
-      break;
-    // left-arrow
-    case 37:
-      if (this.applicationCursor) {
-        key = '\x1bOD'; // SS3 as ^[O for 7-bit
-        //key = '\x8fD'; // SS3 as 0x8f for 8-bit
-        break;
-      }
-      if (ev.ctrlKey) {
-        key = '\x1b[5D';
-        break;
-      }
-      key = '\x1b[D';
-      break;
-    // right-arrow
-    case 39:
-      if (this.applicationCursor) {
-        key = '\x1bOC';
-        break;
-      }
-      if (ev.ctrlKey) {
-        key = '\x1b[5C';
-        break;
-      }
-      key = '\x1b[C';
-      break;
-    // up-arrow
-    case 38:
-      if (this.applicationCursor) {
-        key = '\x1bOA';
-        break;
-      }
-      if (ev.ctrlKey) {
-        this.scrollDisp(-1);
-        return cancel(ev);
-      } else {
-        key = '\x1b[A';
-      }
-      break;
-    // down-arrow
-    case 40:
-      if (this.applicationCursor) {
-        key = '\x1bOB';
-        break;
-      }
-      if (ev.ctrlKey) {
-        this.scrollDisp(1);
-        return cancel(ev);
-      } else {
-        key = '\x1b[B';
-      }
-      break;
-    // delete
-    case 46:
-      key = '\x1b[3~';
-      break;
-    // insert
-    case 45:
-      key = '\x1b[2~';
-      break;
-    // home
-    case 36:
-      if (this.applicationKeypad) {
-        key = '\x1bOH';
-        break;
-      }
-      key = '\x1bOH';
-      break;
-    // end
-    case 35:
-      if (this.applicationKeypad) {
-        key = '\x1bOF';
-        break;
-      }
-      key = '\x1bOF';
-      break;
-    // page up
-    case 33:
-      if (ev.shiftKey) {
-        this.scrollDisp(-(this.rows - 1));
-        return cancel(ev);
-      } else {
-        key = '\x1b[5~';
-      }
-      break;
-    // page down
-    case 34:
-      if (ev.shiftKey) {
-        this.scrollDisp(this.rows - 1);
-        return cancel(ev);
-      } else {
-        key = '\x1b[6~';
-      }
-      break;
-    // F1
-    case 112:
-      key = '\x1bOP';
-      break;
-    // F2
-    case 113:
-      key = '\x1bOQ';
-      break;
-    // F3
-    case 114:
-      key = '\x1bOR';
-      break;
-    // F4
-    case 115:
-      key = '\x1bOS';
-      break;
-    // F5
-    case 116:
-      key = '\x1b[15~';
-      break;
-    // F6
-    case 117:
-      key = '\x1b[17~';
-      break;
-    // F7
-    case 118:
-      key = '\x1b[18~';
-      break;
-    // F8
-    case 119:
-      key = '\x1b[19~';
-      break;
-    // F9
-    case 120:
-      key = '\x1b[20~';
-      break;
-    // F10
-    case 121:
-      key = '\x1b[21~';
-      break;
-    // F11
-    case 122:
-      key = '\x1b[23~';
-      break;
-    // F12
-    case 123:
-      key = '\x1b[24~';
-      break;
-    default:
-      // a-z and space
-      if (ev.ctrlKey) {
-        if (ev.keyCode >= 65 && ev.keyCode <= 90) {
-          // Ctrl-A
-          if (this.screenKeys) {
-            if (!this.prefixMode && !this.selectMode && ev.keyCode === 65) {
-              this.enterPrefix();
-              return cancel(ev);
-            }
-          }
-          // Ctrl-V
-          if (this.prefixMode && ev.keyCode === 86) {
-            this.leavePrefix();
-            return;
-          }
-          // Ctrl-C
-          if ((this.prefixMode || this.selectMode) && ev.keyCode === 67) {
-            if (this.visualMode) {
-              setTimeout(function() {
-                self.leaveVisual();
-              }, 1);
-            }
-            return;
-          }
-          key = String.fromCharCode(ev.keyCode - 64);
-        } else if (ev.keyCode === 32) {
-          // NUL
-          key = String.fromCharCode(0);
-        } else if (ev.keyCode >= 51 && ev.keyCode <= 55) {
-          // escape, file sep, group sep, record sep, unit sep
-          key = String.fromCharCode(ev.keyCode - 51 + 27);
-        } else if (ev.keyCode === 56) {
-          // delete
-          key = String.fromCharCode(127);
-        } else if (ev.keyCode === 219) {
-          // ^[ - escape
-          key = String.fromCharCode(27);
-        } else if (ev.keyCode === 221) {
-          // ^] - group sep
-          key = String.fromCharCode(29);
-        }
-      } else if (ev.altKey) {
-        if (ev.keyCode >= 65 && ev.keyCode <= 90) {
-          key = '\x1b' + String.fromCharCode(ev.keyCode + 32);
-        } else if (ev.keyCode === 192) {
-          key = '\x1b`';
-        } else if (ev.keyCode >= 48 && ev.keyCode <= 57) {
-          key = '\x1b' + (ev.keyCode - 48);
-        }
-      }
-      break;
-  }
-
-  if (!key) return true;
-
-  if (this.prefixMode) {
-    this.leavePrefix();
-    return cancel(ev);
-  }
-
-  if (this.selectMode) {
-    this.keySelect(ev, key);
-    return cancel(ev);
-  }
-
-  this.emit('keydown', ev);
-  this.emit('key', key, ev);
-
-  this.showCursor();
-  this.handler(key);
-
-  return cancel(ev);
-};
-
-Terminal.prototype.setgLevel = function(g) {
-  this.glevel = g;
-  this.charset = this.charsets[g];
-};
-
-Terminal.prototype.setgCharset = function(g, charset) {
-  this.charsets[g] = charset;
-  if (this.glevel === g) {
-    this.charset = charset;
-  }
-};
-
-Terminal.prototype.keyPress = function(ev) {
-  var key;
-
-  cancel(ev);
-
-  if (ev.charCode) {
-    key = ev.charCode;
-  } else if (ev.which == null) {
-    key = ev.keyCode;
-  } else if (ev.which !== 0 && ev.charCode !== 0) {
-    key = ev.which;
-  } else {
-    return false;
-  }
-
-  if (!key || ev.ctrlKey || ev.altKey || ev.metaKey) return false;
-
-  key = String.fromCharCode(key);
-
-  if (this.prefixMode) {
-    this.leavePrefix();
-    this.keyPrefix(ev, key);
-    return false;
-  }
-
-  if (this.selectMode) {
-    this.keySelect(ev, key);
-    return false;
-  }
-
-  this.emit('keypress', key, ev);
-  this.emit('key', key, ev);
-
-  this.showCursor();
-  this.handler(key);
-
-  return false;
-};
-
-Terminal.prototype.send = function(data) {
-  var self = this;
-
-  if (!this.queue) {
-    setTimeout(function() {
-      self.handler(self.queue);
-      self.queue = '';
-    }, 1);
-  }
-
-  this.queue += data;
-};
-
-Terminal.prototype.bell = function() {
-  this.emit('bell');
-  if (!this.visualBell) return;
-  var self = this;
-  this.element.style.borderColor = 'white';
-  setTimeout(function() {
-    self.element.style.borderColor = '';
-  }, 10);
-  if (this.popOnBell) this.focus();
-};
-
-Terminal.prototype.log = function() {
-  if (!this.debug) return;
-  if (!this.context.console || !this.context.console.log) return;
-  var args = Array.prototype.slice.call(arguments);
-  this.context.console.log.apply(this.context.console, args);
-};
-
-Terminal.prototype.error = function() {
-  if (!this.debug) return;
-  if (!this.context.console || !this.context.console.error) return;
-  var args = Array.prototype.slice.call(arguments);
-  this.context.console.error.apply(this.context.console, args);
-};
-
-Terminal.prototype.resize = function(x, y) {
-  var line
-    , el
-    , i
-    , j
-    , ch;
-
-  if (x < 1) x = 1;
-  if (y < 1) y = 1;
-
-  // resize cols
-  j = this.cols;
-  if (j < x) {
-    ch = [this.defAttr, ' ']; // does xterm use the default attr?
-    i = this.lines.length;
-    while (i--) {
-      while (this.lines[i].length < x) {
-        this.lines[i].push(ch);
-      }
-    }
-  } else if (j > x) {
-    i = this.lines.length;
-    while (i--) {
-      while (this.lines[i].length > x) {
-        this.lines[i].pop();
-      }
-    }
-  }
-  this.setupStops(j);
-  this.cols = x;
-  this.columns = x;
-
-  // resize rows
-  j = this.rows;
-  if (j < y) {
-    el = this.element;
-    while (j++ < y) {
-      if (this.lines.length < y + this.ybase) {
-        this.lines.push(this.blankLine());
-      }
-      if (this.children.length < y) {
-        line = this.document.createElement('div');
-        el.appendChild(line);
-        this.children.push(line);
-      }
-    }
-  } else if (j > y) {
-    while (j-- > y) {
-      if (this.lines.length > y + this.ybase) {
-        this.lines.pop();
-      }
-      if (this.children.length > y) {
-        el = this.children.pop();
-        if (!el) continue;
-        el.parentNode.removeChild(el);
-      }
-    }
-  }
-  this.rows = y;
-
-  // make sure the cursor stays on screen
-  if (this.y >= y) this.y = y - 1;
-  if (this.x >= x) this.x = x - 1;
-
-  this.scrollTop = 0;
-  this.scrollBottom = y - 1;
-
-  this.refresh(0, this.rows - 1);
-
-  // it's a real nightmare trying
-  // to resize the original
-  // screen buffer. just set it
-  // to null for now.
-  this.normal = null;
-
-  // Act as though we are a node TTY stream:
-  this.emit('resize');
-};
-
-Terminal.prototype.updateRange = function(y) {
-  if (y < this.refreshStart) this.refreshStart = y;
-  if (y > this.refreshEnd) this.refreshEnd = y;
-  // if (y > this.refreshEnd) {
-  //   this.refreshEnd = y;
-  //   if (y > this.rows - 1) {
-  //     this.refreshEnd = this.rows - 1;
-  //   }
-  // }
-};
-
-Terminal.prototype.maxRange = function() {
-  this.refreshStart = 0;
-  this.refreshEnd = this.rows - 1;
-};
-
-Terminal.prototype.setupStops = function(i) {
-  if (i != null) {
-    if (!this.tabs[i]) {
-      i = this.prevStop(i);
-    }
-  } else {
-    this.tabs = {};
-    i = 0;
-  }
-
-  for (; i < this.cols; i += 8) {
-    this.tabs[i] = true;
-  }
-};
-
-Terminal.prototype.prevStop = function(x) {
-  if (x == null) x = this.x;
-  while (!this.tabs[--x] && x > 0);
-  return x >= this.cols
-    ? this.cols - 1
-    : x < 0 ? 0 : x;
-};
-
-Terminal.prototype.nextStop = function(x) {
-  if (x == null) x = this.x;
-  while (!this.tabs[++x] && x < this.cols);
-  return x >= this.cols
-    ? this.cols - 1
-    : x < 0 ? 0 : x;
-};
-
-// back_color_erase feature for xterm.
-Terminal.prototype.eraseAttr = function() {
-  // if (this.is('screen')) return this.defAttr;
-  return (this.defAttr & ~0x1ff) | (this.curAttr & 0x1ff);
-};
-
-Terminal.prototype.eraseRight = function(x, y) {
-  var line = this.lines[this.ybase + y]
-    , ch = [this.eraseAttr(), ' ']; // xterm
-
-
-  for (; x < this.cols; x++) {
-    line[x] = ch;
-  }
-
-  this.updateRange(y);
-};
-
-Terminal.prototype.eraseLeft = function(x, y) {
-  var line = this.lines[this.ybase + y]
-    , ch = [this.eraseAttr(), ' ']; // xterm
-
-  x++;
-  while (x--) line[x] = ch;
-
-  this.updateRange(y);
-};
-
-Terminal.prototype.eraseLine = function(y) {
-  this.eraseRight(0, y);
-};
-
-Terminal.prototype.blankLine = function(cur) {
-  var attr = cur
-    ? this.eraseAttr()
-    : this.defAttr;
-
-  var ch = [attr, ' ']
-    , line = []
-    , i = 0;
-
-  for (; i < this.cols; i++) {
-    line[i] = ch;
-  }
-
-  return line;
-};
-
-Terminal.prototype.ch = function(cur) {
-  return cur
-    ? [this.eraseAttr(), ' ']
-    : [this.defAttr, ' '];
-};
-
-Terminal.prototype.is = function(term) {
-  var name = this.termName;
-  return (name + '').indexOf(term) === 0;
-};
-
-Terminal.prototype.handler = function(data) {
-  this.emit('data', data);
-};
-
-Terminal.prototype.handleTitle = function(title) {
-  this.emit('title', title);
-};
-
-/**
- * ESC
- */
-
-// ESC D Index (IND is 0x84).
-Terminal.prototype.index = function() {
-  this.y++;
-  if (this.y > this.scrollBottom) {
-    this.y--;
-    this.scroll();
-  }
-  this.state = normal;
-};
-
-// ESC M Reverse Index (RI is 0x8d).
-Terminal.prototype.reverseIndex = function() {
-  var j;
-  this.y--;
-  if (this.y < this.scrollTop) {
-    this.y++;
-    // possibly move the code below to term.reverseScroll();
-    // test: echo -ne '\e[1;1H\e[44m\eM\e[0m'
-    // blankLine(true) is xterm/linux behavior
-    this.lines.splice(this.y + this.ybase, 0, this.blankLine(true));
-    j = this.rows - 1 - this.scrollBottom;
-    this.lines.splice(this.rows - 1 + this.ybase - j + 1, 1);
-    // this.maxRange();
-    this.updateRange(this.scrollTop);
-    this.updateRange(this.scrollBottom);
-  }
-  this.state = normal;
-};
-
-// ESC c Full Reset (RIS).
-Terminal.prototype.reset = function() {
-  this.options.rows = this.rows;
-  this.options.cols = this.cols;
-  Terminal.call(this, this.options);
-  this.refresh(0, this.rows - 1);
-};
-
-// ESC H Tab Set (HTS is 0x88).
-Terminal.prototype.tabSet = function() {
-  this.tabs[this.x] = true;
-  this.state = normal;
-};
-
-/**
- * CSI
- */
-
-// CSI Ps A
-// Cursor Up Ps Times (default = 1) (CUU).
-Terminal.prototype.cursorUp = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.y -= param;
-  if (this.y < 0) this.y = 0;
-};
-
-// CSI Ps B
-// Cursor Down Ps Times (default = 1) (CUD).
-Terminal.prototype.cursorDown = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.y += param;
-  if (this.y >= this.rows) {
-    this.y = this.rows - 1;
-  }
-};
-
-// CSI Ps C
-// Cursor Forward Ps Times (default = 1) (CUF).
-Terminal.prototype.cursorForward = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.x += param;
-  if (this.x >= this.cols) {
-    this.x = this.cols - 1;
-  }
-};
-
-// CSI Ps D
-// Cursor Backward Ps Times (default = 1) (CUB).
-Terminal.prototype.cursorBackward = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.x -= param;
-  if (this.x < 0) this.x = 0;
-};
-
-// CSI Ps ; Ps H
-// Cursor Position [row;column] (default = [1,1]) (CUP).
-Terminal.prototype.cursorPos = function(params) {
-  var row, col;
-
-  row = params[0] - 1;
-
-  if (params.length >= 2) {
-    col = params[1] - 1;
-  } else {
-    col = 0;
-  }
-
-  if (row < 0) {
-    row = 0;
-  } else if (row >= this.rows) {
-    row = this.rows - 1;
-  }
-
-  if (col < 0) {
-    col = 0;
-  } else if (col >= this.cols) {
-    col = this.cols - 1;
-  }
-
-  this.x = col;
-  this.y = row;
-};
-
-// CSI Ps J  Erase in Display (ED).
-//     Ps = 0  -> Erase Below (default).
-//     Ps = 1  -> Erase Above.
-//     Ps = 2  -> Erase All.
-//     Ps = 3  -> Erase Saved Lines (xterm).
-// CSI ? Ps J
-//   Erase in Display (DECSED).
-//     Ps = 0  -> Selective Erase Below (default).
-//     Ps = 1  -> Selective Erase Above.
-//     Ps = 2  -> Selective Erase All.
-Terminal.prototype.eraseInDisplay = function(params) {
-  var j;
-  switch (params[0]) {
-    case 0:
-      this.eraseRight(this.x, this.y);
-      j = this.y + 1;
-      for (; j < this.rows; j++) {
-        this.eraseLine(j);
-      }
-      break;
-    case 1:
-      this.eraseLeft(this.x, this.y);
-      j = this.y;
-      while (j--) {
-        this.eraseLine(j);
-      }
-      break;
-    case 2:
-      j = this.rows;
-      while (j--) this.eraseLine(j);
-      break;
-    case 3:
-      ; // no saved lines
-      break;
-  }
-};
-
-// CSI Ps K  Erase in Line (EL).
-//     Ps = 0  -> Erase to Right (default).
-//     Ps = 1  -> Erase to Left.
-//     Ps = 2  -> Erase All.
-// CSI ? Ps K
-//   Erase in Line (DECSEL).
-//     Ps = 0  -> Selective Erase to Right (default).
-//     Ps = 1  -> Selective Erase to Left.
-//     Ps = 2  -> Selective Erase All.
-Terminal.prototype.eraseInLine = function(params) {
-  switch (params[0]) {
-    case 0:
-      this.eraseRight(this.x, this.y);
-      break;
-    case 1:
-      this.eraseLeft(this.x, this.y);
-      break;
-    case 2:
-      this.eraseLine(this.y);
-      break;
-  }
-};
-
-// CSI Pm m  Character Attributes (SGR).
-//     Ps = 0  -> Normal (default).
-//     Ps = 1  -> Bold.
-//     Ps = 4  -> Underlined.
-//     Ps = 5  -> Blink (appears as Bold).
-//     Ps = 7  -> Inverse.
-//     Ps = 8  -> Invisible, i.e., hidden (VT300).
-//     Ps = 2 2  -> Normal (neither bold nor faint).
-//     Ps = 2 4  -> Not underlined.
-//     Ps = 2 5  -> Steady (not blinking).
-//     Ps = 2 7  -> Positive (not inverse).
-//     Ps = 2 8  -> Visible, i.e., not hidden (VT300).
-//     Ps = 3 0  -> Set foreground color to Black.
-//     Ps = 3 1  -> Set foreground color to Red.
-//     Ps = 3 2  -> Set foreground color to Green.
-//     Ps = 3 3  -> Set foreground color to Yellow.
-//     Ps = 3 4  -> Set foreground color to Blue.
-//     Ps = 3 5  -> Set foreground color to Magenta.
-//     Ps = 3 6  -> Set foreground color to Cyan.
-//     Ps = 3 7  -> Set foreground color to White.
-//     Ps = 3 9  -> Set foreground color to default (original).
-//     Ps = 4 0  -> Set background color to Black.
-//     Ps = 4 1  -> Set background color to Red.
-//     Ps = 4 2  -> Set background color to Green.
-//     Ps = 4 3  -> Set background color to Yellow.
-//     Ps = 4 4  -> Set background color to Blue.
-//     Ps = 4 5  -> Set background color to Magenta.
-//     Ps = 4 6  -> Set background color to Cyan.
-//     Ps = 4 7  -> Set background color to White.
-//     Ps = 4 9  -> Set background color to default (original).
-
-//   If 16-color support is compiled, the following apply.  Assume
-//   that xterm's resources are set so that the ISO color codes are
-//   the first 8 of a set of 16.  Then the aixterm colors are the
-//   bright versions of the ISO colors:
-//     Ps = 9 0  -> Set foreground color to Black.
-//     Ps = 9 1  -> Set foreground color to Red.
-//     Ps = 9 2  -> Set foreground color to Green.
-//     Ps = 9 3  -> Set foreground color to Yellow.
-//     Ps = 9 4  -> Set foreground color to Blue.
-//     Ps = 9 5  -> Set foreground color to Magenta.
-//     Ps = 9 6  -> Set foreground color to Cyan.
-//     Ps = 9 7  -> Set foreground color to White.
-//     Ps = 1 0 0  -> Set background color to Black.
-//     Ps = 1 0 1  -> Set background color to Red.
-//     Ps = 1 0 2  -> Set background color to Green.
-//     Ps = 1 0 3  -> Set background color to Yellow.
-//     Ps = 1 0 4  -> Set background color to Blue.
-//     Ps = 1 0 5  -> Set background color to Magenta.
-//     Ps = 1 0 6  -> Set background color to Cyan.
-//     Ps = 1 0 7  -> Set background color to White.
-
-//   If xterm is compiled with the 16-color support disabled, it
-//   supports the following, from rxvt:
-//     Ps = 1 0 0  -> Set foreground and background color to
-//     default.
-
-//   If 88- or 256-color support is compiled, the following apply.
-//     Ps = 3 8  ; 5  ; Ps -> Set foreground color to the second
-//     Ps.
-//     Ps = 4 8  ; 5  ; Ps -> Set background color to the second
-//     Ps.
-Terminal.prototype.charAttributes = function(params) {
-  // Optimize a single SGR0.
-  if (params.length === 1 && params[0] === 0) {
-    this.curAttr = this.defAttr;
-    return;
-  }
-
-  var l = params.length
-    , i = 0
-    , flags = this.curAttr >> 18
-    , fg = (this.curAttr >> 9) & 0x1ff
-    , bg = this.curAttr & 0x1ff
-    , p;
-
-  for (; i < l; i++) {
-    p = params[i];
-    if (p >= 30 && p <= 37) {
-      // fg color 8
-      fg = p - 30;
-    } else if (p >= 40 && p <= 47) {
-      // bg color 8
-      bg = p - 40;
-    } else if (p >= 90 && p <= 97) {
-      // fg color 16
-      p += 8;
-      fg = p - 90;
-    } else if (p >= 100 && p <= 107) {
-      // bg color 16
-      p += 8;
-      bg = p - 100;
-    } else if (p === 0) {
-      // default
-      flags = this.defAttr >> 18;
-      fg = (this.defAttr >> 9) & 0x1ff;
-      bg = this.defAttr & 0x1ff;
-      // flags = 0;
-      // fg = 0x1ff;
-      // bg = 0x1ff;
-    } else if (p === 1) {
-      // bold text
-      flags |= 1;
-    } else if (p === 4) {
-      // underlined text
-      flags |= 2;
-    } else if (p === 5) {
-      // blink
-      flags |= 4;
-    } else if (p === 7) {
-      // inverse and positive
-      // test with: echo -e '\e[31m\e[42mhello\e[7mworld\e[27mhi\e[m'
-      flags |= 8;
-    } else if (p === 8) {
-      // invisible
-      flags |= 16;
-    } else if (p === 22) {
-      // not bold
-      flags &= ~1;
-    } else if (p === 24) {
-      // not underlined
-      flags &= ~2;
-    } else if (p === 25) {
-      // not blink
-      flags &= ~4;
-    } else if (p === 27) {
-      // not inverse
-      flags &= ~8;
-    } else if (p === 28) {
-      // not invisible
-      flags &= ~16;
-    } else if (p === 39) {
-      // reset fg
-      fg = (this.defAttr >> 9) & 0x1ff;
-    } else if (p === 49) {
-      // reset bg
-      bg = this.defAttr & 0x1ff;
-    } else if (p === 38) {
-      // fg color 256
-      if (params[i + 1] === 2) {
-        i += 2;
-        fg = matchColor(
-          params[i] & 0xff,
-          params[i + 1] & 0xff,
-          params[i + 2] & 0xff);
-        if (fg === -1) fg = 0x1ff;
-        i += 2;
-      } else if (params[i + 1] === 5) {
-        i += 2;
-        p = params[i] & 0xff;
-        fg = p;
-      }
-    } else if (p === 48) {
-      // bg color 256
-      if (params[i + 1] === 2) {
-        i += 2;
-        bg = matchColor(
-          params[i] & 0xff,
-          params[i + 1] & 0xff,
-          params[i + 2] & 0xff);
-        if (bg === -1) bg = 0x1ff;
-        i += 2;
-      } else if (params[i + 1] === 5) {
-        i += 2;
-        p = params[i] & 0xff;
-        bg = p;
-      }
-    } else if (p === 100) {
-      // reset fg/bg
-      fg = (this.defAttr >> 9) & 0x1ff;
-      bg = this.defAttr & 0x1ff;
-    } else {
-      this.error('Unknown SGR attribute: %d.', p);
-    }
-  }
-
-  this.curAttr = (flags << 18) | (fg << 9) | bg;
-};
-
-// CSI Ps n  Device Status Report (DSR).
-//     Ps = 5  -> Status Report.  Result (``OK'') is
-//   CSI 0 n
-//     Ps = 6  -> Report Cursor Position (CPR) [row;column].
-//   Result is
-//   CSI r ; c R
-// CSI ? Ps n
-//   Device Status Report (DSR, DEC-specific).
-//     Ps = 6  -> Report Cursor Position (CPR) [row;column] as CSI
-//     ? r ; c R (assumes page is zero).
-//     Ps = 1 5  -> Report Printer status as CSI ? 1 0  n  (ready).
-//     or CSI ? 1 1  n  (not ready).
-//     Ps = 2 5  -> Report UDK status as CSI ? 2 0  n  (unlocked)
-//     or CSI ? 2 1  n  (locked).
-//     Ps = 2 6  -> Report Keyboard status as
-//   CSI ? 2 7  ;  1  ;  0  ;  0  n  (North American).
-//   The last two parameters apply to VT400 & up, and denote key-
-//   board ready and LK01 respectively.
-//     Ps = 5 3  -> Report Locator status as
-//   CSI ? 5 3  n  Locator available, if compiled-in, or
-//   CSI ? 5 0  n  No Locator, if not.
-Terminal.prototype.deviceStatus = function(params) {
-  if (!this.prefix) {
-    switch (params[0]) {
-      case 5:
-        // status report
-        this.send('\x1b[0n');
-        break;
-      case 6:
-        // cursor position
-        this.send('\x1b['
-          + (this.y + 1)
-          + ';'
-          + (this.x + 1)
-          + 'R');
-        break;
-    }
-  } else if (this.prefix === '?') {
-    // modern xterm doesnt seem to
-    // respond to any of these except ?6, 6, and 5
-    switch (params[0]) {
-      case 6:
-        // cursor position
-        this.send('\x1b[?'
-          + (this.y + 1)
-          + ';'
-          + (this.x + 1)
-          + 'R');
-        break;
-      case 15:
-        // no printer
-        // this.send('\x1b[?11n');
-        break;
-      case 25:
-        // dont support user defined keys
-        // this.send('\x1b[?21n');
-        break;
-      case 26:
-        // north american keyboard
-        // this.send('\x1b[?27;1;0;0n');
-        break;
-      case 53:
-        // no dec locator/mouse
-        // this.send('\x1b[?50n');
-        break;
-    }
-  }
-};
-
-/**
- * Additions
- */
-
-// CSI Ps @
-// Insert Ps (Blank) Character(s) (default = 1) (ICH).
-Terminal.prototype.insertChars = function(params) {
-  var param, row, j, ch;
-
-  param = params[0];
-  if (param < 1) param = 1;
-
-  row = this.y + this.ybase;
-  j = this.x;
-  ch = [this.eraseAttr(), ' ']; // xterm
-
-  while (param-- && j < this.cols) {
-    this.lines[row].splice(j++, 0, ch);
-    this.lines[row].pop();
-  }
-};
-
-// CSI Ps E
-// Cursor Next Line Ps Times (default = 1) (CNL).
-// same as CSI Ps B ?
-Terminal.prototype.cursorNextLine = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.y += param;
-  if (this.y >= this.rows) {
-    this.y = this.rows - 1;
-  }
-  this.x = 0;
-};
-
-// CSI Ps F
-// Cursor Preceding Line Ps Times (default = 1) (CNL).
-// reuse CSI Ps A ?
-Terminal.prototype.cursorPrecedingLine = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.y -= param;
-  if (this.y < 0) this.y = 0;
-  this.x = 0;
-};
-
-// CSI Ps G
-// Cursor Character Absolute  [column] (default = [row,1]) (CHA).
-Terminal.prototype.cursorCharAbsolute = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.x = param - 1;
-};
-
-// CSI Ps L
-// Insert Ps Line(s) (default = 1) (IL).
-Terminal.prototype.insertLines = function(params) {
-  var param, row, j;
-
-  param = params[0];
-  if (param < 1) param = 1;
-  row = this.y + this.ybase;
-
-  j = this.rows - 1 - this.scrollBottom;
-  j = this.rows - 1 + this.ybase - j + 1;
-
-  while (param--) {
-    // test: echo -e '\e[44m\e[1L\e[0m'
-    // blankLine(true) - xterm/linux behavior
-    this.lines.splice(row, 0, this.blankLine(true));
-    this.lines.splice(j, 1);
-  }
-
-  // this.maxRange();
-  this.updateRange(this.y);
-  this.updateRange(this.scrollBottom);
-};
-
-// CSI Ps M
-// Delete Ps Line(s) (default = 1) (DL).
-Terminal.prototype.deleteLines = function(params) {
-  var param, row, j;
-
-  param = params[0];
-  if (param < 1) param = 1;
-  row = this.y + this.ybase;
-
-  j = this.rows - 1 - this.scrollBottom;
-  j = this.rows - 1 + this.ybase - j;
-
-  while (param--) {
-    // test: echo -e '\e[44m\e[1M\e[0m'
-    // blankLine(true) - xterm/linux behavior
-    this.lines.splice(j + 1, 0, this.blankLine(true));
-    this.lines.splice(row, 1);
-  }
-
-  // this.maxRange();
-  this.updateRange(this.y);
-  this.updateRange(this.scrollBottom);
-};
-
-// CSI Ps P
-// Delete Ps Character(s) (default = 1) (DCH).
-Terminal.prototype.deleteChars = function(params) {
-  var param, row, ch;
-
-  param = params[0];
-  if (param < 1) param = 1;
-
-  row = this.y + this.ybase;
-  ch = [this.eraseAttr(), ' ']; // xterm
-
-  while (param--) {
-    this.lines[row].splice(this.x, 1);
-    this.lines[row].push(ch);
-  }
-};
-
-// CSI Ps X
-// Erase Ps Character(s) (default = 1) (ECH).
-Terminal.prototype.eraseChars = function(params) {
-  var param, row, j, ch;
-
-  param = params[0];
-  if (param < 1) param = 1;
-
-  row = this.y + this.ybase;
-  j = this.x;
-  ch = [this.eraseAttr(), ' ']; // xterm
-
-  while (param-- && j < this.cols) {
-    this.lines[row][j++] = ch;
-  }
-};
-
-// CSI Pm `  Character Position Absolute
-//   [column] (default = [row,1]) (HPA).
-Terminal.prototype.charPosAbsolute = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.x = param - 1;
-  if (this.x >= this.cols) {
-    this.x = this.cols - 1;
-  }
-};
-
-// 141 61 a * HPR -
-// Horizontal Position Relative
-// reuse CSI Ps C ?
-Terminal.prototype.HPositionRelative = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.x += param;
-  if (this.x >= this.cols) {
-    this.x = this.cols - 1;
-  }
-};
-
-// CSI Ps c  Send Device Attributes (Primary DA).
-//     Ps = 0  or omitted -> request attributes from terminal.  The
-//     response depends on the decTerminalID resource setting.
-//     -> CSI ? 1 ; 2 c  (``VT100 with Advanced Video Option'')
-//     -> CSI ? 1 ; 0 c  (``VT101 with No Options'')
-//     -> CSI ? 6 c  (``VT102'')
-//     -> CSI ? 6 0 ; 1 ; 2 ; 6 ; 8 ; 9 ; 1 5 ; c  (``VT220'')
-//   The VT100-style response parameters do not mean anything by
-//   themselves.  VT220 parameters do, telling the host what fea-
-//   tures the terminal supports:
-//     Ps = 1  -> 132-columns.
-//     Ps = 2  -> Printer.
-//     Ps = 6  -> Selective erase.
-//     Ps = 8  -> User-defined keys.
-//     Ps = 9  -> National replacement character sets.
-//     Ps = 1 5  -> Technical characters.
-//     Ps = 2 2  -> ANSI color, e.g., VT525.
-//     Ps = 2 9  -> ANSI text locator (i.e., DEC Locator mode).
-// CSI > Ps c
-//   Send Device Attributes (Secondary DA).
-//     Ps = 0  or omitted -> request the terminal's identification
-//     code.  The response depends on the decTerminalID resource set-
-//     ting.  It should apply only to VT220 and up, but xterm extends
-//     this to VT100.
-//     -> CSI  > Pp ; Pv ; Pc c
-//   where Pp denotes the terminal type
-//     Pp = 0  -> ``VT100''.
-//     Pp = 1  -> ``VT220''.
-//   and Pv is the firmware version (for xterm, this was originally
-//   the XFree86 patch number, starting with 95).  In a DEC termi-
-//   nal, Pc indicates the ROM cartridge registration number and is
-//   always zero.
-// More information:
-//   xterm/charproc.c - line 2012, for more information.
-//   vim responds with ^[[?0c or ^[[?1c after the terminal's response (?)
-Terminal.prototype.sendDeviceAttributes = function(params) {
-  if (params[0] > 0) return;
-
-  if (!this.prefix) {
-    if (this.is('xterm')
-        || this.is('rxvt-unicode')
-        || this.is('screen')) {
-      this.send('\x1b[?1;2c');
-    } else if (this.is('linux')) {
-      this.send('\x1b[?6c');
-    }
-  } else if (this.prefix === '>') {
-    // xterm and urxvt
-    // seem to spit this
-    // out around ~370 times (?).
-    if (this.is('xterm')) {
-      this.send('\x1b[>0;276;0c');
-    } else if (this.is('rxvt-unicode')) {
-      this.send('\x1b[>85;95;0c');
-    } else if (this.is('linux')) {
-      // not supported by linux console.
-      // linux console echoes parameters.
-      this.send(params[0] + 'c');
-    } else if (this.is('screen')) {
-      this.send('\x1b[>83;40003;0c');
-    }
-  }
-};
-
-// CSI Pm d
-// Line Position Absolute  [row] (default = [1,column]) (VPA).
-Terminal.prototype.linePosAbsolute = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.y = param - 1;
-  if (this.y >= this.rows) {
-    this.y = this.rows - 1;
-  }
-};
-
-// 145 65 e * VPR - Vertical Position Relative
-// reuse CSI Ps B ?
-Terminal.prototype.VPositionRelative = function(params) {
-  var param = params[0];
-  if (param < 1) param = 1;
-  this.y += param;
-  if (this.y >= this.rows) {
-    this.y = this.rows - 1;
-  }
-};
-
-// CSI Ps ; Ps f
-//   Horizontal and Vertical Position [row;column] (default =
-//   [1,1]) (HVP).
-Terminal.prototype.HVPosition = function(params) {
-  if (params[0] < 1) params[0] = 1;
-  if (params[1] < 1) params[1] = 1;
-
-  this.y = params[0] - 1;
-  if (this.y >= this.rows) {
-    this.y = this.rows - 1;
-  }
-
-  this.x = params[1] - 1;
-  if (this.x >= this.cols) {
-    this.x = this.cols - 1;
-  }
-};
-
-// CSI Pm h  Set Mode (SM).
-//     Ps = 2  -> Keyboard Action Mode (AM).
-//     Ps = 4  -> Insert Mode (IRM).
-//     Ps = 1 2  -> Send/receive (SRM).
-//     Ps = 2 0  -> Automatic Newline (LNM).
-// CSI ? Pm h
-//   DEC Private Mode Set (DECSET).
-//     Ps = 1  -> Application Cursor Keys (DECCKM).
-//     Ps = 2  -> Designate USASCII for character sets G0-G3
-//     (DECANM), and set VT100 mode.
-//     Ps = 3  -> 132 Column Mode (DECCOLM).
-//     Ps = 4  -> Smooth (Slow) Scroll (DECSCLM).
-//     Ps = 5  -> Reverse Video (DECSCNM).
-//     Ps = 6  -> Origin Mode (DECOM).
-//     Ps = 7  -> Wraparound Mode (DECAWM).
-//     Ps = 8  -> Auto-repeat Keys (DECARM).
-//     Ps = 9  -> Send Mouse X & Y on button press.  See the sec-
-//     tion Mouse Tracking.
-//     Ps = 1 0  -> Show toolbar (rxvt).
-//     Ps = 1 2  -> Start Blinking Cursor (att610).
-//     Ps = 1 8  -> Print form feed (DECPFF).
-//     Ps = 1 9  -> Set print extent to full screen (DECPEX).
-//     Ps = 2 5  -> Show Cursor (DECTCEM).
-//     Ps = 3 0  -> Show scrollbar (rxvt).
-//     Ps = 3 5  -> Enable font-shifting functions (rxvt).
-//     Ps = 3 8  -> Enter Tektronix Mode (DECTEK).
-//     Ps = 4 0  -> Allow 80 -> 132 Mode.
-//     Ps = 4 1  -> more(1) fix (see curses resource).
-//     Ps = 4 2  -> Enable Nation Replacement Character sets (DECN-
-//     RCM).
-//     Ps = 4 4  -> Turn On Margin Bell.
-//     Ps = 4 5  -> Reverse-wraparound Mode.
-//     Ps = 4 6  -> Start Logging.  This is normally disabled by a
-//     compile-time option.
-//     Ps = 4 7  -> Use Alternate Screen Buffer.  (This may be dis-
-//     abled by the titeInhibit resource).
-//     Ps = 6 6  -> Application keypad (DECNKM).
-//     Ps = 6 7  -> Backarrow key sends backspace (DECBKM).
-//     Ps = 1 0 0 0  -> Send Mouse X & Y on button press and
-//     release.  See the section Mouse Tracking.
-//     Ps = 1 0 0 1  -> Use Hilite Mouse Tracking.
-//     Ps = 1 0 0 2  -> Use Cell Motion Mouse Tracking.
-//     Ps = 1 0 0 3  -> Use All Motion Mouse Tracking.
-//     Ps = 1 0 0 4  -> Send FocusIn/FocusOut events.
-//     Ps = 1 0 0 5  -> Enable Extended Mouse Mode.
-//     Ps = 1 0 1 0  -> Scroll to bottom on tty output (rxvt).
-//     Ps = 1 0 1 1  -> Scroll to bottom on key press (rxvt).
-//     Ps = 1 0 3 4  -> Interpret "meta" key, sets eighth bit.
-//     (enables the eightBitInput resource).
-//     Ps = 1 0 3 5  -> Enable special modifiers for Alt and Num-
-//     Lock keys.  (This enables the numLock resource).
-//     Ps = 1 0 3 6  -> Send ESC   when Meta modifies a key.  (This
-//     enables the metaSendsEscape resource).
-//     Ps = 1 0 3 7  -> Send DEL from the editing-keypad Delete
-//     key.
-//     Ps = 1 0 3 9  -> Send ESC  when Alt modifies a key.  (This
-//     enables the altSendsEscape resource).
-//     Ps = 1 0 4 0  -> Keep selection even if not highlighted.
-//     (This enables the keepSelection resource).
-//     Ps = 1 0 4 1  -> Use the CLIPBOARD selection.  (This enables
-//     the selectToClipboard resource).
-//     Ps = 1 0 4 2  -> Enable Urgency window manager hint when
-//     Control-G is received.  (This enables the bellIsUrgent
-//     resource).
-//     Ps = 1 0 4 3  -> Enable raising of the window when Control-G
-//     is received.  (enables the popOnBell resource).
-//     Ps = 1 0 4 7  -> Use Alternate Screen Buffer.  (This may be
-//     disabled by the titeInhibit resource).
-//     Ps = 1 0 4 8  -> Save cursor as in DECSC.  (This may be dis-
-//     abled by the titeInhibit resource).
-//     Ps = 1 0 4 9  -> Save cursor as in DECSC and use Alternate
-//     Screen Buffer, clearing it first.  (This may be disabled by
-//     the titeInhibit resource).  This combines the effects of the 1
-//     0 4 7  and 1 0 4 8  modes.  Use this with terminfo-based
-//     applications rather than the 4 7  mode.
-//     Ps = 1 0 5 0  -> Set terminfo/termcap function-key mode.
-//     Ps = 1 0 5 1  -> Set Sun function-key mode.
-//     Ps = 1 0 5 2  -> Set HP function-key mode.
-//     Ps = 1 0 5 3  -> Set SCO function-key mode.
-//     Ps = 1 0 6 0  -> Set legacy keyboard emulation (X11R6).
-//     Ps = 1 0 6 1  -> Set VT220 keyboard emulation.
-//     Ps = 2 0 0 4  -> Set bracketed paste mode.
-// Modes:
-//   http://vt100.net/docs/vt220-rm/chapter4.html
-Terminal.prototype.setMode = function(params) {
-  if (typeof params === 'object') {
-    var l = params.length
-      , i = 0;
-
-    for (; i < l; i++) {
-      this.setMode(params[i]);
-    }
-
-    return;
-  }
-
-  if (!this.prefix) {
-    switch (params) {
-      case 4:
-        this.insertMode = true;
-        break;
-      case 20:
-        //this.convertEol = true;
-        break;
-    }
-  } else if (this.prefix === '?') {
-    switch (params) {
-      case 1:
-        this.applicationCursor = true;
-        break;
-      case 2:
-        this.setgCharset(0, Terminal.charsets.US);
-        this.setgCharset(1, Terminal.charsets.US);
-        this.setgCharset(2, Terminal.charsets.US);
-        this.setgCharset(3, Terminal.charsets.US);
-        // set VT100 mode here
-        break;
-      case 3: // 132 col mode
-        this.savedCols = this.cols;
-        this.resize(132, this.rows);
-        break;
-      case 6:
-        this.originMode = true;
-        break;
-      case 7:
-        this.wraparoundMode = true;
-        break;
-      case 12:
-        // this.cursorBlink = true;
-        break;
-      case 66:
-        this.log('Serial port requested application keypad.');
-        this.applicationKeypad = true;
-        break;
-      case 9: // X10 Mouse
-        // no release, no motion, no wheel, no modifiers.
-      case 1000: // vt200 mouse
-        // no motion.
-        // no modifiers, except control on the wheel.
-      case 1002: // button event mouse
-      case 1003: // any event mouse
-        // any event - sends motion events,
-        // even if there is no button held down.
-        this.x10Mouse = params === 9;
-        this.vt200Mouse = params === 1000;
-        this.normalMouse = params > 1000;
-        this.mouseEvents = true;
-        this.element.style.cursor = 'default';
-        this.log('Binding to mouse events.');
-        break;
-      case 1004: // send focusin/focusout events
-        // focusin: ^[[I
-        // focusout: ^[[O
-        this.sendFocus = true;
-        break;
-      case 1005: // utf8 ext mode mouse
-        this.utfMouse = true;
-        // for wide terminals
-        // simply encodes large values as utf8 characters
-        break;
-      case 1006: // sgr ext mode mouse
-        this.sgrMouse = true;
-        // for wide terminals
-        // does not add 32 to fields
-        // press: ^[[<b;x;yM
-        // release: ^[[<b;x;ym
-        break;
-      case 1015: // urxvt ext mode mouse
-        this.urxvtMouse = true;
-        // for wide terminals
-        // numbers for fields
-        // press: ^[[b;x;yM
-        // motion: ^[[b;x;yT
-        break;
-      case 25: // show cursor
-        this.cursorHidden = false;
-        break;
-      case 1049: // alt screen buffer cursor
-        //this.saveCursor();
-        ; // FALL-THROUGH
-      case 47: // alt screen buffer
-      case 1047: // alt screen buffer
-        if (!this.normal) {
-          var normal = {
-            lines: this.lines,
-            ybase: this.ybase,
-            ydisp: this.ydisp,
-            x: this.x,
-            y: this.y,
-            scrollTop: this.scrollTop,
-            scrollBottom: this.scrollBottom,
-            tabs: this.tabs
-            // XXX save charset(s) here?
-            // charset: this.charset,
-            // glevel: this.glevel,
-            // charsets: this.charsets
-          };
-          this.reset();
-          this.normal = normal;
-          this.showCursor();
-        }
-        break;
-    }
-  }
-};
-
-// CSI Pm l  Reset Mode (RM).
-//     Ps = 2  -> Keyboard Action Mode (AM).
-//     Ps = 4  -> Replace Mode (IRM).
-//     Ps = 1 2  -> Send/receive (SRM).
-//     Ps = 2 0  -> Normal Linefeed (LNM).
-// CSI ? Pm l
-//   DEC Private Mode Reset (DECRST).
-//     Ps = 1  -> Normal Cursor Keys (DECCKM).
-//     Ps = 2  -> Designate VT52 mode (DECANM).
-//     Ps = 3  -> 80 Column Mode (DECCOLM).
-//     Ps = 4  -> Jump (Fast) Scroll (DECSCLM).
-//     Ps = 5  -> Normal Video (DECSCNM).
-//     Ps = 6  -> Normal Cursor Mode (DECOM).
-//     Ps = 7  -> No Wraparound Mode (DECAWM).
-//     Ps = 8  -> No Auto-repeat Keys (DECARM).
-//     Ps = 9  -> Don't send Mouse X & Y on button press.
-//     Ps = 1 0  -> Hide toolbar (rxvt).
-//     Ps = 1 2  -> Stop Blinking Cursor (att610).
-//     Ps = 1 8  -> Don't print form feed (DECPFF).
-//     Ps = 1 9  -> Limit print to scrolling region (DECPEX).
-//     Ps = 2 5  -> Hide Cursor (DECTCEM).
-//     Ps = 3 0  -> Don't show scrollbar (rxvt).
-//     Ps = 3 5  -> Disable font-shifting functions (rxvt).
-//     Ps = 4 0  -> Disallow 80 -> 132 Mode.
-//     Ps = 4 1  -> No more(1) fix (see curses resource).
-//     Ps = 4 2  -> Disable Nation Replacement Character sets (DEC-
-//     NRCM).
-//     Ps = 4 4  -> Turn Off Margin Bell.
-//     Ps = 4 5  -> No Reverse-wraparound Mode.
-//     Ps = 4 6  -> Stop Logging.  (This is normally disabled by a
-//     compile-time option).
-//     Ps = 4 7  -> Use Normal Screen Buffer.
-//     Ps = 6 6  -> Numeric keypad (DECNKM).
-//     Ps = 6 7  -> Backarrow key sends delete (DECBKM).
-//     Ps = 1 0 0 0  -> Don't send Mouse X & Y on button press and
-//     release.  See the section Mouse Tracking.
-//     Ps = 1 0 0 1  -> Don't use Hilite Mouse Tracking.
-//     Ps = 1 0 0 2  -> Don't use Cell Motion Mouse Tracking.
-//     Ps = 1 0 0 3  -> Don't use All Motion Mouse Tracking.
-//     Ps = 1 0 0 4  -> Don't send FocusIn/FocusOut events.
-//     Ps = 1 0 0 5  -> Disable Extended Mouse Mode.
-//     Ps = 1 0 1 0  -> Don't scroll to bottom on tty output
-//     (rxvt).
-//     Ps = 1 0 1 1  -> Don't scroll to bottom on key press (rxvt).
-//     Ps = 1 0 3 4  -> Don't interpret "meta" key.  (This disables
-//     the eightBitInput resource).
-//     Ps = 1 0 3 5  -> Disable special modifiers for Alt and Num-
-//     Lock keys.  (This disables the numLock resource).
-//     Ps = 1 0 3 6  -> Don't send ESC  when Meta modifies a key.
-//     (This disables the metaSendsEscape resource).
-//     Ps = 1 0 3 7  -> Send VT220 Remove from the editing-keypad
-//     Delete key.
-//     Ps = 1 0 3 9  -> Don't send ESC  when Alt modifies a key.
-//     (This disables the altSendsEscape resource).
-//     Ps = 1 0 4 0  -> Do not keep selection when not highlighted.
-//     (This disables the keepSelection resource).
-//     Ps = 1 0 4 1  -> Use the PRIMARY selection.  (This disables
-//     the selectToClipboard resource).
-//     Ps = 1 0 4 2  -> Disable Urgency window manager hint when
-//     Control-G is received.  (This disables the bellIsUrgent
-//     resource).
-//     Ps = 1 0 4 3  -> Disable raising of the window when Control-
-//     G is received.  (This disables the popOnBell resource).
-//     Ps = 1 0 4 7  -> Use Normal Screen Buffer, clearing screen
-//     first if in the Alternate Screen.  (This may be disabled by
-//     the titeInhibit resource).
-//     Ps = 1 0 4 8  -> Restore cursor as in DECRC.  (This may be
-//     disabled by the titeInhibit resource).
-//     Ps = 1 0 4 9  -> Use Normal Screen Buffer and restore cursor
-//     as in DECRC.  (This may be disabled by the titeInhibit
-//     resource).  This combines the effects of the 1 0 4 7  and 1 0
-//     4 8  modes.  Use this with terminfo-based applications rather
-//     than the 4 7  mode.
-//     Ps = 1 0 5 0  -> Reset terminfo/termcap function-key mode.
-//     Ps = 1 0 5 1  -> Reset Sun function-key mode.
-//     Ps = 1 0 5 2  -> Reset HP function-key mode.
-//     Ps = 1 0 5 3  -> Reset SCO function-key mode.
-//     Ps = 1 0 6 0  -> Reset legacy keyboard emulation (X11R6).
-//     Ps = 1 0 6 1  -> Reset keyboard emulation to Sun/PC style.
-//     Ps = 2 0 0 4  -> Reset bracketed paste mode.
-Terminal.prototype.resetMode = function(params) {
-  if (typeof params === 'object') {
-    var l = params.length
-      , i = 0;
-
-    for (; i < l; i++) {
-      this.resetMode(params[i]);
-    }
-
-    return;
-  }
-
-  if (!this.prefix) {
-    switch (params) {
-      case 4:
-        this.insertMode = false;
-        break;
-      case 20:
-        //this.convertEol = false;
-        break;
-    }
-  } else if (this.prefix === '?') {
-    switch (params) {
-      case 1:
-        this.applicationCursor = false;
-        break;
-      case 3:
-        if (this.cols === 132 && this.savedCols) {
-          this.resize(this.savedCols, this.rows);
-        }
-        delete this.savedCols;
-        break;
-      case 6:
-        this.originMode = false;
-        break;
-      case 7:
-        this.wraparoundMode = false;
-        break;
-      case 12:
-        // this.cursorBlink = false;
-        break;
-      case 66:
-        this.log('Switching back to normal keypad.');
-        this.applicationKeypad = false;
-        break;
-      case 9: // X10 Mouse
-      case 1000: // vt200 mouse
-      case 1002: // button event mouse
-      case 1003: // any event mouse
-        this.x10Mouse = false;
-        this.vt200Mouse = false;
-        this.normalMouse = false;
-        this.mouseEvents = false;
-        this.element.style.cursor = '';
-        break;
-      case 1004: // send focusin/focusout events
-        this.sendFocus = false;
-        break;
-      case 1005: // utf8 ext mode mouse
-        this.utfMouse = false;
-        break;
-      case 1006: // sgr ext mode mouse
-        this.sgrMouse = false;
-        break;
-      case 1015: // urxvt ext mode mouse
-        this.urxvtMouse = false;
-        break;
-      case 25: // hide cursor
-        this.cursorHidden = true;
-        break;
-      case 1049: // alt screen buffer cursor
-        ; // FALL-THROUGH
-      case 47: // normal screen buffer
-      case 1047: // normal screen buffer - clearing it first
-        if (this.normal) {
-          this.lines = this.normal.lines;
-          this.ybase = this.normal.ybase;
-          this.ydisp = this.normal.ydisp;
-          this.x = this.normal.x;
-          this.y = this.normal.y;
-          this.scrollTop = this.normal.scrollTop;
-          this.scrollBottom = this.normal.scrollBottom;
-          this.tabs = this.normal.tabs;
-          this.normal = null;
-          // if (params === 1049) {
-          //   this.x = this.savedX;
-          //   this.y = this.savedY;
-          // }
-          this.refresh(0, this.rows - 1);
-          this.showCursor();
-        }
-        break;
-    }
-  }
-};
-
-// CSI Ps ; Ps r
-//   Set Scrolling Region [top;bottom] (default = full size of win-
-//   dow) (DECSTBM).
-// CSI ? Pm r
-Terminal.prototype.setScrollRegion = function(params) {
-  if (this.prefix) return;
-  this.scrollTop = (params[0] || 1) - 1;
-  this.scrollBottom = (params[1] || this.rows) - 1;
-  this.x = 0;
-  this.y = 0;
-};
-
-// CSI s
-//   Save cursor (ANSI.SYS).
-Terminal.prototype.saveCursor = function(params) {
-  this.savedX = this.x;
-  this.savedY = this.y;
-};
-
-// CSI u
-//   Restore cursor (ANSI.SYS).
-Terminal.prototype.restoreCursor = function(params) {
-  this.x = this.savedX || 0;
-  this.y = this.savedY || 0;
-};
-
-/**
- * Lesser Used
- */
-
-// CSI Ps I
-//   Cursor Forward Tabulation Ps tab stops (default = 1) (CHT).
-Terminal.prototype.cursorForwardTab = function(params) {
-  var param = params[0] || 1;
-  while (param--) {
-    this.x = this.nextStop();
-  }
-};
-
-// CSI Ps S  Scroll up Ps lines (default = 1) (SU).
-Terminal.prototype.scrollUp = function(params) {
-  var param = params[0] || 1;
-  while (param--) {
-    this.lines.splice(this.ybase + this.scrollTop, 1);
-    this.lines.splice(this.ybase + this.scrollBottom, 0, this.blankLine());
-  }
-  // this.maxRange();
-  this.updateRange(this.scrollTop);
-  this.updateRange(this.scrollBottom);
-};
-
-// CSI Ps T  Scroll down Ps lines (default = 1) (SD).
-Terminal.prototype.scrollDown = function(params) {
-  var param = params[0] || 1;
-  while (param--) {
-    this.lines.splice(this.ybase + this.scrollBottom, 1);
-    this.lines.splice(this.ybase + this.scrollTop, 0, this.blankLine());
-  }
-  // this.maxRange();
-  this.updateRange(this.scrollTop);
-  this.updateRange(this.scrollBottom);
-};
-
-// CSI Ps ; Ps ; Ps ; Ps ; Ps T
-//   Initiate highlight mouse tracking.  Parameters are
-//   [func;startx;starty;firstrow;lastrow].  See the section Mouse
-//   Tracking.
-Terminal.prototype.initMouseTracking = function(params) {
-  // Relevant: DECSET 1001
-};
-
-// CSI > Ps; Ps T
-//   Reset one or more features of the title modes to the default
-//   value.  Normally, "reset" disables the feature.  It is possi-
-//   ble to disable the ability to reset features by compiling a
-//   different default for the title modes into xterm.
-//     Ps = 0  -> Do not set window/icon labels using hexadecimal.
-//     Ps = 1  -> Do not query window/icon labels using hexadeci-
-//     mal.
-//     Ps = 2  -> Do not set window/icon labels using UTF-8.
-//     Ps = 3  -> Do not query window/icon labels using UTF-8.
-//   (See discussion of "Title Modes").
-Terminal.prototype.resetTitleModes = function(params) {
-  ;
-};
-
-// CSI Ps Z  Cursor Backward Tabulation Ps tab stops (default = 1) (CBT).
-Terminal.prototype.cursorBackwardTab = function(params) {
-  var param = params[0] || 1;
-  while (param--) {
-    this.x = this.prevStop();
-  }
-};
-
-// CSI Ps b  Repeat the preceding graphic character Ps times (REP).
-Terminal.prototype.repeatPrecedingCharacter = function(params) {
-  var param = params[0] || 1
-    , line = this.lines[this.ybase + this.y]
-    , ch = line[this.x - 1] || [this.defAttr, ' '];
-
-  while (param--) line[this.x++] = ch;
-};
-
-// CSI Ps g  Tab Clear (TBC).
-//     Ps = 0  -> Clear Current Column (default).
-//     Ps = 3  -> Clear All.
-// Potentially:
-//   Ps = 2  -> Clear Stops on Line.
-//   http://vt100.net/annarbor/aaa-ug/section6.html
-Terminal.prototype.tabClear = function(params) {
-  var param = params[0];
-  if (param <= 0) {
-    delete this.tabs[this.x];
-  } else if (param === 3) {
-    this.tabs = {};
-  }
-};
-
-// CSI Pm i  Media Copy (MC).
-//     Ps = 0  -> Print screen (default).
-//     Ps = 4  -> Turn off printer controller mode.
-//     Ps = 5  -> Turn on printer controller mode.
-// CSI ? Pm i
-//   Media Copy (MC, DEC-specific).
-//     Ps = 1  -> Print line containing cursor.
-//     Ps = 4  -> Turn off autoprint mode.
-//     Ps = 5  -> Turn on autoprint mode.
-//     Ps = 1  0  -> Print composed display, ignores DECPEX.
-//     Ps = 1  1  -> Print all pages.
-Terminal.prototype.mediaCopy = function(params) {
-  ;
-};
-
-// CSI > Ps; Ps m
-//   Set or reset resource-values used by xterm to decide whether
-//   to construct escape sequences holding information about the
-//   modifiers pressed with a given key.  The first parameter iden-
-//   tifies the resource to set/reset.  The second parameter is the
-//   value to assign to the resource.  If the second parameter is
-//   omitted, the resource is reset to its initial value.
-//     Ps = 1  -> modifyCursorKeys.
-//     Ps = 2  -> modifyFunctionKeys.
-//     Ps = 4  -> modifyOtherKeys.
-//   If no parameters are given, all resources are reset to their
-//   initial values.
-Terminal.prototype.setResources = function(params) {
-  ;
-};
-
-// CSI > Ps n
-//   Disable modifiers which may be enabled via the CSI > Ps; Ps m
-//   sequence.  This corresponds to a resource value of "-1", which
-//   cannot be set with the other sequence.  The parameter identi-
-//   fies the resource to be disabled:
-//     Ps = 1  -> modifyCursorKeys.
-//     Ps = 2  -> modifyFunctionKeys.
-//     Ps = 4  -> modifyOtherKeys.
-//   If the parameter is omitted, modifyFunctionKeys is disabled.
-//   When modifyFunctionKeys is disabled, xterm uses the modifier
-//   keys to make an extended sequence of functions rather than
-//   adding a parameter to each function key to denote the modi-
-//   fiers.
-Terminal.prototype.disableModifiers = function(params) {
-  ;
-};
-
-// CSI > Ps p
-//   Set resource value pointerMode.  This is used by xterm to
-//   decide whether to hide the pointer cursor as the user types.
-//   Valid values for the parameter:
-//     Ps = 0  -> never hide the pointer.
-//     Ps = 1  -> hide if the mouse tracking mode is not enabled.
-//     Ps = 2  -> always hide the pointer.  If no parameter is
-//     given, xterm uses the default, which is 1 .
-Terminal.prototype.setPointerMode = function(params) {
-  ;
-};
-
-// CSI ! p   Soft terminal reset (DECSTR).
-// http://vt100.net/docs/vt220-rm/table4-10.html
-Terminal.prototype.softReset = function(params) {
-  this.cursorHidden = false;
-  this.insertMode = false;
-  this.originMode = false;
-  this.wraparoundMode = false; // autowrap
-  this.applicationKeypad = false; // ?
-  this.applicationCursor = false;
-  this.scrollTop = 0;
-  this.scrollBottom = this.rows - 1;
-  this.curAttr = this.defAttr;
-  this.x = this.y = 0; // ?
-  this.charset = null;
-  this.glevel = 0; // ??
-  this.charsets = [null]; // ??
-};
-
-// CSI Ps$ p
-//   Request ANSI mode (DECRQM).  For VT300 and up, reply is
-//     CSI Ps; Pm$ y
-//   where Ps is the mode number as in RM, and Pm is the mode
-//   value:
-//     0 - not recognized
-//     1 - set
-//     2 - reset
-//     3 - permanently set
-//     4 - permanently reset
-Terminal.prototype.requestAnsiMode = function(params) {
-  ;
-};
-
-// CSI ? Ps$ p
-//   Request DEC private mode (DECRQM).  For VT300 and up, reply is
-//     CSI ? Ps; Pm$ p
-//   where Ps is the mode number as in DECSET, Pm is the mode value
-//   as in the ANSI DECRQM.
-Terminal.prototype.requestPrivateMode = function(params) {
-  ;
-};
-
-// CSI Ps ; Ps " p
-//   Set conformance level (DECSCL).  Valid values for the first
-//   parameter:
-//     Ps = 6 1  -> VT100.
-//     Ps = 6 2  -> VT200.
-//     Ps = 6 3  -> VT300.
-//   Valid values for the second parameter:
-//     Ps = 0  -> 8-bit controls.
-//     Ps = 1  -> 7-bit controls (always set for VT100).
-//     Ps = 2  -> 8-bit controls.
-Terminal.prototype.setConformanceLevel = function(params) {
-  ;
-};
-
-// CSI Ps q  Load LEDs (DECLL).
-//     Ps = 0  -> Clear all LEDS (default).
-//     Ps = 1  -> Light Num Lock.
-//     Ps = 2  -> Light Caps Lock.
-//     Ps = 3  -> Light Scroll Lock.
-//     Ps = 2  1  -> Extinguish Num Lock.
-//     Ps = 2  2  -> Extinguish Caps Lock.
-//     Ps = 2  3  -> Extinguish Scroll Lock.
-Terminal.prototype.loadLEDs = function(params) {
-  ;
-};
-
-// CSI Ps SP q
-//   Set cursor style (DECSCUSR, VT520).
-//     Ps = 0  -> blinking block.
-//     Ps = 1  -> blinking block (default).
-//     Ps = 2  -> steady block.
-//     Ps = 3  -> blinking underline.
-//     Ps = 4  -> steady underline.
-Terminal.prototype.setCursorStyle = function(params) {
-  ;
-};
-
-// CSI Ps " q
-//   Select character protection attribute (DECSCA).  Valid values
-//   for the parameter:
-//     Ps = 0  -> DECSED and DECSEL can erase (default).
-//     Ps = 1  -> DECSED and DECSEL cannot erase.
-//     Ps = 2  -> DECSED and DECSEL can erase.
-Terminal.prototype.setCharProtectionAttr = function(params) {
-  ;
-};
-
-// CSI ? Pm r
-//   Restore DEC Private Mode Values.  The value of Ps previously
-//   saved is restored.  Ps values are the same as for DECSET.
-Terminal.prototype.restorePrivateValues = function(params) {
-  ;
-};
-
-// CSI Pt; Pl; Pb; Pr; Ps$ r
-//   Change Attributes in Rectangular Area (DECCARA), VT400 and up.
-//     Pt; Pl; Pb; Pr denotes the rectangle.
-//     Ps denotes the SGR attributes to change: 0, 1, 4, 5, 7.
-// NOTE: xterm doesn't enable this code by default.
-Terminal.prototype.setAttrInRectangle = function(params) {
-  var t = params[0]
-    , l = params[1]
-    , b = params[2]
-    , r = params[3]
-    , attr = params[4];
-
-  var line
-    , i;
-
-  for (; t < b + 1; t++) {
-    line = this.lines[this.ybase + t];
-    for (i = l; i < r; i++) {
-      line[i] = [attr, line[i][1]];
-    }
-  }
-
-  // this.maxRange();
-  this.updateRange(params[0]);
-  this.updateRange(params[2]);
-};
-
-// CSI ? Pm s
-//   Save DEC Private Mode Values.  Ps values are the same as for
-//   DECSET.
-Terminal.prototype.savePrivateValues = function(params) {
-  ;
-};
-
-// CSI Ps ; Ps ; Ps t
-//   Window manipulation (from dtterm, as well as extensions).
-//   These controls may be disabled using the allowWindowOps
-//   resource.  Valid values for the first (and any additional
-//   parameters) are:
-//     Ps = 1  -> De-iconify window.
-//     Ps = 2  -> Iconify window.
-//     Ps = 3  ;  x ;  y -> Move window to [x, y].
-//     Ps = 4  ;  height ;  width -> Resize the xterm window to
-//     height and width in pixels.
-//     Ps = 5  -> Raise the xterm window to the front of the stack-
-//     ing order.
-//     Ps = 6  -> Lower the xterm window to the bottom of the
-//     stacking order.
-//     Ps = 7  -> Refresh the xterm window.
-//     Ps = 8  ;  height ;  width -> Resize the text area to
-//     [height;width] in characters.
-//     Ps = 9  ;  0  -> Restore maximized window.
-//     Ps = 9  ;  1  -> Maximize window (i.e., resize to screen
-//     size).
-//     Ps = 1 0  ;  0  -> Undo full-screen mode.
-//     Ps = 1 0  ;  1  -> Change to full-screen.
-//     Ps = 1 1  -> Report xterm window state.  If the xterm window
-//     is open (non-iconified), it returns CSI 1 t .  If the xterm
-//     window is iconified, it returns CSI 2 t .
-//     Ps = 1 3  -> Report xterm window position.  Result is CSI 3
-//     ; x ; y t
-//     Ps = 1 4  -> Report xterm window in pixels.  Result is CSI
-//     4  ;  height ;  width t
-//     Ps = 1 8  -> Report the size of the text area in characters.
-//     Result is CSI  8  ;  height ;  width t
-//     Ps = 1 9  -> Report the size of the screen in characters.
-//     Result is CSI  9  ;  height ;  width t
-//     Ps = 2 0  -> Report xterm window's icon label.  Result is
-//     OSC  L  label ST
-//     Ps = 2 1  -> Report xterm window's title.  Result is OSC  l
-//     label ST
-//     Ps = 2 2  ;  0  -> Save xterm icon and window title on
-//     stack.
-//     Ps = 2 2  ;  1  -> Save xterm icon title on stack.
-//     Ps = 2 2  ;  2  -> Save xterm window title on stack.
-//     Ps = 2 3  ;  0  -> Restore xterm icon and window title from
-//     stack.
-//     Ps = 2 3  ;  1  -> Restore xterm icon title from stack.
-//     Ps = 2 3  ;  2  -> Restore xterm window title from stack.
-//     Ps >= 2 4  -> Resize to Ps lines (DECSLPP).
-Terminal.prototype.manipulateWindow = function(params) {
-  ;
-};
-
-// CSI Pt; Pl; Pb; Pr; Ps$ t
-//   Reverse Attributes in Rectangular Area (DECRARA), VT400 and
-//   up.
-//     Pt; Pl; Pb; Pr denotes the rectangle.
-//     Ps denotes the attributes to reverse, i.e.,  1, 4, 5, 7.
-// NOTE: xterm doesn't enable this code by default.
-Terminal.prototype.reverseAttrInRectangle = function(params) {
-  ;
-};
-
-// CSI > Ps; Ps t
-//   Set one or more features of the title modes.  Each parameter
-//   enables a single feature.
-//     Ps = 0  -> Set window/icon labels using hexadecimal.
-//     Ps = 1  -> Query window/icon labels using hexadecimal.
-//     Ps = 2  -> Set window/icon labels using UTF-8.
-//     Ps = 3  -> Query window/icon labels using UTF-8.  (See dis-
-//     cussion of "Title Modes")
-Terminal.prototype.setTitleModeFeature = function(params) {
-  ;
-};
-
-// CSI Ps SP t
-//   Set warning-bell volume (DECSWBV, VT520).
-//     Ps = 0  or 1  -> off.
-//     Ps = 2 , 3  or 4  -> low.
-//     Ps = 5 , 6 , 7 , or 8  -> high.
-Terminal.prototype.setWarningBellVolume = function(params) {
-  ;
-};
-
-// CSI Ps SP u
-//   Set margin-bell volume (DECSMBV, VT520).
-//     Ps = 1  -> off.
-//     Ps = 2 , 3  or 4  -> low.
-//     Ps = 0 , 5 , 6 , 7 , or 8  -> high.
-Terminal.prototype.setMarginBellVolume = function(params) {
-  ;
-};
-
-// CSI Pt; Pl; Pb; Pr; Pp; Pt; Pl; Pp$ v
-//   Copy Rectangular Area (DECCRA, VT400 and up).
-//     Pt; Pl; Pb; Pr denotes the rectangle.
-//     Pp denotes the source page.
-//     Pt; Pl denotes the target location.
-//     Pp denotes the target page.
-// NOTE: xterm doesn't enable this code by default.
-Terminal.prototype.copyRectangle = function(params) {
-  ;
-};
-
-// CSI Pt ; Pl ; Pb ; Pr ' w
-//   Enable Filter Rectangle (DECEFR), VT420 and up.
-//   Parameters are [top;left;bottom;right].
-//   Defines the coordinates of a filter rectangle and activates
-//   it.  Anytime the locator is detected outside of the filter
-//   rectangle, an outside rectangle event is generated and the
-//   rectangle is disabled.  Filter rectangles are always treated
-//   as "one-shot" events.  Any parameters that are omitted default
-//   to the current locator position.  If all parameters are omit-
-//   ted, any locator motion will be reported.  DECELR always can-
-//   cels any prevous rectangle definition.
-Terminal.prototype.enableFilterRectangle = function(params) {
-  ;
-};
-
-// CSI Ps x  Request Terminal Parameters (DECREQTPARM).
-//   if Ps is a "0" (default) or "1", and xterm is emulating VT100,
-//   the control sequence elicits a response of the same form whose
-//   parameters describe the terminal:
-//     Ps -> the given Ps incremented by 2.
-//     Pn = 1  <- no parity.
-//     Pn = 1  <- eight bits.
-//     Pn = 1  <- 2  8  transmit 38.4k baud.
-//     Pn = 1  <- 2  8  receive 38.4k baud.
-//     Pn = 1  <- clock multiplier.
-//     Pn = 0  <- STP flags.
-Terminal.prototype.requestParameters = function(params) {
-  ;
-};
-
-// CSI Ps x  Select Attribute Change Extent (DECSACE).
-//     Ps = 0  -> from start to end position, wrapped.
-//     Ps = 1  -> from start to end position, wrapped.
-//     Ps = 2  -> rectangle (exact).
-Terminal.prototype.selectChangeExtent = function(params) {
-  ;
-};
-
-// CSI Pc; Pt; Pl; Pb; Pr$ x
-//   Fill Rectangular Area (DECFRA), VT420 and up.
-//     Pc is the character to use.
-//     Pt; Pl; Pb; Pr denotes the rectangle.
-// NOTE: xterm doesn't enable this code by default.
-Terminal.prototype.fillRectangle = function(params) {
-  var ch = params[0]
-    , t = params[1]
-    , l = params[2]
-    , b = params[3]
-    , r = params[4];
-
-  var line
-    , i;
-
-  for (; t < b + 1; t++) {
-    line = this.lines[this.ybase + t];
-    for (i = l; i < r; i++) {
-      line[i] = [line[i][0], String.fromCharCode(ch)];
-    }
-  }
-
-  // this.maxRange();
-  this.updateRange(params[1]);
-  this.updateRange(params[3]);
-};
-
-// CSI Ps ; Pu ' z
-//   Enable Locator Reporting (DECELR).
-//   Valid values for the first parameter:
-//     Ps = 0  -> Locator disabled (default).
-//     Ps = 1  -> Locator enabled.
-//     Ps = 2  -> Locator enabled for one report, then disabled.
-//   The second parameter specifies the coordinate unit for locator
-//   reports.
-//   Valid values for the second parameter:
-//     Pu = 0  <- or omitted -> default to character cells.
-//     Pu = 1  <- device physical pixels.
-//     Pu = 2  <- character cells.
-Terminal.prototype.enableLocatorReporting = function(params) {
-  var val = params[0] > 0;
-  //this.mouseEvents = val;
-  //this.decLocator = val;
-};
-
-// CSI Pt; Pl; Pb; Pr$ z
-//   Erase Rectangular Area (DECERA), VT400 and up.
-//     Pt; Pl; Pb; Pr denotes the rectangle.
-// NOTE: xterm doesn't enable this code by default.
-Terminal.prototype.eraseRectangle = function(params) {
-  var t = params[0]
-    , l = params[1]
-    , b = params[2]
-    , r = params[3];
-
-  var line
-    , i
-    , ch;
-
-  ch = [this.eraseAttr(), ' ']; // xterm?
-
-  for (; t < b + 1; t++) {
-    line = this.lines[this.ybase + t];
-    for (i = l; i < r; i++) {
-      line[i] = ch;
-    }
-  }
-
-  // this.maxRange();
-  this.updateRange(params[0]);
-  this.updateRange(params[2]);
-};
-
-// CSI Pm ' {
-//   Select Locator Events (DECSLE).
-//   Valid values for the first (and any additional parameters)
-//   are:
-//     Ps = 0  -> only respond to explicit host requests (DECRQLP).
-//                (This is default).  It also cancels any filter
-//   rectangle.
-//     Ps = 1  -> report button down transitions.
-//     Ps = 2  -> do not report button down transitions.
-//     Ps = 3  -> report button up transitions.
-//     Ps = 4  -> do not report button up transitions.
-Terminal.prototype.setLocatorEvents = function(params) {
-  ;
-};
-
-// CSI Pt; Pl; Pb; Pr$ {
-//   Selective Erase Rectangular Area (DECSERA), VT400 and up.
-//     Pt; Pl; Pb; Pr denotes the rectangle.
-Terminal.prototype.selectiveEraseRectangle = function(params) {
-  ;
-};
-
-// CSI Ps ' |
-//   Request Locator Position (DECRQLP).
-//   Valid values for the parameter are:
-//     Ps = 0 , 1 or omitted -> transmit a single DECLRP locator
-//     report.
-
-//   If Locator Reporting has been enabled by a DECELR, xterm will
-//   respond with a DECLRP Locator Report.  This report is also
-//   generated on button up and down events if they have been
-//   enabled with a DECSLE, or when the locator is detected outside
-//   of a filter rectangle, if filter rectangles have been enabled
-//   with a DECEFR.
-
-//     -> CSI Pe ; Pb ; Pr ; Pc ; Pp &  w
-
-//   Parameters are [event;button;row;column;page].
-//   Valid values for the event:
-//     Pe = 0  -> locator unavailable - no other parameters sent.
-//     Pe = 1  -> request - xterm received a DECRQLP.
-//     Pe = 2  -> left button down.
-//     Pe = 3  -> left button up.
-//     Pe = 4  -> middle button down.
-//     Pe = 5  -> middle button up.
-//     Pe = 6  -> right button down.
-//     Pe = 7  -> right button up.
-//     Pe = 8  -> M4 button down.
-//     Pe = 9  -> M4 button up.
-//     Pe = 1 0  -> locator outside filter rectangle.
-//   ``button'' parameter is a bitmask indicating which buttons are
-//     pressed:
-//     Pb = 0  <- no buttons down.
-//     Pb & 1  <- right button down.
-//     Pb & 2  <- middle button down.
-//     Pb & 4  <- left button down.
-//     Pb & 8  <- M4 button down.
-//   ``row'' and ``column'' parameters are the coordinates of the
-//     locator position in the xterm window, encoded as ASCII deci-
-//     mal.
-//   The ``page'' parameter is not used by xterm, and will be omit-
-//   ted.
-Terminal.prototype.requestLocatorPosition = function(params) {
-  ;
-};
-
-// CSI P m SP }
-// Insert P s Column(s) (default = 1) (DECIC), VT420 and up.
-// NOTE: xterm doesn't enable this code by default.
-Terminal.prototype.insertColumns = function() {
-  var param = params[0]
-    , l = this.ybase + this.rows
-    , ch = [this.eraseAttr(), ' '] // xterm?
-    , i;
-
-  while (param--) {
-    for (i = this.ybase; i < l; i++) {
-      this.lines[i].splice(this.x + 1, 0, ch);
-      this.lines[i].pop();
-    }
-  }
-
-  this.maxRange();
-};
-
-// CSI P m SP ~
-// Delete P s Column(s) (default = 1) (DECDC), VT420 and up
-// NOTE: xterm doesn't enable this code by default.
-Terminal.prototype.deleteColumns = function() {
-  var param = params[0]
-    , l = this.ybase + this.rows
-    , ch = [this.eraseAttr(), ' '] // xterm?
-    , i;
-
-  while (param--) {
-    for (i = this.ybase; i < l; i++) {
-      this.lines[i].splice(this.x, 1);
-      this.lines[i].push(ch);
-    }
-  }
-
-  this.maxRange();
-};
-
-/**
- * Prefix/Select/Visual/Search Modes
- */
-
-Terminal.prototype.enterPrefix = function() {
-  this.prefixMode = true;
-};
-
-Terminal.prototype.leavePrefix = function() {
-  this.prefixMode = false;
-};
-
-Terminal.prototype.enterSelect = function() {
-  this._real = {
-    x: this.x,
-    y: this.y,
-    ydisp: this.ydisp,
-    ybase: this.ybase,
-    cursorHidden: this.cursorHidden,
-    lines: this.copyBuffer(this.lines),
-    write: this.write
-  };
-  this.write = function() {};
-  this.selectMode = true;
-  this.visualMode = false;
-  this.cursorHidden = false;
-  this.refresh(this.y, this.y);
-};
-
-Terminal.prototype.leaveSelect = function() {
-  this.x = this._real.x;
-  this.y = this._real.y;
-  this.ydisp = this._real.ydisp;
-  this.ybase = this._real.ybase;
-  this.cursorHidden = this._real.cursorHidden;
-  this.lines = this._real.lines;
-  this.write = this._real.write;
-  delete this._real;
-  this.selectMode = false;
-  this.visualMode = false;
-  this.refresh(0, this.rows - 1);
-};
-
-Terminal.prototype.enterVisual = function() {
-  this._real.preVisual = this.copyBuffer(this.lines);
-  this.selectText(this.x, this.x, this.ydisp + this.y, this.ydisp + this.y);
-  this.visualMode = true;
-};
-
-Terminal.prototype.leaveVisual = function() {
-  this.lines = this._real.preVisual;
-  delete this._real.preVisual;
-  delete this._selected;
-  this.visualMode = false;
-  this.refresh(0, this.rows - 1);
-};
-
-Terminal.prototype.enterSearch = function(down) {
-  this.entry = '';
-  this.searchMode = true;
-  this.searchDown = down;
-  this._real.preSearch = this.copyBuffer(this.lines);
-  this._real.preSearchX = this.x;
-  this._real.preSearchY = this.y;
-
-  var bottom = this.ydisp + this.rows - 1;
-  for (var i = 0; i < this.entryPrefix.length; i++) {
-    //this.lines[bottom][i][0] = (this.defAttr & ~0x1ff) | 4;
-    //this.lines[bottom][i][1] = this.entryPrefix[i];
-    this.lines[bottom][i] = [
-      (this.defAttr & ~0x1ff) | 4,
-      this.entryPrefix[i]
-    ];
-  }
-
-  this.y = this.rows - 1;
-  this.x = this.entryPrefix.length;
-
-  this.refresh(this.rows - 1, this.rows - 1);
-};
-
-Terminal.prototype.leaveSearch = function() {
-  this.searchMode = false;
-
-  if (this._real.preSearch) {
-    this.lines = this._real.preSearch;
-    this.x = this._real.preSearchX;
-    this.y = this._real.preSearchY;
-    delete this._real.preSearch;
-    delete this._real.preSearchX;
-    delete this._real.preSearchY;
-  }
-
-  this.refresh(this.rows - 1, this.rows - 1);
-};
-
-Terminal.prototype.copyBuffer = function(lines) {
-  var lines = lines || this.lines
-    , out = [];
-
-  for (var y = 0; y < lines.length; y++) {
-    out[y] = [];
-    for (var x = 0; x < lines[y].length; x++) {
-      out[y][x] = [lines[y][x][0], lines[y][x][1]];
-    }
-  }
-
-  return out;
-};
-
-Terminal.prototype.getCopyTextarea = function(text) {
-  var textarea = this._copyTextarea
-    , document = this.document;
-
-  if (!textarea) {
-    textarea = document.createElement('textarea');
-    textarea.style.position = 'absolute';
-    textarea.style.left = '-32000px';
-    textarea.style.top = '-32000px';
-    textarea.style.width = '0px';
-    textarea.style.height = '0px';
-    textarea.style.opacity = '0';
-    textarea.style.backgroundColor = 'transparent';
-    textarea.style.borderStyle = 'none';
-    textarea.style.outlineStyle = 'none';
-
-    document.getElementsByTagName('body')[0].appendChild(textarea);
-
-    this._copyTextarea = textarea;
-  }
-
-  return textarea;
-};
-
-// NOTE: Only works for primary selection on X11.
-// Non-X11 users should use Ctrl-C instead.
-Terminal.prototype.copyText = function(text) {
-  var self = this
-    , textarea = this.getCopyTextarea();
-
-  this.emit('copy', text);
-
-  textarea.focus();
-  textarea.textContent = text;
-  textarea.value = text;
-  textarea.setSelectionRange(0, text.length);
-
-  setTimeout(function() {
-    self.element.focus();
-    self.focus();
-  }, 1);
-};
-
-Terminal.prototype.selectText = function(x1, x2, y1, y2) {
-  var ox1
-    , ox2
-    , oy1
-    , oy2
-    , tmp
-    , x
-    , y
-    , xl
-    , attr;
-
-  if (this._selected) {
-    ox1 = this._selected.x1;
-    ox2 = this._selected.x2;
-    oy1 = this._selected.y1;
-    oy2 = this._selected.y2;
-
-    if (oy2 < oy1) {
-      tmp = ox2;
-      ox2 = ox1;
-      ox1 = tmp;
-      tmp = oy2;
-      oy2 = oy1;
-      oy1 = tmp;
-    }
-
-    if (ox2 < ox1 && oy1 === oy2) {
-      tmp = ox2;
-      ox2 = ox1;
-      ox1 = tmp;
-    }
-
-    for (y = oy1; y <= oy2; y++) {
-      x = 0;
-      xl = this.cols - 1;
-      if (y === oy1) {
-        x = ox1;
-      }
-      if (y === oy2) {
-        xl = ox2;
-      }
-      for (; x <= xl; x++) {
-        if (this.lines[y][x].old != null) {
-          //this.lines[y][x][0] = this.lines[y][x].old;
-          //delete this.lines[y][x].old;
-          attr = this.lines[y][x].old;
-          delete this.lines[y][x].old;
-          this.lines[y][x] = [attr, this.lines[y][x][1]];
-        }
-      }
-    }
-
-    y1 = this._selected.y1;
-    x1 = this._selected.x1;
-  }
-
-  y1 = Math.max(y1, 0);
-  y1 = Math.min(y1, this.ydisp + this.rows - 1);
-
-  y2 = Math.max(y2, 0);
-  y2 = Math.min(y2, this.ydisp + this.rows - 1);
-
-  this._selected = { x1: x1, x2: x2, y1: y1, y2: y2 };
-
-  if (y2 < y1) {
-    tmp = x2;
-    x2 = x1;
-    x1 = tmp;
-    tmp = y2;
-    y2 = y1;
-    y1 = tmp;
-  }
-
-  if (x2 < x1 && y1 === y2) {
-    tmp = x2;
-    x2 = x1;
-    x1 = tmp;
-  }
-
-  for (y = y1; y <= y2; y++) {
-    x = 0;
-    xl = this.cols - 1;
-    if (y === y1) {
-      x = x1;
-    }
-    if (y === y2) {
-      xl = x2;
-    }
-    for (; x <= xl; x++) {
-      //this.lines[y][x].old = this.lines[y][x][0];
-      //this.lines[y][x][0] &= ~0x1ff;
-      //this.lines[y][x][0] |= (0x1ff << 9) | 4;
-      attr = this.lines[y][x][0];
-      this.lines[y][x] = [
-        (attr & ~0x1ff) | ((0x1ff << 9) | 4),
-        this.lines[y][x][1]
-      ];
-      this.lines[y][x].old = attr;
-    }
-  }
-
-  y1 = y1 - this.ydisp;
-  y2 = y2 - this.ydisp;
-
-  y1 = Math.max(y1, 0);
-  y1 = Math.min(y1, this.rows - 1);
-
-  y2 = Math.max(y2, 0);
-  y2 = Math.min(y2, this.rows - 1);
-
-  //this.refresh(y1, y2);
-  this.refresh(0, this.rows - 1);
-};
-
-Terminal.prototype.grabText = function(x1, x2, y1, y2) {
-  var out = ''
-    , buf = ''
-    , ch
-    , x
-    , y
-    , xl
-    , tmp;
-
-  if (y2 < y1) {
-    tmp = x2;
-    x2 = x1;
-    x1 = tmp;
-    tmp = y2;
-    y2 = y1;
-    y1 = tmp;
-  }
-
-  if (x2 < x1 && y1 === y2) {
-    tmp = x2;
-    x2 = x1;
-    x1 = tmp;
-  }
-
-  for (y = y1; y <= y2; y++) {
-    x = 0;
-    xl = this.cols - 1;
-    if (y === y1) {
-      x = x1;
-    }
-    if (y === y2) {
-      xl = x2;
-    }
-    for (; x <= xl; x++) {
-      ch = this.lines[y][x][1];
-      if (ch === ' ') {
-        buf += ch;
-        continue;
-      }
-      if (buf) {
-        out += buf;
-        buf = '';
-      }
-      out += ch;
-      if (isWide(ch)) x++;
-    }
-    buf = '';
-    out += '\n';
-  }
-
-  // If we're not at the end of the
-  // line, don't add a newline.
-  for (x = x2, y = y2; x < this.cols; x++) {
-    if (this.lines[y][x][1] !== ' ') {
-      out = out.slice(0, -1);
-      break;
-    }
-  }
-
-  return out;
-};
-
-Terminal.prototype.keyPrefix = function(ev, key) {
-  if (key === 'k' || key === '&') {
-    this.destroy();
-  } else if (key === 'p' || key === ']') {
-    this.emit('request paste');
-  } else if (key === 'c') {
-    this.emit('request create');
-  } else if (key >= '0' && key <= '9') {
-    key = +key - 1;
-    if (!~key) key = 9;
-    this.emit('request term', key);
-  } else if (key === 'n') {
-    this.emit('request term next');
-  } else if (key === 'P') {
-    this.emit('request term previous');
-  } else if (key === ':') {
-    this.emit('request command mode');
-  } else if (key === '[') {
-    this.enterSelect();
-  }
-};
-
-Terminal.prototype.keySelect = function(ev, key) {
-  this.showCursor();
-
-  if (this.searchMode || key === 'n' || key === 'N') {
-    return this.keySearch(ev, key);
-  }
-
-  if (key === '\x04') { // ctrl-d
-    var y = this.ydisp + this.y;
-    if (this.ydisp === this.ybase) {
-      // Mimic vim behavior
-      this.y = Math.min(this.y + (this.rows - 1) / 2 | 0, this.rows - 1);
-      this.refresh(0, this.rows - 1);
-    } else {
-      this.scrollDisp((this.rows - 1) / 2 | 0);
-    }
-    if (this.visualMode) {
-      this.selectText(this.x, this.x, y, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === '\x15') { // ctrl-u
-    var y = this.ydisp + this.y;
-    if (this.ydisp === 0) {
-      // Mimic vim behavior
-      this.y = Math.max(this.y - (this.rows - 1) / 2 | 0, 0);
-      this.refresh(0, this.rows - 1);
-    } else {
-      this.scrollDisp(-(this.rows - 1) / 2 | 0);
-    }
-    if (this.visualMode) {
-      this.selectText(this.x, this.x, y, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === '\x06') { // ctrl-f
-    var y = this.ydisp + this.y;
-    this.scrollDisp(this.rows - 1);
-    if (this.visualMode) {
-      this.selectText(this.x, this.x, y, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === '\x02') { // ctrl-b
-    var y = this.ydisp + this.y;
-    this.scrollDisp(-(this.rows - 1));
-    if (this.visualMode) {
-      this.selectText(this.x, this.x, y, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === 'k' || key === '\x1b[A') {
-    var y = this.ydisp + this.y;
-    this.y--;
-    if (this.y < 0) {
-      this.y = 0;
-      this.scrollDisp(-1);
-    }
-    if (this.visualMode) {
-      this.selectText(this.x, this.x, y, this.ydisp + this.y);
-    } else {
-      this.refresh(this.y, this.y + 1);
-    }
-    return;
-  }
-
-  if (key === 'j' || key === '\x1b[B') {
-    var y = this.ydisp + this.y;
-    this.y++;
-    if (this.y >= this.rows) {
-      this.y = this.rows - 1;
-      this.scrollDisp(1);
-    }
-    if (this.visualMode) {
-      this.selectText(this.x, this.x, y, this.ydisp + this.y);
-    } else {
-      this.refresh(this.y - 1, this.y);
-    }
-    return;
-  }
-
-  if (key === 'h' || key === '\x1b[D') {
-    var x = this.x;
-    this.x--;
-    if (this.x < 0) {
-      this.x = 0;
-    }
-    if (this.visualMode) {
-      this.selectText(x, this.x, this.ydisp + this.y, this.ydisp + this.y);
-    } else {
-      this.refresh(this.y, this.y);
-    }
-    return;
-  }
-
-  if (key === 'l' || key === '\x1b[C') {
-    var x = this.x;
-    this.x++;
-    if (this.x >= this.cols) {
-      this.x = this.cols - 1;
-    }
-    if (this.visualMode) {
-      this.selectText(x, this.x, this.ydisp + this.y, this.ydisp + this.y);
-    } else {
-      this.refresh(this.y, this.y);
-    }
-    return;
-  }
-
-  if (key === 'v' || key === ' ') {
-    if (!this.visualMode) {
-      this.enterVisual();
-    } else {
-      this.leaveVisual();
-    }
-    return;
-  }
-
-  if (key === 'y') {
-    if (this.visualMode) {
-      var text = this.grabText(
-        this._selected.x1, this._selected.x2,
-        this._selected.y1, this._selected.y2);
-      this.copyText(text);
-      this.leaveVisual();
-      // this.leaveSelect();
-    }
-    return;
-  }
-
-  if (key === 'q' || key === '\x1b') {
-    if (this.visualMode) {
-      this.leaveVisual();
-    } else {
-      this.leaveSelect();
-    }
-    return;
-  }
-
-  if (key === 'w' || key === 'W') {
-    var ox = this.x;
-    var oy = this.y;
-    var oyd = this.ydisp;
-
-    var x = this.x;
-    var y = this.y;
-    var yb = this.ydisp;
-    var saw_space = false;
-
-    for (;;) {
-      var line = this.lines[yb + y];
-      while (x < this.cols) {
-        if (line[x][1] <= ' ') {
-          saw_space = true;
-        } else if (saw_space) {
-          break;
-        }
-        x++;
-      }
-      if (x >= this.cols) x = this.cols - 1;
-      if (x === this.cols - 1 && line[x][1] <= ' ') {
-        x = 0;
-        if (++y >= this.rows) {
-          y--;
-          if (++yb > this.ybase) {
-            yb = this.ybase;
-            x = this.x;
-            break;
-          }
-        }
-        continue;
-      }
-      break;
-    }
-
-    this.x = x, this.y = y;
-    this.scrollDisp(-this.ydisp + yb);
-
-    if (this.visualMode) {
-      this.selectText(ox, this.x, oy + oyd, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === 'b' || key === 'B') {
-    var ox = this.x;
-    var oy = this.y;
-    var oyd = this.ydisp;
-
-    var x = this.x;
-    var y = this.y;
-    var yb = this.ydisp;
-
-    for (;;) {
-      var line = this.lines[yb + y];
-      var saw_space = x > 0 && line[x][1] > ' ' && line[x - 1][1] > ' ';
-      while (x >= 0) {
-        if (line[x][1] <= ' ') {
-          if (saw_space && (x + 1 < this.cols && line[x + 1][1] > ' ')) {
-            x++;
-            break;
-          } else {
-            saw_space = true;
-          }
-        }
-        x--;
-      }
-      if (x < 0) x = 0;
-      if (x === 0 && (line[x][1] <= ' ' || !saw_space)) {
-        x = this.cols - 1;
-        if (--y < 0) {
-          y++;
-          if (--yb < 0) {
-            yb++;
-            x = 0;
-            break;
-          }
-        }
-        continue;
-      }
-      break;
-    }
-
-    this.x = x, this.y = y;
-    this.scrollDisp(-this.ydisp + yb);
-
-    if (this.visualMode) {
-      this.selectText(ox, this.x, oy + oyd, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === 'e' || key === 'E') {
-    var x = this.x + 1;
-    var y = this.y;
-    var yb = this.ydisp;
-    if (x >= this.cols) x--;
-
-    for (;;) {
-      var line = this.lines[yb + y];
-      while (x < this.cols) {
-        if (line[x][1] <= ' ') {
-          x++;
-        } else {
-          break;
-        }
-      }
-      while (x < this.cols) {
-        if (line[x][1] <= ' ') {
-          if (x - 1 >= 0 && line[x - 1][1] > ' ') {
-            x--;
-            break;
-          }
-        }
-        x++;
-      }
-      if (x >= this.cols) x = this.cols - 1;
-      if (x === this.cols - 1 && line[x][1] <= ' ') {
-        x = 0;
-        if (++y >= this.rows) {
-          y--;
-          if (++yb > this.ybase) {
-            yb = this.ybase;
-            break;
-          }
-        }
-        continue;
-      }
-      break;
-    }
-
-    this.x = x, this.y = y;
-    this.scrollDisp(-this.ydisp + yb);
-
-    if (this.visualMode) {
-      this.selectText(ox, this.x, oy + oyd, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === '^' || key === '0') {
-    var ox = this.x;
-
-    if (key === '0') {
-      this.x = 0;
-    } else if (key === '^') {
-      var line = this.lines[this.ydisp + this.y];
-      var x = 0;
-      while (x < this.cols) {
-        if (line[x][1] > ' ') {
-          break;
-        }
-        x++;
-      }
-      if (x >= this.cols) x = this.cols - 1;
-      this.x = x;
-    }
-
-    if (this.visualMode) {
-      this.selectText(ox, this.x, this.ydisp + this.y, this.ydisp + this.y);
-    } else {
-      this.refresh(this.y, this.y);
-    }
-    return;
-  }
-
-  if (key === '$') {
-    var ox = this.x;
-    var line = this.lines[this.ydisp + this.y];
-    var x = this.cols - 1;
-    while (x >= 0) {
-      if (line[x][1] > ' ') {
-        if (this.visualMode && x < this.cols - 1) x++;
-        break;
-      }
-      x--;
-    }
-    if (x < 0) x = 0;
-    this.x = x;
-    if (this.visualMode) {
-      this.selectText(ox, this.x, this.ydisp + this.y, this.ydisp + this.y);
-    } else {
-      this.refresh(this.y, this.y);
-    }
-    return;
-  }
-
-  if (key === 'g' || key === 'G') {
-    var ox = this.x;
-    var oy = this.y;
-    var oyd = this.ydisp;
-    if (key === 'g') {
-      this.x = 0, this.y = 0;
-      this.scrollDisp(-this.ydisp);
-    } else if (key === 'G') {
-      this.x = 0, this.y = this.rows - 1;
-      this.scrollDisp(this.ybase);
-    }
-    if (this.visualMode) {
-      this.selectText(ox, this.x, oy + oyd, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === 'H' || key === 'M' || key === 'L') {
-    var ox = this.x;
-    var oy = this.y;
-    if (key === 'H') {
-      this.x = 0, this.y = 0;
-    } else if (key === 'M') {
-      this.x = 0, this.y = this.rows / 2 | 0;
-    } else if (key === 'L') {
-      this.x = 0, this.y = this.rows - 1;
-    }
-    if (this.visualMode) {
-      this.selectText(ox, this.x, this.ydisp + oy, this.ydisp + this.y);
-    } else {
-      this.refresh(oy, oy);
-      this.refresh(this.y, this.y);
-    }
-    return;
-  }
-
-  if (key === '{' || key === '}') {
-    var ox = this.x;
-    var oy = this.y;
-    var oyd = this.ydisp;
-
-    var line;
-    var saw_full = false;
-    var found = false;
-    var first_is_space = -1;
-    var y = this.y + (key === '{' ? -1 : 1);
-    var yb = this.ydisp;
-    var i;
-
-    if (key === '{') {
-      if (y < 0) {
-        y++;
-        if (yb > 0) yb--;
-      }
-    } else if (key === '}') {
-      if (y >= this.rows) {
-        y--;
-        if (yb < this.ybase) yb++;
-      }
-    }
-
-    for (;;) {
-      line = this.lines[yb + y];
-
-      for (i = 0; i < this.cols; i++) {
-        if (line[i][1] > ' ') {
-          if (first_is_space === -1) {
-            first_is_space = 0;
-          }
-          saw_full = true;
-          break;
-        } else if (i === this.cols - 1) {
-          if (first_is_space === -1) {
-            first_is_space = 1;
-          } else if (first_is_space === 0) {
-            found = true;
-          } else if (first_is_space === 1) {
-            if (saw_full) found = true;
-          }
-          break;
-        }
-      }
-
-      if (found) break;
-
-      if (key === '{') {
-        y--;
-        if (y < 0) {
-          y++;
-          if (yb > 0) yb--;
-          else break;
-        }
-      } else if (key === '}') {
-        y++;
-        if (y >= this.rows) {
-          y--;
-          if (yb < this.ybase) yb++;
-          else break;
-        }
-      }
-    }
-
-    if (!found) {
-      if (key === '{') {
-        y = 0;
-        yb = 0;
-      } else if (key === '}') {
-        y = this.rows - 1;
-        yb = this.ybase;
-      }
-    }
-
-    this.x = 0, this.y = y;
-    this.scrollDisp(-this.ydisp + yb);
-
-    if (this.visualMode) {
-      this.selectText(ox, this.x, oy + oyd, this.ydisp + this.y);
-    }
-    return;
-  }
-
-  if (key === '/' || key === '?') {
-    if (!this.visualMode) {
-      this.enterSearch(key === '/');
-    }
-    return;
-  }
-
-  return false;
-};
-
-Terminal.prototype.keySearch = function(ev, key) {
-  if (key === '\x1b') {
-    this.leaveSearch();
-    return;
-  }
-
-  if (key === '\r' || (!this.searchMode && (key === 'n' || key === 'N'))) {
-    this.leaveSearch();
-
-    var entry = this.entry;
-
-    if (!entry) {
-      this.refresh(0, this.rows - 1);
-      return;
-    }
-
-    var ox = this.x;
-    var oy = this.y;
-    var oyd = this.ydisp;
-
-    var line;
-    var found = false;
-    var wrapped = false;
-    var x = this.x + 1;
-    var y = this.ydisp + this.y;
-    var yb, i;
-    var up = key === 'N'
-      ? this.searchDown
-      : !this.searchDown;
-
-    for (;;) {
-      line = this.lines[y];
-
-      while (x < this.cols) {
-        for (i = 0; i < entry.length; i++) {
-          if (x + i >= this.cols) break;
-          if (line[x + i][1] !== entry[i]) {
-            break;
-          } else if (line[x + i][1] === entry[i] && i === entry.length - 1) {
-            found = true;
-            break;
-          }
-        }
-        if (found) break;
-        x += i + 1;
-      }
-      if (found) break;
-
-      x = 0;
-
-      if (!up) {
-        y++;
-        if (y > this.ybase + this.rows - 1) {
-          if (wrapped) break;
-          // this.setMessage('Search wrapped. Continuing at TOP.');
-          wrapped = true;
-          y = 0;
-        }
-      } else {
-        y--;
-        if (y < 0) {
-          if (wrapped) break;
-          // this.setMessage('Search wrapped. Continuing at BOTTOM.');
-          wrapped = true;
-          y = this.ybase + this.rows - 1;
-        }
-      }
-    }
-
-    if (found) {
-      if (y - this.ybase < 0) {
-        yb = y;
-        y = 0;
-        if (yb > this.ybase) {
-          y = yb - this.ybase;
-          yb = this.ybase;
-        }
-      } else {
-        yb = this.ybase;
-        y -= this.ybase;
-      }
-
-      this.x = x, this.y = y;
-      this.scrollDisp(-this.ydisp + yb);
-
-      if (this.visualMode) {
-        this.selectText(ox, this.x, oy + oyd, this.ydisp + this.y);
-      }
-      return;
-    }
-
-    // this.setMessage("No matches found.");
-    this.refresh(0, this.rows - 1);
-
-    return;
-  }
-
-  if (key === '\b' || key === '\x7f') {
-    if (this.entry.length === 0) return;
-    var bottom = this.ydisp + this.rows - 1;
-    this.entry = this.entry.slice(0, -1);
-    var i = this.entryPrefix.length + this.entry.length;
-    //this.lines[bottom][i][1] = ' ';
-    this.lines[bottom][i] = [
-      this.lines[bottom][i][0],
-      ' '
-    ];
-    this.x--;
-    this.refresh(this.rows - 1, this.rows - 1);
-    this.refresh(this.y, this.y);
-    return;
-  }
-
-  if (key.length === 1 && key >= ' ' && key <= '~') {
-    var bottom = this.ydisp + this.rows - 1;
-    this.entry += key;
-    var i = this.entryPrefix.length + this.entry.length - 1;
-    //this.lines[bottom][i][0] = (this.defAttr & ~0x1ff) | 4;
-    //this.lines[bottom][i][1] = key;
-    this.lines[bottom][i] = [
-      (this.defAttr & ~0x1ff) | 4,
-      key
-    ];
-    this.x++;
-    this.refresh(this.rows - 1, this.rows - 1);
-    this.refresh(this.y, this.y);
-    return;
-  }
-
-  return false;
-};
-
-/**
- * Character Sets
- */
-
-Terminal.charsets = {};
-
-// DEC Special Character and Line Drawing Set.
-// http://vt100.net/docs/vt102-ug/table5-13.html
-// A lot of curses apps use this if they see TERM=xterm.
-// testing: echo -e '\e(0a\e(B'
-// The xterm output sometimes seems to conflict with the
-// reference above. xterm seems in line with the reference
-// when running vttest however.
-// The table below now uses xterm's output from vttest.
-Terminal.charsets.SCLD = { // (0
-  '`': '\u25c6', // '◆'
-  'a': '\u2592', // '▒'
-  'b': '\u0009', // '\t'
-  'c': '\u000c', // '\f'
-  'd': '\u000d', // '\r'
-  'e': '\u000a', // '\n'
-  'f': '\u00b0', // '°'
-  'g': '\u00b1', // '±'
-  'h': '\u2424', // '\u2424' (NL)
-  'i': '\u000b', // '\v'
-  'j': '\u2518', // '┘'
-  'k': '\u2510', // '┐'
-  'l': '\u250c', // '┌'
-  'm': '\u2514', // '└'
-  'n': '\u253c', // '┼'
-  'o': '\u23ba', // '⎺'
-  'p': '\u23bb', // '⎻'
-  'q': '\u2500', // '─'
-  'r': '\u23bc', // '⎼'
-  's': '\u23bd', // '⎽'
-  't': '\u251c', // '├'
-  'u': '\u2524', // '┤'
-  'v': '\u2534', // '┴'
-  'w': '\u252c', // '┬'
-  'x': '\u2502', // '│'
-  'y': '\u2264', // '≤'
-  'z': '\u2265', // '≥'
-  '{': '\u03c0', // 'π'
-  '|': '\u2260', // '≠'
-  '}': '\u00a3', // '£'
-  '~': '\u00b7'  // '·'
-};
-
-Terminal.charsets.UK = null; // (A
-Terminal.charsets.US = null; // (B (USASCII)
-Terminal.charsets.Dutch = null; // (4
-Terminal.charsets.Finnish = null; // (C or (5
-Terminal.charsets.French = null; // (R
-Terminal.charsets.FrenchCanadian = null; // (Q
-Terminal.charsets.German = null; // (K
-Terminal.charsets.Italian = null; // (Y
-Terminal.charsets.NorwegianDanish = null; // (E or (6
-Terminal.charsets.Spanish = null; // (Z
-Terminal.charsets.Swedish = null; // (H or (7
-Terminal.charsets.Swiss = null; // (=
-Terminal.charsets.ISOLatin = null; // /A
-
-/**
- * Helpers
- */
-
-function on(el, type, handler, capture) {
-  el.addEventListener(type, handler, capture || false);
-}
-
-function off(el, type, handler, capture) {
-  el.removeEventListener(type, handler, capture || false);
-}
-
-function cancel(ev) {
-  if (ev.preventDefault) ev.preventDefault();
-  ev.returnValue = false;
-  if (ev.stopPropagation) ev.stopPropagation();
-  ev.cancelBubble = true;
-  return false;
-}
-
-function inherits(child, parent) {
-  function f() {
-    this.constructor = child;
-  }
-  f.prototype = parent.prototype;
-  child.prototype = new f;
-}
-
-// if bold is broken, we can't
-// use it in the terminal.
-function isBoldBroken(document) {
-  var body = document.getElementsByTagName('body')[0];
-  var terminal = document.createElement('div');
-  terminal.className = 'terminal';
-  var line = document.createElement('div');
-  var el = document.createElement('span');
-  el.innerHTML = 'hello world';
-  line.appendChild(el);
-  terminal.appendChild(line);
-  body.appendChild(terminal);
-  var w1 = el.scrollWidth;
-  el.style.fontWeight = 'bold';
-  var w2 = el.scrollWidth;
-  body.removeChild(terminal);
-  return w1 !== w2;
-}
-
-var String = this.String;
-var setTimeout = this.setTimeout;
-var setInterval = this.setInterval;
-
-function indexOf(obj, el) {
-  var i = obj.length;
-  while (i--) {
-    if (obj[i] === el) return i;
-  }
-  return -1;
-}
-
-function isWide(ch) {
-  if (ch <= '\uff00') return false;
-  return (ch >= '\uff01' && ch <= '\uffbe')
-      || (ch >= '\uffc2' && ch <= '\uffc7')
-      || (ch >= '\uffca' && ch <= '\uffcf')
-      || (ch >= '\uffd2' && ch <= '\uffd7')
-      || (ch >= '\uffda' && ch <= '\uffdc')
-      || (ch >= '\uffe0' && ch <= '\uffe6')
-      || (ch >= '\uffe8' && ch <= '\uffee');
-}
-
-function matchColor(r1, g1, b1) {
-  var hash = (r1 << 16) | (g1 << 8) | b1;
-
-  if (matchColor._cache[hash] != null) {
-    return matchColor._cache[hash];
-  }
-
-  var ldiff = Infinity
-    , li = -1
-    , i = 0
-    , c
-    , r2
-    , g2
-    , b2
-    , diff;
-
-  for (; i < Terminal.vcolors.length; i++) {
-    c = Terminal.vcolors[i];
-    r2 = c[0];
-    g2 = c[1];
-    b2 = c[2];
-
-    diff = matchColor.distance(r1, g1, b1, r2, g2, b2);
-
-    if (diff === 0) {
-      li = i;
-      break;
-    }
-
-    if (diff < ldiff) {
-      ldiff = diff;
-      li = i;
-    }
-  }
-
-  return matchColor._cache[hash] = li;
-}
-
-matchColor._cache = {};
-
-// http://stackoverflow.com/questions/1633828
-matchColor.distance = function(r1, g1, b1, r2, g2, b2) {
-  return Math.pow(30 * (r1 - r2), 2)
-    + Math.pow(59 * (g1 - g2), 2)
-    + Math.pow(11 * (b1 - b2), 2);
-};
-
-function each(obj, iter, con) {
-  if (obj.forEach) return obj.forEach(iter, con);
-  for (var i = 0; i < obj.length; i++) {
-    iter.call(con, obj[i], i, obj);
-  }
-}
-
-function keys(obj) {
-  if (Object.keys) return Object.keys(obj);
-  var key, keys = [];
-  for (key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      keys.push(key);
-    }
-  }
-  return keys;
-}
-
-/**
- * Expose
- */
-
-Terminal.EventEmitter = EventEmitter;
-Terminal.Stream = Stream;
-Terminal.inherits = inherits;
-Terminal.on = on;
-Terminal.off = off;
-Terminal.cancel = cancel;
-
-if (typeof module !== 'undefined') {
-  module.exports = Terminal;
-} else {
-  this.Terminal = Terminal;
-}
-
-}).call(function() {
-  return this || (typeof window !== 'undefined' ? window : global);
-}());
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],311:[function(require,module,exports){
+},{"_process":214,"randombytes":305,"safe-buffer":306}],305:[function(require,module,exports){
+arguments[4][225][0].apply(exports,arguments)
+},{"_process":214,"dup":225,"safe-buffer":306}],306:[function(require,module,exports){
+arguments[4][240][0].apply(exports,arguments)
+},{"buffer":128,"dup":240}],307:[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  * IPv6 Support
@@ -82558,7 +76342,7 @@ if (typeof module !== 'undefined') {
   };
 }));
 
-},{}],309:[function(require,module,exports){
+},{}],308:[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  * Second Level Domain (SLD) Support
@@ -82805,7 +76589,1624 @@ if (typeof module !== 'undefined') {
   return SLD;
 }));
 
+},{}],309:[function(require,module,exports){
+(function (global){
+/*! https://mths.be/punycode v1.4.0 by @mathias */
+;(function(root) {
+
+	/** Detect free variables */
+	var freeExports = typeof exports == 'object' && exports &&
+		!exports.nodeType && exports;
+	var freeModule = typeof module == 'object' && module &&
+		!module.nodeType && module;
+	var freeGlobal = typeof global == 'object' && global;
+	if (
+		freeGlobal.global === freeGlobal ||
+		freeGlobal.window === freeGlobal ||
+		freeGlobal.self === freeGlobal
+	) {
+		root = freeGlobal;
+	}
+
+	/**
+	 * The `punycode` object.
+	 * @name punycode
+	 * @type Object
+	 */
+	var punycode,
+
+	/** Highest positive signed 32-bit float value */
+	maxInt = 2147483647, // aka. 0x7FFFFFFF or 2^31-1
+
+	/** Bootstring parameters */
+	base = 36,
+	tMin = 1,
+	tMax = 26,
+	skew = 38,
+	damp = 700,
+	initialBias = 72,
+	initialN = 128, // 0x80
+	delimiter = '-', // '\x2D'
+
+	/** Regular expressions */
+	regexPunycode = /^xn--/,
+	regexNonASCII = /[^\x20-\x7E]/, // unprintable ASCII chars + non-ASCII chars
+	regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g, // RFC 3490 separators
+
+	/** Error messages */
+	errors = {
+		'overflow': 'Overflow: input needs wider integers to process',
+		'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+		'invalid-input': 'Invalid input'
+	},
+
+	/** Convenience shortcuts */
+	baseMinusTMin = base - tMin,
+	floor = Math.floor,
+	stringFromCharCode = String.fromCharCode,
+
+	/** Temporary variable */
+	key;
+
+	/*--------------------------------------------------------------------------*/
+
+	/**
+	 * A generic error utility function.
+	 * @private
+	 * @param {String} type The error type.
+	 * @returns {Error} Throws a `RangeError` with the applicable error message.
+	 */
+	function error(type) {
+		throw new RangeError(errors[type]);
+	}
+
+	/**
+	 * A generic `Array#map` utility function.
+	 * @private
+	 * @param {Array} array The array to iterate over.
+	 * @param {Function} callback The function that gets called for every array
+	 * item.
+	 * @returns {Array} A new array of values returned by the callback function.
+	 */
+	function map(array, fn) {
+		var length = array.length;
+		var result = [];
+		while (length--) {
+			result[length] = fn(array[length]);
+		}
+		return result;
+	}
+
+	/**
+	 * A simple `Array#map`-like wrapper to work with domain name strings or email
+	 * addresses.
+	 * @private
+	 * @param {String} domain The domain name or email address.
+	 * @param {Function} callback The function that gets called for every
+	 * character.
+	 * @returns {Array} A new string of characters returned by the callback
+	 * function.
+	 */
+	function mapDomain(string, fn) {
+		var parts = string.split('@');
+		var result = '';
+		if (parts.length > 1) {
+			// In email addresses, only the domain name should be punycoded. Leave
+			// the local part (i.e. everything up to `@`) intact.
+			result = parts[0] + '@';
+			string = parts[1];
+		}
+		// Avoid `split(regex)` for IE8 compatibility. See #17.
+		string = string.replace(regexSeparators, '\x2E');
+		var labels = string.split('.');
+		var encoded = map(labels, fn).join('.');
+		return result + encoded;
+	}
+
+	/**
+	 * Creates an array containing the numeric code points of each Unicode
+	 * character in the string. While JavaScript uses UCS-2 internally,
+	 * this function will convert a pair of surrogate halves (each of which
+	 * UCS-2 exposes as separate characters) into a single code point,
+	 * matching UTF-16.
+	 * @see `punycode.ucs2.encode`
+	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	 * @memberOf punycode.ucs2
+	 * @name decode
+	 * @param {String} string The Unicode input string (UCS-2).
+	 * @returns {Array} The new array of code points.
+	 */
+	function ucs2decode(string) {
+		var output = [],
+		    counter = 0,
+		    length = string.length,
+		    value,
+		    extra;
+		while (counter < length) {
+			value = string.charCodeAt(counter++);
+			if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+				// high surrogate, and there is a next character
+				extra = string.charCodeAt(counter++);
+				if ((extra & 0xFC00) == 0xDC00) { // low surrogate
+					output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+				} else {
+					// unmatched surrogate; only append this code unit, in case the next
+					// code unit is the high surrogate of a surrogate pair
+					output.push(value);
+					counter--;
+				}
+			} else {
+				output.push(value);
+			}
+		}
+		return output;
+	}
+
+	/**
+	 * Creates a string based on an array of numeric code points.
+	 * @see `punycode.ucs2.decode`
+	 * @memberOf punycode.ucs2
+	 * @name encode
+	 * @param {Array} codePoints The array of numeric code points.
+	 * @returns {String} The new Unicode string (UCS-2).
+	 */
+	function ucs2encode(array) {
+		return map(array, function(value) {
+			var output = '';
+			if (value > 0xFFFF) {
+				value -= 0x10000;
+				output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
+				value = 0xDC00 | value & 0x3FF;
+			}
+			output += stringFromCharCode(value);
+			return output;
+		}).join('');
+	}
+
+	/**
+	 * Converts a basic code point into a digit/integer.
+	 * @see `digitToBasic()`
+	 * @private
+	 * @param {Number} codePoint The basic numeric code point value.
+	 * @returns {Number} The numeric value of a basic code point (for use in
+	 * representing integers) in the range `0` to `base - 1`, or `base` if
+	 * the code point does not represent a value.
+	 */
+	function basicToDigit(codePoint) {
+		if (codePoint - 48 < 10) {
+			return codePoint - 22;
+		}
+		if (codePoint - 65 < 26) {
+			return codePoint - 65;
+		}
+		if (codePoint - 97 < 26) {
+			return codePoint - 97;
+		}
+		return base;
+	}
+
+	/**
+	 * Converts a digit/integer into a basic code point.
+	 * @see `basicToDigit()`
+	 * @private
+	 * @param {Number} digit The numeric value of a basic code point.
+	 * @returns {Number} The basic code point whose value (when used for
+	 * representing integers) is `digit`, which needs to be in the range
+	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
+	 * used; else, the lowercase form is used. The behavior is undefined
+	 * if `flag` is non-zero and `digit` has no uppercase form.
+	 */
+	function digitToBasic(digit, flag) {
+		//  0..25 map to ASCII a..z or A..Z
+		// 26..35 map to ASCII 0..9
+		return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
+	}
+
+	/**
+	 * Bias adaptation function as per section 3.4 of RFC 3492.
+	 * https://tools.ietf.org/html/rfc3492#section-3.4
+	 * @private
+	 */
+	function adapt(delta, numPoints, firstTime) {
+		var k = 0;
+		delta = firstTime ? floor(delta / damp) : delta >> 1;
+		delta += floor(delta / numPoints);
+		for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
+			delta = floor(delta / baseMinusTMin);
+		}
+		return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+	}
+
+	/**
+	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
+	 * symbols.
+	 * @memberOf punycode
+	 * @param {String} input The Punycode string of ASCII-only symbols.
+	 * @returns {String} The resulting string of Unicode symbols.
+	 */
+	function decode(input) {
+		// Don't use UCS-2
+		var output = [],
+		    inputLength = input.length,
+		    out,
+		    i = 0,
+		    n = initialN,
+		    bias = initialBias,
+		    basic,
+		    j,
+		    index,
+		    oldi,
+		    w,
+		    k,
+		    digit,
+		    t,
+		    /** Cached calculation results */
+		    baseMinusT;
+
+		// Handle the basic code points: let `basic` be the number of input code
+		// points before the last delimiter, or `0` if there is none, then copy
+		// the first basic code points to the output.
+
+		basic = input.lastIndexOf(delimiter);
+		if (basic < 0) {
+			basic = 0;
+		}
+
+		for (j = 0; j < basic; ++j) {
+			// if it's not a basic code point
+			if (input.charCodeAt(j) >= 0x80) {
+				error('not-basic');
+			}
+			output.push(input.charCodeAt(j));
+		}
+
+		// Main decoding loop: start just after the last delimiter if any basic code
+		// points were copied; start at the beginning otherwise.
+
+		for (index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
+
+			// `index` is the index of the next character to be consumed.
+			// Decode a generalized variable-length integer into `delta`,
+			// which gets added to `i`. The overflow checking is easier
+			// if we increase `i` as we go, then subtract off its starting
+			// value at the end to obtain `delta`.
+			for (oldi = i, w = 1, k = base; /* no condition */; k += base) {
+
+				if (index >= inputLength) {
+					error('invalid-input');
+				}
+
+				digit = basicToDigit(input.charCodeAt(index++));
+
+				if (digit >= base || digit > floor((maxInt - i) / w)) {
+					error('overflow');
+				}
+
+				i += digit * w;
+				t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+
+				if (digit < t) {
+					break;
+				}
+
+				baseMinusT = base - t;
+				if (w > floor(maxInt / baseMinusT)) {
+					error('overflow');
+				}
+
+				w *= baseMinusT;
+
+			}
+
+			out = output.length + 1;
+			bias = adapt(i - oldi, out, oldi == 0);
+
+			// `i` was supposed to wrap around from `out` to `0`,
+			// incrementing `n` each time, so we'll fix that now:
+			if (floor(i / out) > maxInt - n) {
+				error('overflow');
+			}
+
+			n += floor(i / out);
+			i %= out;
+
+			// Insert `n` at position `i` of the output
+			output.splice(i++, 0, n);
+
+		}
+
+		return ucs2encode(output);
+	}
+
+	/**
+	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
+	 * Punycode string of ASCII-only symbols.
+	 * @memberOf punycode
+	 * @param {String} input The string of Unicode symbols.
+	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
+	 */
+	function encode(input) {
+		var n,
+		    delta,
+		    handledCPCount,
+		    basicLength,
+		    bias,
+		    j,
+		    m,
+		    q,
+		    k,
+		    t,
+		    currentValue,
+		    output = [],
+		    /** `inputLength` will hold the number of code points in `input`. */
+		    inputLength,
+		    /** Cached calculation results */
+		    handledCPCountPlusOne,
+		    baseMinusT,
+		    qMinusT;
+
+		// Convert the input in UCS-2 to Unicode
+		input = ucs2decode(input);
+
+		// Cache the length
+		inputLength = input.length;
+
+		// Initialize the state
+		n = initialN;
+		delta = 0;
+		bias = initialBias;
+
+		// Handle the basic code points
+		for (j = 0; j < inputLength; ++j) {
+			currentValue = input[j];
+			if (currentValue < 0x80) {
+				output.push(stringFromCharCode(currentValue));
+			}
+		}
+
+		handledCPCount = basicLength = output.length;
+
+		// `handledCPCount` is the number of code points that have been handled;
+		// `basicLength` is the number of basic code points.
+
+		// Finish the basic string - if it is not empty - with a delimiter
+		if (basicLength) {
+			output.push(delimiter);
+		}
+
+		// Main encoding loop:
+		while (handledCPCount < inputLength) {
+
+			// All non-basic code points < n have been handled already. Find the next
+			// larger one:
+			for (m = maxInt, j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+				if (currentValue >= n && currentValue < m) {
+					m = currentValue;
+				}
+			}
+
+			// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+			// but guard against overflow
+			handledCPCountPlusOne = handledCPCount + 1;
+			if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+				error('overflow');
+			}
+
+			delta += (m - n) * handledCPCountPlusOne;
+			n = m;
+
+			for (j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+
+				if (currentValue < n && ++delta > maxInt) {
+					error('overflow');
+				}
+
+				if (currentValue == n) {
+					// Represent delta as a generalized variable-length integer
+					for (q = delta, k = base; /* no condition */; k += base) {
+						t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+						if (q < t) {
+							break;
+						}
+						qMinusT = q - t;
+						baseMinusT = base - t;
+						output.push(
+							stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+						);
+						q = floor(qMinusT / baseMinusT);
+					}
+
+					output.push(stringFromCharCode(digitToBasic(q, 0)));
+					bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+					delta = 0;
+					++handledCPCount;
+				}
+			}
+
+			++delta;
+			++n;
+
+		}
+		return output.join('');
+	}
+
+	/**
+	 * Converts a Punycode string representing a domain name or an email address
+	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
+	 * it doesn't matter if you call it on a string that has already been
+	 * converted to Unicode.
+	 * @memberOf punycode
+	 * @param {String} input The Punycoded domain name or email address to
+	 * convert to Unicode.
+	 * @returns {String} The Unicode representation of the given Punycode
+	 * string.
+	 */
+	function toUnicode(input) {
+		return mapDomain(input, function(string) {
+			return regexPunycode.test(string)
+				? decode(string.slice(4).toLowerCase())
+				: string;
+		});
+	}
+
+	/**
+	 * Converts a Unicode string representing a domain name or an email address to
+	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
+	 * i.e. it doesn't matter if you call it with a domain that's already in
+	 * ASCII.
+	 * @memberOf punycode
+	 * @param {String} input The domain name or email address to convert, as a
+	 * Unicode string.
+	 * @returns {String} The Punycode representation of the given domain name or
+	 * email address.
+	 */
+	function toASCII(input) {
+		return mapDomain(input, function(string) {
+			return regexNonASCII.test(string)
+				? 'xn--' + encode(string)
+				: string;
+		});
+	}
+
+	/*--------------------------------------------------------------------------*/
+
+	/** Define the public API */
+	punycode = {
+		/**
+		 * A string representing the current Punycode.js version number.
+		 * @memberOf punycode
+		 * @type String
+		 */
+		'version': '1.3.2',
+		/**
+		 * An object of methods to convert from JavaScript's internal character
+		 * representation (UCS-2) to Unicode code points, and back.
+		 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+		 * @memberOf punycode
+		 * @type Object
+		 */
+		'ucs2': {
+			'decode': ucs2decode,
+			'encode': ucs2encode
+		},
+		'decode': decode,
+		'encode': encode,
+		'toASCII': toASCII,
+		'toUnicode': toUnicode
+	};
+
+	/** Expose `punycode` */
+	// Some AMD build optimizers, like r.js, check for specific condition patterns
+	// like the following:
+	if (
+		typeof define == 'function' &&
+		typeof define.amd == 'object' &&
+		define.amd
+	) {
+		define('punycode', function() {
+			return punycode;
+		});
+	} else if (freeExports && freeModule) {
+		if (module.exports == freeExports) {
+			// in Node.js, io.js, or RingoJS v0.8.0+
+			freeModule.exports = punycode;
+		} else {
+			// in Narwhal or RingoJS v0.7.0-
+			for (key in punycode) {
+				punycode.hasOwnProperty(key) && (freeExports[key] = punycode[key]);
+			}
+		}
+	} else {
+		// in Rhino or a web browser
+		root.punycode = punycode;
+	}
+
+}(this));
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],310:[function(require,module,exports){
+module.exports=["000000",
+"800000",
+"008000",
+"808000",
+"000080",
+"800080",
+"008080",
+"c0c0c0",
+"808080",
+"ff0000",
+"00ff00",
+"ffff00",
+"0000ff",
+"ff00ff",
+"00ffff",
+"ffffff",
+"000000",
+"00005f",
+"000087",
+"0000af",
+"0000d7",
+"0000ff",
+"005f00",
+"005f5f",
+"005f87",
+"005faf",
+"005fd7",
+"005fff",
+"008700",
+"00875f",
+"008787",
+"0087af",
+"0087d7",
+"0087ff",
+"00af00",
+"00af5f",
+"00af87",
+"00afaf",
+"00afd7",
+"00afff",
+"00d700",
+"00d75f",
+"00d787",
+"00d7af",
+"00d7d7",
+"00d7ff",
+"00ff00",
+"00ff5f",
+"00ff87",
+"00ffaf",
+"00ffd7",
+"00ffff",
+"5f0000",
+"5f005f",
+"5f0087",
+"5f00af",
+"5f00d7",
+"5f00ff",
+"5f5f00",
+"5f5f5f",
+"5f5f87",
+"5f5faf",
+"5f5fd7",
+"5f5fff",
+"5f8700",
+"5f875f",
+"5f8787",
+"5f87af",
+"5f87d7",
+"5f87ff",
+"5faf00",
+"5faf5f",
+"5faf87",
+"5fafaf",
+"5fafd7",
+"5fafff",
+"5fd700",
+"5fd75f",
+"5fd787",
+"5fd7af",
+"5fd7d7",
+"5fd7ff",
+"5fff00",
+"5fff5f",
+"5fff87",
+"5fffaf",
+"5fffd7",
+"5fffff",
+"870000",
+"87005f",
+"870087",
+"8700af",
+"8700d7",
+"8700ff",
+"875f00",
+"875f5f",
+"875f87",
+"875faf",
+"875fd7",
+"875fff",
+"878700",
+"87875f",
+"878787",
+"8787af",
+"8787d7",
+"8787ff",
+"87af00",
+"87af5f",
+"87af87",
+"87afaf",
+"87afd7",
+"87afff",
+"87d700",
+"87d75f",
+"87d787",
+"87d7af",
+"87d7d7",
+"87d7ff",
+"87ff00",
+"87ff5f",
+"87ff87",
+"87ffaf",
+"87ffd7",
+"87ffff",
+"af0000",
+"af005f",
+"af0087",
+"af00af",
+"af00d7",
+"af00ff",
+"af5f00",
+"af5f5f",
+"af5f87",
+"af5faf",
+"af5fd7",
+"af5fff",
+"af8700",
+"af875f",
+"af8787",
+"af87af",
+"af87d7",
+"af87ff",
+"afaf00",
+"afaf5f",
+"afaf87",
+"afafaf",
+"afafd7",
+"afafff",
+"afd700",
+"afd75f",
+"afd787",
+"afd7af",
+"afd7d7",
+"afd7ff",
+"afff00",
+"afff5f",
+"afff87",
+"afffaf",
+"afffd7",
+"afffff",
+"d70000",
+"d7005f",
+"d70087",
+"d700af",
+"d700d7",
+"d700ff",
+"d75f00",
+"d75f5f",
+"d75f87",
+"d75faf",
+"d75fd7",
+"d75fff",
+"d78700",
+"d7875f",
+"d78787",
+"d787af",
+"d787d7",
+"d787ff",
+"d7af00",
+"d7af5f",
+"d7af87",
+"d7afaf",
+"d7afd7",
+"d7afff",
+"d7d700",
+"d7d75f",
+"d7d787",
+"d7d7af",
+"d7d7d7",
+"d7d7ff",
+"d7ff00",
+"d7ff5f",
+"d7ff87",
+"d7ffaf",
+"d7ffd7",
+"d7ffff",
+"ff0000",
+"ff005f",
+"ff0087",
+"ff00af",
+"ff00d7",
+"ff00ff",
+"ff5f00",
+"ff5f5f",
+"ff5f87",
+"ff5faf",
+"ff5fd7",
+"ff5fff",
+"ff8700",
+"ff875f",
+"ff8787",
+"ff87af",
+"ff87d7",
+"ff87ff",
+"ffaf00",
+"ffaf5f",
+"ffaf87",
+"ffafaf",
+"ffafd7",
+"ffafff",
+"ffd700",
+"ffd75f",
+"ffd787",
+"ffd7af",
+"ffd7d7",
+"ffd7ff",
+"ffff00",
+"ffff5f",
+"ffff87",
+"ffffaf",
+"ffffd7",
+"ffffff",
+"080808",
+"121212",
+"1c1c1c",
+"262626",
+"303030",
+"3a3a3a",
+"444444",
+"4e4e4e",
+"585858",
+"606060",
+"666666",
+"767676",
+"808080",
+"8a8a8a",
+"949494",
+"9e9e9e",
+"a8a8a8",
+"b2b2b2",
+"bcbcbc",
+"c6c6c6",
+"d0d0d0",
+"dadada",
+"e4e4e4",
+"eeeeee"]
+
+},{}],311:[function(require,module,exports){
+// colors scraped from
+// http://www.calmar.ws/vim/256-xterm-24bit-rgb-color-chart.html
+// %s/ *\d\+ \+#\([^ ]\+\)/\1\r/g
+
+var colors = require('./colors.json')
+    .map(function (hex) {
+        var r = parseInt(hex.slice(0,2), 16);
+        var g = parseInt(hex.slice(2,4), 16);
+        var b = parseInt(hex.slice(4,6), 16);
+        return [ r, g, b ];
+    })
+;
+
+var x256 = module.exports = function (r, g, b) {
+    var c = Array.isArray(r) ? r : [ r, g, b ];
+    var best = null;
+    
+    for (var i = 0; i < colors.length; i++) {
+        var d = distance(colors[i], c)
+        if (!best || d <= best.distance) {
+            best = { distance : d, index : i };
+        }
+    }
+    
+    return best.index;
+};
+x256.colors = colors;
+
+function distance (a, b) {
+    return Math.sqrt(
+        Math.pow(a[0]-b[0], 2)
+        + Math.pow(a[1]-b[1], 2)
+        + Math.pow(a[2]-b[2], 2)
+    )
+}
+
+},{"./colors.json":310}],"blessed":[function(require,module,exports){
+/**
+ * blessed - a high-level terminal interface library for node.js
+ * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
+ * https://github.com/chjj/blessed
+ */
+
+/**
+ * Blessed
+ */
+
+function blessed() {
+  return blessed.program.apply(null, arguments);
+}
+
+blessed.program = blessed.Program = require('./program');
+blessed.tput = blessed.Tput = require('./tput');
+blessed.widget = require('./widget');
+blessed.colors = require('./colors');
+blessed.unicode = require('./unicode');
+blessed.helpers = require('./helpers');
+
+blessed.helpers.sprintf = blessed.tput.sprintf;
+blessed.helpers.tryRead = blessed.tput.tryRead;
+blessed.helpers.merge(blessed, blessed.helpers);
+
+blessed.helpers.merge(blessed, blessed.widget);
+
+/**
+ * Expose
+ */
+
+module.exports = blessed;
+
+},{"./colors":33,"./helpers":36,"./program":38,"./tput":39,"./unicode":40,"./widget":41}],"context":[function(require,module,exports){
+(function (Buffer){
+'use strict';
+
+const fs        = require('fs'),
+      URI       = require('urijs'),
+      Cluster   = require('./cluster'),
+      Namespace = require('./namespace'),
+      User      = require('./user');
+
+/**
+ * contexts:
+ * - context:
+ *     cluster: horse-cluster
+ *     namespace: chisel-ns
+ *     user: green-user
+ *   name: federal-context
+ * - context:
+ *     cluster: pig-cluster
+ *     namespace: saw-ns
+ *     user: black-user
+ *   name: queen-anne-context
+ */
+class Context {
+
+  constructor({ cluster, namespace, user, name }) {
+    if (typeof name === 'undefined') {
+      if (typeof namespace.name === 'undefined') {
+        this.name = cluster.name + '/' + user.username;
+      } else {
+        this.name = namespace.name + '/' + cluster.name + '/' + user.username;
+      }
+    } else {
+      this.name = name;
+    }
+    this.cluster = cluster;
+    this.namespace = namespace;
+    this.user = user;
+  }
+
+  getMasterApi() {
+    if (typeof this.cluster.server === 'undefined') {
+      return undefined;
+    }
+
+    const api = Context.getBaseMasterApi(this.cluster.server);
+    // TODO: handle browser support for loading file certs
+    if (this.user.certificatePath) {
+      api.cert = fs.readFileSync(this.user.certificatePath);
+    }
+    if (this.user.certificateBase64) {
+      api.cert = Buffer.from(this.user.certificateBase64, 'base64');
+    }
+    if (this.user.keyPath) {
+      api.key = fs.readFileSync(this.user.keyPath);
+    }
+    if (this.user.keyBase64) {
+      api.key = Buffer.from(this.user.keyBase64, 'base64');
+    }
+    if (this.user.token) {
+      api.headers['Authorization'] = `Bearer ${this.user.token}`;
+    }
+    if (this.cluster.rejectUnauthorized) {
+      api.rejectUnauthorized = false;
+    }
+    if (this.cluster.ca) {
+      api.ca = fs.readFileSync(this.cluster.ca);
+    }
+    if (this.cluster.certData) {
+      api.ca = Buffer.from(this.cluster.certData, 'base64');
+    }
+    return api;
+  }
+
+  static getBaseMasterApi(url) {
+    const api = {
+      headers : {
+        'Accept' : 'application/json, text/plain, */*',
+      },
+      get url() {
+        // Do not report default ports as it can cause non matching redirection URLs
+        // during OAuth authentication
+        const skipPort = !this.port || this.protocol === 'http:' && this.port === '80' || this.protocol === 'https:' && this.port === '443';
+        let url = `${this.protocol}//${this.hostname}`;
+        if (!skipPort) url += `:${this.port}`;
+        if (this.path) url += this.path;
+        return url;
+      },
+      set url(url) {
+        const uri = URI.parse(url);
+        let parts = {};
+        if (uri.protocol) {
+          parts = uri;
+        } else {
+          URI.parseHost(url, parts);
+        }
+        const { protocol = 'https', hostname, port, path } = parts;
+        this.protocol = protocol + ':';
+        this.hostname = hostname;
+        this.port = port;
+        this.path = path;
+      }
+    }
+    api.url = url;
+    return api;
+  }
+}
+
+Context.default = new Context({
+  cluster   : Cluster.default,
+  namespace : Namespace.default,
+  user      : User.default,
+  name      : '',
+});
+
+module.exports = Context;
+}).call(this,require("buffer").Buffer)
+},{"./cluster":2,"./namespace":5,"./user":6,"buffer":128,"fs":78,"urijs":"urijs"}],"http-then":[function(require,module,exports){
+(function (Buffer){
+'use strict';
+
+const crypto = require('crypto'),
+      http   = require('http'),
+      https  = require('https'),
+      os     = require('os'),
+      URI    = require('urijs');
+
+const { Transform } = require('stream');
+
+// TODO: expose a writable stream option instead of a generator
+module.exports.get = function (options, { generator, readable, async = true, cancellable = false } = {}) {
+  if (generator) {
+    if (os.platform() === 'browser' && WebSocket) {
+      return getWebSocketStream(options, { generator, readable, async });
+    } else {
+      return getStream(options, { generator, readable, async });
+    }
+  } else {
+    return getBody(options, cancellable);
+  }
+};
+
+function getBody(options, cancellable = false) {
+  let cancellation = Function.prototype;
+  const promise = new Promise((resolve, reject) => {
+    const client = (options.protocol || 'https').startsWith('https') ? https : http;
+    let clientAbort, finished;
+    const request = client.get(options, response => {
+      if (response.statusCode >= 400) {
+        const error = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
+        // standard promises don't handle multi-parameters reject callbacks
+        error.response = response;
+        // IncomingMessage.destroy is not available in Browserify default shim
+        // response.destroy(error);
+        reject(error);
+        return;
+      }
+      const body = [];
+      response
+        .on('data', chunk => body.push(chunk))
+        .on('end', () => {
+          response.body = Buffer.concat(body);
+          finished = true;
+          resolve(response);
+        });
+    }).on('error', error => {
+      finished = true;
+      // 'Error: socket hang up' may be thrown on abort
+      if (!clientAbort) reject(error);
+    });
+    cancellation = () => {
+      if (!finished) {
+        clientAbort = true;
+        request.abort();
+        return true;
+      }
+    };
+  });
+  return cancellable ? { promise, cancellation: () => cancellation() } : promise;
+}
+
+function getWebSocketStream(options, { generator, readable, async = true }) {
+  let cancellation = Function.prototype;
+  const promise = new Promise((resolve, reject) => {
+    const url = new URI(options.path)
+      .protocol((options.protocol || 'https').startsWith('https') ? 'wss' : 'ws')
+      .hostname(options.hostname)
+      .port(options.port);
+    if (options.headers['Authorization']) {
+      url.addQuery('access_token', options.headers['Authorization'].substring(7));
+    }
+    const socket = new WebSocket(url.toString(), options.headers['Sec-WebSocket-Protocol']);
+    socket.binaryType = 'arraybuffer';
+    if (readable) readable.on('data', data => socket.send(data));
+
+    let clientAbort, abortState;
+    cancellation = () => {
+      abortState = socket.readyState;
+      clientAbort = true;
+      socket.close();
+    };
+
+    socket.addEventListener('error', event => {
+      if (!clientAbort || abortState > 0) {
+        reject(Error(`WebSocket connection failed to ${event.target.url}`));
+      }
+    });
+
+    socket.addEventListener('open', event => {
+      const gen = generator();
+      gen.next();
+
+      socket.addEventListener('message', event => {
+        const res = gen.next(new Buffer(event.data, 'binary'));
+        if (res.done) {
+          socket.close();
+          event.body = res.value;
+          // ignored for async as it's already been resolved
+          resolve(event);
+        }
+      });
+
+      socket.addEventListener('close', event => {
+        if (!clientAbort) {
+          const res = gen.next();
+          // the generator may have already returned from the 'data' event
+          if (!async && !res.done) {
+            event.body = res.value;
+            resolve(event);
+          }
+        }
+        // ignored if the generator is done already
+        gen.return();
+      });
+
+      if (async) {
+        resolve(event);
+      }
+    });
+  });
+
+  return { promise, cancellation: () => cancellation() };
+}
+
+function getStream(options, { generator, readable, async = true }) {
+  let cancellation = Function.prototype;
+
+  const promise = new Promise((resolve, reject) => {
+    let clientAbort, serverAbort;
+    const client = (options.protocol || 'https').startsWith('https') ? https : http;
+    const request = client.get(options)
+      .on('error', error => {
+        // FIXME: check the state of the connection and the promise
+        // 'Error: socket hang up' may be thrown on close
+        // for containers that have not emitted any logs yet
+        if (!clientAbort) reject(error);
+      })
+      .on('response', response => {
+        if (response.statusCode >= 400) {
+          const error = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
+          // standard promises don't handle multi-parameters reject callbacks
+          error.response = response;
+          response.destroy(error);
+          return;
+        }
+        const gen = generator();
+        gen.next();
+
+        response
+          .on('aborted', () => serverAbort = !clientAbort)
+          .on('data', chunk => {
+            // TODO: is there a way to avoid the client to deal with fragmentation?
+            const res = gen.next(chunk);
+            if (res.done) {
+              // we may work on the http.ClientRequest if needed
+              response.destroy();
+              response.body = res.value;
+              // ignored for async as it's already been resolved
+              resolve(response);
+            }
+          })
+          .on('end', () => {
+            if (serverAbort || clientAbort && !async) {
+              try {
+                // FIXME: what happens when the generator is done already?
+                const res = gen.throw(new Error('Request aborted'));
+                // the generator may have already returned from the 'data' event
+                if (!async && !res.done) {
+                  response.body = res.value;
+                  resolve(response);
+                }
+              } catch (e) {
+                if (!async) {
+                  reject(e);
+                }
+                // else swallow for generators that ignore aborted requests
+              }
+            } else if (!(clientAbort && async)) {
+              const res = gen.next();
+              // the generator may have already returned from the 'data' event
+              if (!async && !res.done) {
+                response.body = res.value;
+                resolve(response);
+              }
+            }
+            // ignored if the generator is done already
+            gen.return();
+          });
+
+        if (async) {
+          resolve(response);
+        }
+      })
+      .on('upgrade', (response, socket, head) => {
+        // TODO: verify 'Sec-WebSocket-Accept' during WebSocket handshake
+        if (response.statusCode !== 101) {
+          const error = new Error(`Failed to upgrade resource ${options.path}, status code: ${response.statusCode}`);
+          // standard promises don't handle multi-parameters reject callbacks
+          error.response = response;
+          response.destroy(error);
+          return;
+        }
+        cancellation = () => {
+          clientAbort = true;
+          socket.end();
+        };
+
+        if (readable) readable.pipe(new Encode()).pipe(socket);
+
+        const gen = decode(generator(), socket);
+        gen.next();
+
+        socket
+          .on('data', frame => {
+            // the server may still be sending some data as the socket
+            // is ended, not aborted, on cancel
+            if (!clientAbort) {
+              const res = gen.next(frame);
+              if (res.done) {
+                socket.end();
+                response.body = res.value;
+                // ignored for async as it's already been resolved
+                resolve(response);
+              }
+            } else {
+              gen.return();
+            }
+          })
+          .on('end', () => {
+            if (!clientAbort) {
+              const res = gen.next();
+              // the generator may have already returned from the 'data' event
+              if (!async && !res.done) {
+                response.body = res.value;
+                resolve(response);
+              }
+            }
+            // ignored if the generator is done already
+            // FIXME: avoid leaking the client generator
+            gen.return();
+          });
+
+        if (async) {
+          resolve(response);
+        }
+      });
+    cancellation = () => {
+      clientAbort = true;
+      request.abort();
+    };
+  });
+  return { promise, cancellation: () => cancellation() };
+}
+
+// TODO: handle fragmentation and continuation frame
+function* decode(gen, socket) {
+  gen.next();
+  let data, frame, payload, offset;
+  while (data = yield) {
+    if (!frame) {
+      frame = decodeFrame(data);
+      // handle connection close in the 'end' event handler
+      if (frame.opcode === 0x8) {
+        socket.end();
+        continue;
+      }
+      if (frame.payload.length === frame.length) {
+        payload = frame.payload;
+        offset = payload.length;
+      } else {
+        payload = Buffer.alloc(frame.length);
+        offset = frame.payload.copy(payload);
+      }
+    } else {
+      offset += data.copy(payload, offset);
+    }
+
+    if (offset === frame.length) {
+      // all the payload data has been transmitted
+      try {
+        const res = gen.next(payload);
+        if (res.done) {
+          return res.value;
+        }
+      } finally {
+        frame = undefined;
+      }
+    }
+  }
+  return gen.next().value;
+}
+
+// https://tools.ietf.org/html/rfc6455#section-5.2
+// https://tools.ietf.org/html/rfc6455#section-5.7
+function decodeFrame(frame) {
+  const FIN    = frame[0] & 0x80;
+  const RSV1   = frame[0] & 0x40;
+  const RSV2   = frame[0] & 0x20;
+  const RSV3   = frame[0] & 0x10;
+  const opcode = frame[0] & 0x0F;
+  const mask   = frame[1] & 0x80;
+  let length   = frame[1] & 0x7F;
+
+  // just return the opcode on connection close
+  if (opcode === 0x8) {
+    return { opcode };
+  }
+
+  let nextByte = 2;
+  if (length === 126) {
+    length = frame.readUInt16BE(nextByte);
+    nextByte += 2;
+  } else if (length === 127) {
+    length = frame.readUInt64BE(nextByte);
+    nextByte += 8;
+  }
+
+  let maskingKey;
+  if (mask) {
+    maskingKey = frame.slice(nextByte, nextByte + 4);
+    nextByte += 4;
+  }
+
+  const payload = frame.slice(nextByte);
+  if (maskingKey) {
+    for (let i = 0; i < payload.length; i++) {
+      payload[i] = payload[i] ^ maskingKey[i % 4];
+    }
+  }
+  return { FIN, opcode, length, payload };
+}
+
+function encodeFrame(data) {
+  const length = data.length;
+  let extra = 0;
+  if (length <= 125) {
+    extra = 0;
+  } else if (length <= (1 << 17) - 1) {
+    extra = 2;
+  } else if (length <= (1 << 64) - 1) {
+    extra = 8;
+  } else {
+    // TODO: handle very large messages, fragment into multiple continuation frames...
+    throw Error('Message longer than 2^64 are not supported!');
+  }
+
+  const frame = Buffer.allocUnsafe(6 + length + extra);
+  const random = crypto.randomBytes(4);
+  for (let i = 0, j = 0; i < length; i++, j++) {
+    data[i] = data[i] ^ random[j % 4];
+  }
+
+  frame[0] = 0x80 | 0x1;
+  let next = 2;
+  if(extra === 0) {
+    frame[1] = 0x80 | length;
+  } else if (extra === 2) {
+    frame[1] = 0x80 | 126;
+    frame[2] = length >> 8;
+    frame[3] = length & 0xFF;
+    next = 4;
+  } else { 
+    frame[1] = 0x80 | 127;
+    frame[2] = length >> 56;
+    frame[3] = length >> 48;
+    frame[4] = length >> 40;
+    frame[5] = length >> 32;
+    frame[6] = length >> 24;
+    frame[7] = length >> 16;
+    frame[8] = length >> 8;
+    frame[9] = length & 0xFF;
+    next = 10
+  }
+  frame[next++] = random[0];
+  frame[next++] = random[1];
+  frame[next++] = random[2];
+  frame[next++] = random[3];
+  for (let i = 0; i < length; i++) {
+    frame[next + i] = data[i];
+  }
+  return frame;
+}
+
+class Encode extends Transform {
+  constructor() {
+    super({
+      transform(chunk, _, callback) {
+        try {
+          this.push(encodeFrame(chunk));
+          callback();
+        } catch (error) {
+          callback(error);
+        }
+      }
+    });
+  }
+}
+
+}).call(this,require("buffer").Buffer)
+},{"buffer":128,"crypto":138,"http":250,"https":181,"os":190,"stream":249,"urijs":"urijs"}],"kubebox":[function(require,module,exports){
+'use strict';
+
+// TODO: display uncaught exception in a popup
+// TODO: handle current namespace deletion nicely
+
+const Client       = require('./client'),
+      blessed      = require('blessed'),
+      EventEmitter = require('events'),
+      get          = require('./http-then').get,
+      os           = require('os'),
+      task         = require('./task'),
+      URI          = require('urijs');
+
+const { Cluster, Context, KubeConfig, Namespace, User } = require('./config/config');
+const { Dashboard, login, namespaces, NavBar, spinner } = require('./ui/ui');
+const { isNotEmpty, isEmpty } = require('./util');
+const { call, wait } = require('./promise');
+
+// runtime fixes for Blessed
+require('./ui/blessed/patches');
+
+class Kubebox extends EventEmitter {
+
+  constructor(screen, server) {
+    super();
+    const kubebox = this;
+    const cancellations = new task.Cancellations();
+    const { debug, log } = require('./ui/debug')(screen);
+    const { until } = spinner(screen);
+    const CORS = os.platform() === 'browser' && !server;
+
+    let kube_config, current_namespace;
+    const client = new Client();
+    if (server) {
+      client.master_api = server;
+    } else {
+      kube_config = new KubeConfig({ debug });
+      this.loadKubeConfig = config => kube_config.loadFromConfig(config);
+      client.master_api = kube_config.current_context.getMasterApi();
+      current_namespace = kube_config.current_context.namespace.name;
+    }
+
+    const navbar = new NavBar(screen);
+
+    const status = blessed.text({
+      tags    : true,
+      width   : '100%',
+      height  : 1,
+      bottom  : 0,
+      padding : {
+        left  : 1,
+        right : 1,
+      },
+      style : {
+        fg : 'grey',
+        bg : 'white',
+      }
+    });
+
+    const dashboard = new Dashboard({ screen, navbar, status, client, debug });
+
+    navbar.add({
+      name   : 'Namespace',
+      render : screen => {
+        dashboard.render();
+        screen.append(status);
+      }
+    }, { select: true });
+    navbar.add({
+      name   : 'Debug',
+      render : screen => {
+        screen.append(debug);
+        debug.focus();
+        debug.setScrollPerc(100);
+        screen.append(status);
+      }
+    });
+
+    // FIXME: the namespace selection handle should only be active
+    // when the connection is established to the cluster
+    screen.key(['n'], () => {
+      namespaces.prompt(screen, client, { current_namespace })
+        .then(namespace => {
+          if (namespace === current_namespace) return;
+          dashboard.reset();
+          // switch dashboard to new namespace
+          current_namespace = namespace;
+          debug.log(`Switching to namespace ${current_namespace}`);
+          screen.render();
+          return dashboard.run(current_namespace);
+        })
+        .catch(error => console.error(error.stack));
+    });
+
+    function error(message) {
+      const err = Error(message);
+      err.name = 'Kubebox';
+      return err;
+    }
+
+    function fail(options = {}) {
+      return error => {
+        debug.log(`{red-fg}${error.name === 'Kubebox' ? error.message : error.stack}{/red-fg}`);
+        return logging(Object.assign({}, options, { message: `{red-fg}${error.message}{/red-fg}` }))
+          .catch(fail(options));
+      }
+    }
+
+    screen.key(['l', 'C-l'], (ch, key) => logging({ closable: true })
+      .catch(fail({ closable: true })));
+
+    if (typeof client.master_api !== 'undefined') {
+      connect(kube_config ? kube_config.current_context.user : null).catch(fail());
+    } else {
+      logging().catch(fail());
+    }
+
+    function connect(login, options = {}) {
+      if (login) debug.log(`Connecting to ${client.url} ...`);
+      const { promise, cancellation } = get(client.get_api(), { cancellable: true });
+      cancellations.add('connect', () => {
+        if (cancellation()) debug.log(`{grey-fg}Cancelled connection to ${client.url}{/grey-fg}`);
+      });
+      return until(promise
+        // We may want to update the master URL based on federation information
+        // by selecting the server whose client CIDR matches the client IP (serverAddressByClientCIDRs)
+        .then(() => login ? log(`{green-fg}Connected to {bold}${client.url}{/bold}{/green-fg}`) : '')
+        // Work-around CORS issue where authorization header triggers a pre-flight check that returns 302 which is not allowed
+        .then(() => get(client.get_apis({ authorization: !CORS })))
+        .then(response => client.apis = JSON.parse(response.body.toString('utf8')).paths)
+        .then(() => current_namespace
+          ? Promise.resolve(current_namespace)
+          : namespaces.prompt(screen, client, { promptAfterRequest : true })
+            .then(namespace => current_namespace = namespace))
+        .then(dashboard.run))
+        .spin(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}...`))
+          .cancel(c => cancellations.add('connect', c))
+          .succeed(s => status.setContent(`${s} Connected to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
+          .fail(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
+        .catch(error => error.response && [401, 403].includes(error.response.statusCode)
+          ? log(`Authentication required for ${client.url}`)
+            .then(() => login
+              ? until(authenticate(login))
+                  .spin(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}...`))
+                    .cancel(c => cancellations.add('connect', c))
+                    .succeed(s => status.setContent(`${s} Authenticated to {bold}${client.url}{/bold}`))
+                    .fail(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}`))
+                  .then(user => log(`{green-fg}Authenticated as {bold}${user.metadata.name}{/bold}{/green-fg}`)
+                    .then(() => connect(null, Object.assign({}, options, { user: user }))))
+                  .catch(error => error.response && error.response.statusCode === 401
+                    ? log(`{red-fg}Authentication failed for ${client.url}{/red-fg}`)
+                        // throttle reauthentication
+                        .then(wait(100))
+                        .then(() => logging(Object.assign({}, options, { message: `{red-fg}Authentication failed for ${client.url}{/red-fg}` })))
+                    : Promise.reject(error))
+              : logging(options))
+          : error.message
+            ? log(`{red-fg}Connection failed to ${client.url}{/red-fg}`)
+                // throttle reconnection
+                .then(wait(100))
+                .then(() => logging(Object.assign({}, options, { message: os.platform() === 'browser'
+                  // Fetch and XHR API do not expose connection network error details :(
+                  ? `{red-fg}Connection failed to ${client.url}{/red-fg}`
+                  : `{red-fg}${error.message}{/red-fg}` })))
+            : Promise.reject(error));
+    }
+
+    function logging(options = { closable: false }) {
+      cancellations.run('logging');
+      const { promise, cancellation } = login.prompt(screen, kube_config, kubebox, options);
+      cancellations.add('logging', cancellation);
+      return promise
+        .then(call(_ => {
+          cancellations.run('connect');
+          // it may be better to reset the dashboard when authentication has succeeded
+          dashboard.reset();
+        }))
+        .then(updateSessionAfterLogin)
+        .then(login => connect(login, Object.assign({}, options, { closable: false })));
+    }
+
+    function authenticate(login) {
+      if (!client.openshift)
+        return Promise.reject(error(`Authentication failed for ${client.url}`));
+      // password takes precedence over token
+      return (isNotEmpty(login.token) && isEmpty(login.password) ? Promise.resolve(login.token)
+        // try retrieving an OAuth access token from the OpenShift OAuth server
+        : CORS
+          ? get(client.oauth_authorize_web(login))
+            .then(response => {
+              const path = URI.parse(response.url).path;
+              if (response.statusCode === 200 && path === '/oauth/token/display') {
+                return response.body.toString('utf8').match(/<code>(.*)<\/code>/)[1];
+              } else if (path === '/login') {
+                const error = error('Authentication failed!');
+                // fake authentication error to emulate the implicit grant flow
+                response.statusCode = 401;
+                error.response = response;
+                throw error;
+              } else {
+                throw error('Unsupported authentication!');
+              }
+            })
+          : get(client.oauth_authorize(login))
+            .then(response => response.headers.location.match(/access_token=([^&]+)/)[1]))
+        // test it authenticates ok
+        .then(token => get(client.get_user(token))
+          // then set the authorization header
+          .then(call(_ => client.headers['Authorization'] = `Bearer ${token}`))
+          // and return user details
+          .then(response => JSON.parse(response.body.toString('utf8'))));
+    }
+
+    function updateSessionAfterLogin(login) {
+      if (kube_config) {
+        // TODO: we may want to store / update the retrieved tokens
+        // (in memory / into the Web browser local store)
+        kube_config.updateOrInsertContext(login);
+        client.master_api = kube_config.current_context.getMasterApi();
+        current_namespace = kube_config.current_context.namespace.name;
+      } else {
+        current_namespace = null;
+      }
+      delete client.headers['Authorization'];
+      return login;
+    }
+  }
+}
+
+module.exports = Kubebox;
+
+},{"./client":1,"./config/config":3,"./http-then":"http-then","./promise":7,"./task":8,"./ui/blessed/patches":14,"./ui/debug":23,"./ui/ui":29,"./util":31,"blessed":"blessed","events":165,"os":190,"urijs":"urijs"}],"urijs":[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  *
@@ -85061,1486 +80462,4 @@ if (typeof module !== 'undefined') {
   return URI;
 }));
 
-},{"./IPv6":308,"./SecondLevelDomains":309,"./punycode":311}],311:[function(require,module,exports){
-(function (global){
-/*! https://mths.be/punycode v1.4.0 by @mathias */
-;(function(root) {
-
-	/** Detect free variables */
-	var freeExports = typeof exports == 'object' && exports &&
-		!exports.nodeType && exports;
-	var freeModule = typeof module == 'object' && module &&
-		!module.nodeType && module;
-	var freeGlobal = typeof global == 'object' && global;
-	if (
-		freeGlobal.global === freeGlobal ||
-		freeGlobal.window === freeGlobal ||
-		freeGlobal.self === freeGlobal
-	) {
-		root = freeGlobal;
-	}
-
-	/**
-	 * The `punycode` object.
-	 * @name punycode
-	 * @type Object
-	 */
-	var punycode,
-
-	/** Highest positive signed 32-bit float value */
-	maxInt = 2147483647, // aka. 0x7FFFFFFF or 2^31-1
-
-	/** Bootstring parameters */
-	base = 36,
-	tMin = 1,
-	tMax = 26,
-	skew = 38,
-	damp = 700,
-	initialBias = 72,
-	initialN = 128, // 0x80
-	delimiter = '-', // '\x2D'
-
-	/** Regular expressions */
-	regexPunycode = /^xn--/,
-	regexNonASCII = /[^\x20-\x7E]/, // unprintable ASCII chars + non-ASCII chars
-	regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g, // RFC 3490 separators
-
-	/** Error messages */
-	errors = {
-		'overflow': 'Overflow: input needs wider integers to process',
-		'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
-		'invalid-input': 'Invalid input'
-	},
-
-	/** Convenience shortcuts */
-	baseMinusTMin = base - tMin,
-	floor = Math.floor,
-	stringFromCharCode = String.fromCharCode,
-
-	/** Temporary variable */
-	key;
-
-	/*--------------------------------------------------------------------------*/
-
-	/**
-	 * A generic error utility function.
-	 * @private
-	 * @param {String} type The error type.
-	 * @returns {Error} Throws a `RangeError` with the applicable error message.
-	 */
-	function error(type) {
-		throw new RangeError(errors[type]);
-	}
-
-	/**
-	 * A generic `Array#map` utility function.
-	 * @private
-	 * @param {Array} array The array to iterate over.
-	 * @param {Function} callback The function that gets called for every array
-	 * item.
-	 * @returns {Array} A new array of values returned by the callback function.
-	 */
-	function map(array, fn) {
-		var length = array.length;
-		var result = [];
-		while (length--) {
-			result[length] = fn(array[length]);
-		}
-		return result;
-	}
-
-	/**
-	 * A simple `Array#map`-like wrapper to work with domain name strings or email
-	 * addresses.
-	 * @private
-	 * @param {String} domain The domain name or email address.
-	 * @param {Function} callback The function that gets called for every
-	 * character.
-	 * @returns {Array} A new string of characters returned by the callback
-	 * function.
-	 */
-	function mapDomain(string, fn) {
-		var parts = string.split('@');
-		var result = '';
-		if (parts.length > 1) {
-			// In email addresses, only the domain name should be punycoded. Leave
-			// the local part (i.e. everything up to `@`) intact.
-			result = parts[0] + '@';
-			string = parts[1];
-		}
-		// Avoid `split(regex)` for IE8 compatibility. See #17.
-		string = string.replace(regexSeparators, '\x2E');
-		var labels = string.split('.');
-		var encoded = map(labels, fn).join('.');
-		return result + encoded;
-	}
-
-	/**
-	 * Creates an array containing the numeric code points of each Unicode
-	 * character in the string. While JavaScript uses UCS-2 internally,
-	 * this function will convert a pair of surrogate halves (each of which
-	 * UCS-2 exposes as separate characters) into a single code point,
-	 * matching UTF-16.
-	 * @see `punycode.ucs2.encode`
-	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
-	 * @memberOf punycode.ucs2
-	 * @name decode
-	 * @param {String} string The Unicode input string (UCS-2).
-	 * @returns {Array} The new array of code points.
-	 */
-	function ucs2decode(string) {
-		var output = [],
-		    counter = 0,
-		    length = string.length,
-		    value,
-		    extra;
-		while (counter < length) {
-			value = string.charCodeAt(counter++);
-			if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
-				// high surrogate, and there is a next character
-				extra = string.charCodeAt(counter++);
-				if ((extra & 0xFC00) == 0xDC00) { // low surrogate
-					output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
-				} else {
-					// unmatched surrogate; only append this code unit, in case the next
-					// code unit is the high surrogate of a surrogate pair
-					output.push(value);
-					counter--;
-				}
-			} else {
-				output.push(value);
-			}
-		}
-		return output;
-	}
-
-	/**
-	 * Creates a string based on an array of numeric code points.
-	 * @see `punycode.ucs2.decode`
-	 * @memberOf punycode.ucs2
-	 * @name encode
-	 * @param {Array} codePoints The array of numeric code points.
-	 * @returns {String} The new Unicode string (UCS-2).
-	 */
-	function ucs2encode(array) {
-		return map(array, function(value) {
-			var output = '';
-			if (value > 0xFFFF) {
-				value -= 0x10000;
-				output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
-				value = 0xDC00 | value & 0x3FF;
-			}
-			output += stringFromCharCode(value);
-			return output;
-		}).join('');
-	}
-
-	/**
-	 * Converts a basic code point into a digit/integer.
-	 * @see `digitToBasic()`
-	 * @private
-	 * @param {Number} codePoint The basic numeric code point value.
-	 * @returns {Number} The numeric value of a basic code point (for use in
-	 * representing integers) in the range `0` to `base - 1`, or `base` if
-	 * the code point does not represent a value.
-	 */
-	function basicToDigit(codePoint) {
-		if (codePoint - 48 < 10) {
-			return codePoint - 22;
-		}
-		if (codePoint - 65 < 26) {
-			return codePoint - 65;
-		}
-		if (codePoint - 97 < 26) {
-			return codePoint - 97;
-		}
-		return base;
-	}
-
-	/**
-	 * Converts a digit/integer into a basic code point.
-	 * @see `basicToDigit()`
-	 * @private
-	 * @param {Number} digit The numeric value of a basic code point.
-	 * @returns {Number} The basic code point whose value (when used for
-	 * representing integers) is `digit`, which needs to be in the range
-	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
-	 * used; else, the lowercase form is used. The behavior is undefined
-	 * if `flag` is non-zero and `digit` has no uppercase form.
-	 */
-	function digitToBasic(digit, flag) {
-		//  0..25 map to ASCII a..z or A..Z
-		// 26..35 map to ASCII 0..9
-		return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
-	}
-
-	/**
-	 * Bias adaptation function as per section 3.4 of RFC 3492.
-	 * https://tools.ietf.org/html/rfc3492#section-3.4
-	 * @private
-	 */
-	function adapt(delta, numPoints, firstTime) {
-		var k = 0;
-		delta = firstTime ? floor(delta / damp) : delta >> 1;
-		delta += floor(delta / numPoints);
-		for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
-			delta = floor(delta / baseMinusTMin);
-		}
-		return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
-	}
-
-	/**
-	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
-	 * symbols.
-	 * @memberOf punycode
-	 * @param {String} input The Punycode string of ASCII-only symbols.
-	 * @returns {String} The resulting string of Unicode symbols.
-	 */
-	function decode(input) {
-		// Don't use UCS-2
-		var output = [],
-		    inputLength = input.length,
-		    out,
-		    i = 0,
-		    n = initialN,
-		    bias = initialBias,
-		    basic,
-		    j,
-		    index,
-		    oldi,
-		    w,
-		    k,
-		    digit,
-		    t,
-		    /** Cached calculation results */
-		    baseMinusT;
-
-		// Handle the basic code points: let `basic` be the number of input code
-		// points before the last delimiter, or `0` if there is none, then copy
-		// the first basic code points to the output.
-
-		basic = input.lastIndexOf(delimiter);
-		if (basic < 0) {
-			basic = 0;
-		}
-
-		for (j = 0; j < basic; ++j) {
-			// if it's not a basic code point
-			if (input.charCodeAt(j) >= 0x80) {
-				error('not-basic');
-			}
-			output.push(input.charCodeAt(j));
-		}
-
-		// Main decoding loop: start just after the last delimiter if any basic code
-		// points were copied; start at the beginning otherwise.
-
-		for (index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
-
-			// `index` is the index of the next character to be consumed.
-			// Decode a generalized variable-length integer into `delta`,
-			// which gets added to `i`. The overflow checking is easier
-			// if we increase `i` as we go, then subtract off its starting
-			// value at the end to obtain `delta`.
-			for (oldi = i, w = 1, k = base; /* no condition */; k += base) {
-
-				if (index >= inputLength) {
-					error('invalid-input');
-				}
-
-				digit = basicToDigit(input.charCodeAt(index++));
-
-				if (digit >= base || digit > floor((maxInt - i) / w)) {
-					error('overflow');
-				}
-
-				i += digit * w;
-				t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-
-				if (digit < t) {
-					break;
-				}
-
-				baseMinusT = base - t;
-				if (w > floor(maxInt / baseMinusT)) {
-					error('overflow');
-				}
-
-				w *= baseMinusT;
-
-			}
-
-			out = output.length + 1;
-			bias = adapt(i - oldi, out, oldi == 0);
-
-			// `i` was supposed to wrap around from `out` to `0`,
-			// incrementing `n` each time, so we'll fix that now:
-			if (floor(i / out) > maxInt - n) {
-				error('overflow');
-			}
-
-			n += floor(i / out);
-			i %= out;
-
-			// Insert `n` at position `i` of the output
-			output.splice(i++, 0, n);
-
-		}
-
-		return ucs2encode(output);
-	}
-
-	/**
-	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
-	 * Punycode string of ASCII-only symbols.
-	 * @memberOf punycode
-	 * @param {String} input The string of Unicode symbols.
-	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
-	 */
-	function encode(input) {
-		var n,
-		    delta,
-		    handledCPCount,
-		    basicLength,
-		    bias,
-		    j,
-		    m,
-		    q,
-		    k,
-		    t,
-		    currentValue,
-		    output = [],
-		    /** `inputLength` will hold the number of code points in `input`. */
-		    inputLength,
-		    /** Cached calculation results */
-		    handledCPCountPlusOne,
-		    baseMinusT,
-		    qMinusT;
-
-		// Convert the input in UCS-2 to Unicode
-		input = ucs2decode(input);
-
-		// Cache the length
-		inputLength = input.length;
-
-		// Initialize the state
-		n = initialN;
-		delta = 0;
-		bias = initialBias;
-
-		// Handle the basic code points
-		for (j = 0; j < inputLength; ++j) {
-			currentValue = input[j];
-			if (currentValue < 0x80) {
-				output.push(stringFromCharCode(currentValue));
-			}
-		}
-
-		handledCPCount = basicLength = output.length;
-
-		// `handledCPCount` is the number of code points that have been handled;
-		// `basicLength` is the number of basic code points.
-
-		// Finish the basic string - if it is not empty - with a delimiter
-		if (basicLength) {
-			output.push(delimiter);
-		}
-
-		// Main encoding loop:
-		while (handledCPCount < inputLength) {
-
-			// All non-basic code points < n have been handled already. Find the next
-			// larger one:
-			for (m = maxInt, j = 0; j < inputLength; ++j) {
-				currentValue = input[j];
-				if (currentValue >= n && currentValue < m) {
-					m = currentValue;
-				}
-			}
-
-			// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
-			// but guard against overflow
-			handledCPCountPlusOne = handledCPCount + 1;
-			if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
-				error('overflow');
-			}
-
-			delta += (m - n) * handledCPCountPlusOne;
-			n = m;
-
-			for (j = 0; j < inputLength; ++j) {
-				currentValue = input[j];
-
-				if (currentValue < n && ++delta > maxInt) {
-					error('overflow');
-				}
-
-				if (currentValue == n) {
-					// Represent delta as a generalized variable-length integer
-					for (q = delta, k = base; /* no condition */; k += base) {
-						t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-						if (q < t) {
-							break;
-						}
-						qMinusT = q - t;
-						baseMinusT = base - t;
-						output.push(
-							stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
-						);
-						q = floor(qMinusT / baseMinusT);
-					}
-
-					output.push(stringFromCharCode(digitToBasic(q, 0)));
-					bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
-					delta = 0;
-					++handledCPCount;
-				}
-			}
-
-			++delta;
-			++n;
-
-		}
-		return output.join('');
-	}
-
-	/**
-	 * Converts a Punycode string representing a domain name or an email address
-	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
-	 * it doesn't matter if you call it on a string that has already been
-	 * converted to Unicode.
-	 * @memberOf punycode
-	 * @param {String} input The Punycoded domain name or email address to
-	 * convert to Unicode.
-	 * @returns {String} The Unicode representation of the given Punycode
-	 * string.
-	 */
-	function toUnicode(input) {
-		return mapDomain(input, function(string) {
-			return regexPunycode.test(string)
-				? decode(string.slice(4).toLowerCase())
-				: string;
-		});
-	}
-
-	/**
-	 * Converts a Unicode string representing a domain name or an email address to
-	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
-	 * i.e. it doesn't matter if you call it with a domain that's already in
-	 * ASCII.
-	 * @memberOf punycode
-	 * @param {String} input The domain name or email address to convert, as a
-	 * Unicode string.
-	 * @returns {String} The Punycode representation of the given domain name or
-	 * email address.
-	 */
-	function toASCII(input) {
-		return mapDomain(input, function(string) {
-			return regexNonASCII.test(string)
-				? 'xn--' + encode(string)
-				: string;
-		});
-	}
-
-	/*--------------------------------------------------------------------------*/
-
-	/** Define the public API */
-	punycode = {
-		/**
-		 * A string representing the current Punycode.js version number.
-		 * @memberOf punycode
-		 * @type String
-		 */
-		'version': '1.3.2',
-		/**
-		 * An object of methods to convert from JavaScript's internal character
-		 * representation (UCS-2) to Unicode code points, and back.
-		 * @see <https://mathiasbynens.be/notes/javascript-encoding>
-		 * @memberOf punycode
-		 * @type Object
-		 */
-		'ucs2': {
-			'decode': ucs2decode,
-			'encode': ucs2encode
-		},
-		'decode': decode,
-		'encode': encode,
-		'toASCII': toASCII,
-		'toUnicode': toUnicode
-	};
-
-	/** Expose `punycode` */
-	// Some AMD build optimizers, like r.js, check for specific condition patterns
-	// like the following:
-	if (
-		typeof define == 'function' &&
-		typeof define.amd == 'object' &&
-		define.amd
-	) {
-		define('punycode', function() {
-			return punycode;
-		});
-	} else if (freeExports && freeModule) {
-		if (module.exports == freeExports) {
-			// in Node.js, io.js, or RingoJS v0.8.0+
-			freeModule.exports = punycode;
-		} else {
-			// in Narwhal or RingoJS v0.7.0-
-			for (key in punycode) {
-				punycode.hasOwnProperty(key) && (freeExports[key] = punycode[key]);
-			}
-		}
-	} else {
-		// in Rhino or a web browser
-		root.punycode = punycode;
-	}
-
-}(this));
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-
-},{}],312:[function(require,module,exports){
-module.exports=["000000",
-"800000",
-"008000",
-"808000",
-"000080",
-"800080",
-"008080",
-"c0c0c0",
-"808080",
-"ff0000",
-"00ff00",
-"ffff00",
-"0000ff",
-"ff00ff",
-"00ffff",
-"ffffff",
-"000000",
-"00005f",
-"000087",
-"0000af",
-"0000d7",
-"0000ff",
-"005f00",
-"005f5f",
-"005f87",
-"005faf",
-"005fd7",
-"005fff",
-"008700",
-"00875f",
-"008787",
-"0087af",
-"0087d7",
-"0087ff",
-"00af00",
-"00af5f",
-"00af87",
-"00afaf",
-"00afd7",
-"00afff",
-"00d700",
-"00d75f",
-"00d787",
-"00d7af",
-"00d7d7",
-"00d7ff",
-"00ff00",
-"00ff5f",
-"00ff87",
-"00ffaf",
-"00ffd7",
-"00ffff",
-"5f0000",
-"5f005f",
-"5f0087",
-"5f00af",
-"5f00d7",
-"5f00ff",
-"5f5f00",
-"5f5f5f",
-"5f5f87",
-"5f5faf",
-"5f5fd7",
-"5f5fff",
-"5f8700",
-"5f875f",
-"5f8787",
-"5f87af",
-"5f87d7",
-"5f87ff",
-"5faf00",
-"5faf5f",
-"5faf87",
-"5fafaf",
-"5fafd7",
-"5fafff",
-"5fd700",
-"5fd75f",
-"5fd787",
-"5fd7af",
-"5fd7d7",
-"5fd7ff",
-"5fff00",
-"5fff5f",
-"5fff87",
-"5fffaf",
-"5fffd7",
-"5fffff",
-"870000",
-"87005f",
-"870087",
-"8700af",
-"8700d7",
-"8700ff",
-"875f00",
-"875f5f",
-"875f87",
-"875faf",
-"875fd7",
-"875fff",
-"878700",
-"87875f",
-"878787",
-"8787af",
-"8787d7",
-"8787ff",
-"87af00",
-"87af5f",
-"87af87",
-"87afaf",
-"87afd7",
-"87afff",
-"87d700",
-"87d75f",
-"87d787",
-"87d7af",
-"87d7d7",
-"87d7ff",
-"87ff00",
-"87ff5f",
-"87ff87",
-"87ffaf",
-"87ffd7",
-"87ffff",
-"af0000",
-"af005f",
-"af0087",
-"af00af",
-"af00d7",
-"af00ff",
-"af5f00",
-"af5f5f",
-"af5f87",
-"af5faf",
-"af5fd7",
-"af5fff",
-"af8700",
-"af875f",
-"af8787",
-"af87af",
-"af87d7",
-"af87ff",
-"afaf00",
-"afaf5f",
-"afaf87",
-"afafaf",
-"afafd7",
-"afafff",
-"afd700",
-"afd75f",
-"afd787",
-"afd7af",
-"afd7d7",
-"afd7ff",
-"afff00",
-"afff5f",
-"afff87",
-"afffaf",
-"afffd7",
-"afffff",
-"d70000",
-"d7005f",
-"d70087",
-"d700af",
-"d700d7",
-"d700ff",
-"d75f00",
-"d75f5f",
-"d75f87",
-"d75faf",
-"d75fd7",
-"d75fff",
-"d78700",
-"d7875f",
-"d78787",
-"d787af",
-"d787d7",
-"d787ff",
-"d7af00",
-"d7af5f",
-"d7af87",
-"d7afaf",
-"d7afd7",
-"d7afff",
-"d7d700",
-"d7d75f",
-"d7d787",
-"d7d7af",
-"d7d7d7",
-"d7d7ff",
-"d7ff00",
-"d7ff5f",
-"d7ff87",
-"d7ffaf",
-"d7ffd7",
-"d7ffff",
-"ff0000",
-"ff005f",
-"ff0087",
-"ff00af",
-"ff00d7",
-"ff00ff",
-"ff5f00",
-"ff5f5f",
-"ff5f87",
-"ff5faf",
-"ff5fd7",
-"ff5fff",
-"ff8700",
-"ff875f",
-"ff8787",
-"ff87af",
-"ff87d7",
-"ff87ff",
-"ffaf00",
-"ffaf5f",
-"ffaf87",
-"ffafaf",
-"ffafd7",
-"ffafff",
-"ffd700",
-"ffd75f",
-"ffd787",
-"ffd7af",
-"ffd7d7",
-"ffd7ff",
-"ffff00",
-"ffff5f",
-"ffff87",
-"ffffaf",
-"ffffd7",
-"ffffff",
-"080808",
-"121212",
-"1c1c1c",
-"262626",
-"303030",
-"3a3a3a",
-"444444",
-"4e4e4e",
-"585858",
-"606060",
-"666666",
-"767676",
-"808080",
-"8a8a8a",
-"949494",
-"9e9e9e",
-"a8a8a8",
-"b2b2b2",
-"bcbcbc",
-"c6c6c6",
-"d0d0d0",
-"dadada",
-"e4e4e4",
-"eeeeee"]
-
-},{}],313:[function(require,module,exports){
-// colors scraped from
-// http://www.calmar.ws/vim/256-xterm-24bit-rgb-color-chart.html
-// %s/ *\d\+ \+#\([^ ]\+\)/\1\r/g
-
-var colors = require('./colors.json')
-    .map(function (hex) {
-        var r = parseInt(hex.slice(0,2), 16);
-        var g = parseInt(hex.slice(2,4), 16);
-        var b = parseInt(hex.slice(4,6), 16);
-        return [ r, g, b ];
-    })
-;
-
-var x256 = module.exports = function (r, g, b) {
-    var c = Array.isArray(r) ? r : [ r, g, b ];
-    var best = null;
-    
-    for (var i = 0; i < colors.length; i++) {
-        var d = distance(colors[i], c)
-        if (!best || d <= best.distance) {
-            best = { distance : d, index : i };
-        }
-    }
-    
-    return best.index;
-};
-x256.colors = colors;
-
-function distance (a, b) {
-    return Math.sqrt(
-        Math.pow(a[0]-b[0], 2)
-        + Math.pow(a[1]-b[1], 2)
-        + Math.pow(a[2]-b[2], 2)
-    )
-}
-
-},{"./colors.json":312}],"blessed":[function(require,module,exports){
-/**
- * blessed - a high-level terminal interface library for node.js
- * Copyright (c) 2013-2015, Christopher Jeffrey and contributors (MIT License).
- * https://github.com/chjj/blessed
- */
-
-/**
- * Blessed
- */
-
-function blessed() {
-  return blessed.program.apply(null, arguments);
-}
-
-blessed.program = blessed.Program = require('./program');
-blessed.tput = blessed.Tput = require('./tput');
-blessed.widget = require('./widget');
-blessed.colors = require('./colors');
-blessed.unicode = require('./unicode');
-blessed.helpers = require('./helpers');
-
-blessed.helpers.sprintf = blessed.tput.sprintf;
-blessed.helpers.tryRead = blessed.tput.tryRead;
-blessed.helpers.merge(blessed, blessed.helpers);
-
-blessed.helpers.merge(blessed, blessed.widget);
-
-/**
- * Expose
- */
-
-module.exports = blessed;
-
-},{"./colors":34,"./helpers":37,"./program":39,"./tput":40,"./unicode":41,"./widget":42}],"http-then":[function(require,module,exports){
-(function (Buffer){
-'use strict';
-
-const crypto = require('crypto'),
-      http   = require('http'),
-      https  = require('https'),
-      os     = require('os'),
-      URI    = require('urijs');
-
-const { Transform } = require('stream');
-
-// TODO: expose a writable stream option instead of a generator
-module.exports.get = function (options, { generator, readable, async = true, cancellable = false } = {}) {
-  if (generator) {
-    if (os.platform() === 'browser' && WebSocket) {
-      return getWebSocketStream(options, { generator, readable, async });
-    } else {
-      return getStream(options, { generator, readable, async });
-    }
-  } else {
-    return getBody(options, cancellable);
-  }
-};
-
-function getBody(options, cancellable = false) {
-  let cancellation = Function.prototype;
-  const promise = new Promise((resolve, reject) => {
-    const client = (options.protocol || 'https').startsWith('https') ? https : http;
-    let clientAbort, finished;
-    const request = client.get(options, response => {
-      if (response.statusCode >= 400) {
-        const error = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
-        // standard promises don't handle multi-parameters reject callbacks
-        error.response = response;
-        // IncomingMessage.destroy is not available in Browserify default shim
-        // response.destroy(error);
-        reject(error);
-        return;
-      }
-      const body = [];
-      response
-        .on('data', chunk => body.push(chunk))
-        .on('end', () => {
-          response.body = Buffer.concat(body);
-          finished = true;
-          resolve(response);
-        });
-    }).on('error', error => {
-      finished = true;
-      // 'Error: socket hang up' may be thrown on abort
-      if (!clientAbort) reject(error);
-    });
-    cancellation = () => {
-      if (!finished) {
-        clientAbort = true;
-        request.abort();
-        return true;
-      }
-    };
-  });
-  return cancellable ? { promise, cancellation: () => cancellation() } : promise;
-}
-
-function getWebSocketStream(options, { generator, readable, async = true }) {
-  let cancellation = Function.prototype;
-  const promise = new Promise((resolve, reject) => {
-    const url = new URI(options.path)
-      .protocol((options.protocol || 'https').startsWith('https') ? 'wss' : 'ws')
-      .hostname(options.hostname)
-      .port(options.port);
-    if (options.headers['Authorization']) {
-      url.addQuery('access_token', options.headers['Authorization'].substring(7));
-    }
-    const socket = new WebSocket(url.toString(), options.headers['Sec-WebSocket-Protocol']);
-    socket.binaryType = 'arraybuffer';
-    if (readable) readable.on('data', data => socket.send(data));
-
-    let clientAbort, abortState;
-    cancellation = () => {
-      abortState = socket.readyState;
-      clientAbort = true;
-      socket.close();
-    };
-
-    socket.addEventListener('error', event => {
-      if (!clientAbort || abortState > 0) {
-        reject(Error(`WebSocket connection failed to ${event.target.url}`));
-      }
-    });
-
-    socket.addEventListener('open', event => {
-      const gen = generator();
-      gen.next();
-
-      socket.addEventListener('message', event => {
-        const res = gen.next(new Buffer(event.data, 'binary'));
-        if (res.done) {
-          socket.close();
-          event.body = res.value;
-          // ignored for async as it's already been resolved
-          resolve(event);
-        }
-      });
-
-      socket.addEventListener('close', event => {
-        if (!clientAbort) {
-          const res = gen.next();
-          // the generator may have already returned from the 'data' event
-          if (!async && !res.done) {
-            event.body = res.value;
-            resolve(event);
-          }
-        }
-        // ignored if the generator is done already
-        gen.return();
-      });
-
-      if (async) {
-        resolve(event);
-      }
-    });
-  });
-
-  return { promise, cancellation: () => cancellation() };
-}
-
-function getStream(options, { generator, readable, async = true }) {
-  let cancellation = Function.prototype;
-
-  const promise = new Promise((resolve, reject) => {
-    let clientAbort, serverAbort;
-    const client = (options.protocol || 'https').startsWith('https') ? https : http;
-    const request = client.get(options)
-      .on('error', error => {
-        // FIXME: check the state of the connection and the promise
-        // 'Error: socket hang up' may be thrown on close
-        // for containers that have not emitted any logs yet
-        if (!clientAbort) reject(error);
-      })
-      .on('response', response => {
-        if (response.statusCode >= 400) {
-          const error = new Error(`Failed to get resource ${options.path}, status code: ${response.statusCode}`);
-          // standard promises don't handle multi-parameters reject callbacks
-          error.response = response;
-          response.destroy(error);
-          return;
-        }
-        const gen = generator();
-        gen.next();
-
-        response
-          .on('aborted', () => serverAbort = !clientAbort)
-          .on('data', chunk => {
-            // TODO: is there a way to avoid the client to deal with fragmentation?
-            const res = gen.next(chunk);
-            if (res.done) {
-              // we may work on the http.ClientRequest if needed
-              response.destroy();
-              response.body = res.value;
-              // ignored for async as it's already been resolved
-              resolve(response);
-            }
-          })
-          .on('end', () => {
-            if (serverAbort || clientAbort && !async) {
-              try {
-                // FIXME: what happens when the generator is done already?
-                const res = gen.throw(new Error('Request aborted'));
-                // the generator may have already returned from the 'data' event
-                if (!async && !res.done) {
-                  response.body = res.value;
-                  resolve(response);
-                }
-              } catch (e) {
-                if (!async) {
-                  reject(e);
-                }
-                // else swallow for generators that ignore aborted requests
-              }
-            } else if (!(clientAbort && async)) {
-              const res = gen.next();
-              // the generator may have already returned from the 'data' event
-              if (!async && !res.done) {
-                response.body = res.value;
-                resolve(response);
-              }
-            }
-            // ignored if the generator is done already
-            gen.return();
-          });
-
-        if (async) {
-          resolve(response);
-        }
-      })
-      .on('upgrade', (response, socket, head) => {
-        // TODO: verify 'Sec-WebSocket-Accept' during WebSocket handshake
-        if (response.statusCode !== 101) {
-          const error = new Error(`Failed to upgrade resource ${options.path}, status code: ${response.statusCode}`);
-          // standard promises don't handle multi-parameters reject callbacks
-          error.response = response;
-          response.destroy(error);
-          return;
-        }
-        cancellation = () => {
-          clientAbort = true;
-          socket.end();
-        };
-
-        if (readable) readable.pipe(new Encode()).pipe(socket);
-
-        const gen = decode(generator(), socket);
-        gen.next();
-
-        socket
-          .on('data', frame => {
-            // the server may still be sending some data as the socket
-            // is ended, not aborted, on cancel
-            if (!clientAbort) {
-              const res = gen.next(frame);
-              if (res.done) {
-                socket.end();
-                response.body = res.value;
-                // ignored for async as it's already been resolved
-                resolve(response);
-              }
-            } else {
-              gen.return();
-            }
-          })
-          .on('end', () => {
-            if (!clientAbort) {
-              const res = gen.next();
-              // the generator may have already returned from the 'data' event
-              if (!async && !res.done) {
-                response.body = res.value;
-                resolve(response);
-              }
-            }
-            // ignored if the generator is done already
-            // FIXME: avoid leaking the client generator
-            gen.return();
-          });
-
-        if (async) {
-          resolve(response);
-        }
-      });
-    cancellation = () => {
-      clientAbort = true;
-      request.abort();
-    };
-  });
-  return { promise, cancellation: () => cancellation() };
-}
-
-// TODO: handle fragmentation and continuation frame
-function* decode(gen, socket) {
-  gen.next();
-  let data, frame, payload, offset;
-  while (data = yield) {
-    if (!frame) {
-      frame = decodeFrame(data);
-      // handle connection close in the 'end' event handler
-      if (frame.opcode === 0x8) {
-        socket.end();
-        continue;
-      }
-      if (frame.payload.length === frame.length) {
-        payload = frame.payload;
-        offset = payload.length;
-      } else {
-        payload = Buffer.alloc(frame.length);
-        offset = frame.payload.copy(payload);
-      }
-    } else {
-      offset += data.copy(payload, offset);
-    }
-
-    if (offset === frame.length) {
-      // all the payload data has been transmitted
-      try {
-        const res = gen.next(payload);
-        if (res.done) {
-          return res.value;
-        }
-      } finally {
-        frame = undefined;
-      }
-    }
-  }
-  return gen.next().value;
-}
-
-// https://tools.ietf.org/html/rfc6455#section-5.2
-// https://tools.ietf.org/html/rfc6455#section-5.7
-function decodeFrame(frame) {
-  const FIN    = frame[0] & 0x80;
-  const RSV1   = frame[0] & 0x40;
-  const RSV2   = frame[0] & 0x20;
-  const RSV3   = frame[0] & 0x10;
-  const opcode = frame[0] & 0x0F;
-  const mask   = frame[1] & 0x80;
-  let length   = frame[1] & 0x7F;
-
-  // just return the opcode on connection close
-  if (opcode === 0x8) {
-    return { opcode };
-  }
-
-  let nextByte = 2;
-  if (length === 126) {
-    length = frame.readUInt16BE(nextByte);
-    nextByte += 2;
-  } else if (length === 127) {
-    length = frame.readUInt64BE(nextByte);
-    nextByte += 8;
-  }
-
-  let maskingKey;
-  if (mask) {
-    maskingKey = frame.slice(nextByte, nextByte + 4);
-    nextByte += 4;
-  }
-
-  const payload = frame.slice(nextByte);
-  if (maskingKey) {
-    for (let i = 0; i < payload.length; i++) {
-      payload[i] = payload[i] ^ maskingKey[i % 4];
-    }
-  }
-  return { FIN, opcode, length, payload };
-}
-
-function encodeFrame(data) {
-  const length = data.length;
-  let extra = 0;
-  if (length <= 125) {
-    extra = 0;
-  } else if (length <= (1 << 17) - 1) {
-    extra = 2;
-  } else if (length <= (1 << 64) - 1) {
-    extra = 8;
-  } else {
-    // TODO: handle very large messages, fragment into multiple continuation frames...
-    throw Error('Message longer than 2^64 are not supported!');
-  }
-
-  const frame = Buffer.allocUnsafe(6 + length + extra);
-  const random = crypto.randomBytes(4);
-  for (let i = 0, j = 0; i < length; i++, j++) {
-    data[i] = data[i] ^ random[j % 4];
-  }
-
-  frame[0] = 0x80 | 0x1;
-  let next = 2;
-  if(extra === 0) {
-    frame[1] = 0x80 | length;
-  } else if (extra === 2) {
-    frame[1] = 0x80 | 126;
-    frame[2] = length >> 8;
-    frame[3] = length & 0xFF;
-    next = 4;
-  } else { 
-    frame[1] = 0x80 | 127;
-    frame[2] = length >> 56;
-    frame[3] = length >> 48;
-    frame[4] = length >> 40;
-    frame[5] = length >> 32;
-    frame[6] = length >> 24;
-    frame[7] = length >> 16;
-    frame[8] = length >> 8;
-    frame[9] = length & 0xFF;
-    next = 10
-  }
-  frame[next++] = random[0];
-  frame[next++] = random[1];
-  frame[next++] = random[2];
-  frame[next++] = random[3];
-  for (let i = 0; i < length; i++) {
-    frame[next + i] = data[i];
-  }
-  return frame;
-}
-
-class Encode extends Transform {
-  constructor() {
-    super({
-      transform(chunk, _, callback) {
-        try {
-          this.push(encodeFrame(chunk));
-          callback();
-        } catch (error) {
-          callback(error);
-        }
-      }
-    });
-  }
-}
-
-}).call(this,require("buffer").Buffer)
-
-},{"buffer":129,"crypto":139,"http":251,"https":182,"os":191,"stream":250,"urijs":310}],"kubebox":[function(require,module,exports){
-'use strict';
-
-// TODO: display uncaught exception in a popup
-// TODO: handle current namespace deletion nicely
-
-const Client       = require('./client'),
-      blessed      = require('blessed'),
-      EventEmitter = require('events'),
-      get          = require('./http-then').get,
-      os           = require('os'),
-      task         = require('./task'),
-      URI          = require('urijs');
-
-const { Cluster, Context, KubeConfig, Namespace, User } = require('./config/config');
-const { Dashboard, login, namespaces, NavBar, spinner } = require('./ui/ui');
-const { isNotEmpty, isEmpty } = require('./util');
-const { call, wait } = require('./promise');
-
-// runtime fixes for Blessed
-require('./ui/blessed/patches');
-
-class Kubebox extends EventEmitter {
-
-  constructor(screen, server) {
-    super();
-    const kubebox = this;
-    const cancellations = new task.Cancellations();
-    const { debug, log } = require('./ui/debug')(screen);
-    const { until } = spinner(screen);
-    const kube_config = new KubeConfig({ debug, server });
-    this.loadKubeConfig = config => kube_config.loadFromConfig(config);
-
-    const client = new Client();
-    client.master_api = kube_config.current_context.getMasterApi();
-    let current_namespace = kube_config.current_context.namespace.name;
-
-    const navbar = new NavBar(screen);
-
-    const status = blessed.text({
-      tags    : true,
-      width   : '100%',
-      height  : 1,
-      bottom  : 0,
-      padding : {
-        left  : 1,
-        right : 1,
-      },
-      style : {
-        fg : 'grey',
-        bg : 'white',
-      }
-    });
-
-    const dashboard = new Dashboard({ screen, navbar, status, client, debug, kube_config });
-
-    navbar.add({
-      name   : 'Namespace',
-      render : screen => {
-        dashboard.render();
-        screen.append(status);
-      }
-    }, { select: true });
-    navbar.add({
-      name   : 'Debug',
-      render : screen => {
-        screen.append(debug);
-        debug.focus();
-        debug.setScrollPerc(100);
-        screen.append(status);
-      }
-    });
-
-    // FIXME: the namespace selection handle should only be active
-    // when the connection is established to the cluster
-    screen.key(['n'], () => {
-      namespaces.prompt(screen, client, { current_namespace })
-        .then(namespace => {
-          if (namespace === current_namespace) return;
-          dashboard.reset();
-          // switch dashboard to new namespace
-          current_namespace = namespace;
-          debug.log(`Switching to namespace ${current_namespace}`);
-          screen.render();
-          return dashboard.run(current_namespace);
-        })
-        .catch(error => console.error(error.stack));
-    });
-
-    screen.key(['l', 'C-l'], (ch, key) => logging({ closable: true, server })
-      .catch(error => console.error(error.stack)));
-
-    // TODO: display login prompt with message on error
-    if (typeof client.master_api !== 'undefined') {
-      connect(kube_config.current_context.user, { server })
-        .catch(error => console.error(error.stack));
-    } else {
-      if (server) {
-        status.setContent(`{blue-fg}ℹ{/blue-fg} Log in to {bold}${server}{/bold}...`);
-      }
-      logging({ closable: false, server })
-        .catch(error => console.error(error.stack));
-    }
-
-    function connect(login, options = {}) {
-      if (login) debug.log(`Connecting to ${client.url} ...`);
-      const { promise, cancellation } = get(client.get_api(), { cancellable: true });
-      cancellations.add('connect', () => {
-        if (cancellation()) debug.log(`{grey-fg}Cancelled connection to ${client.url}{/grey-fg}`);
-      });
-      return until(promise
-        // We may want to update the master URL based on federation information
-        // by selecting the server whose client CIDR matches the client IP (serverAddressByClientCIDRs)
-        .then(() => login ? log(`{green-fg}Connected to {bold}${client.url}{/bold}{/green-fg}`) : '')
-        .then(() => get(client.get_apis()))
-        .then(response => client.apis = JSON.parse(response.body.toString('utf8')).paths)
-        .then(() => current_namespace
-          ? Promise.resolve(current_namespace)
-          : namespaces.prompt(screen, client, { promptAfterRequest : true })
-            .then(namespace => current_namespace = namespace))
-        .then(dashboard.run))
-        .spin(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}...`))
-          .cancel(c => cancellations.add('connect', c))
-          .succeed(s => status.setContent(`${s} Connected to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
-          .fail(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
-        .catch(error => error.response && [401, 403].includes(error.response.statusCode)
-          ? log(`Authentication required for ${client.url}`)
-            .then(() => login
-              ? until(authenticate(login))
-                  .spin(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}...`))
-                    .cancel(c => cancellations.add('connect', c))
-                    .succeed(s => status.setContent(`${s} Authenticated to {bold}${client.url}{/bold}`))
-                    .fail(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}`))
-                  .then(user => log(`{green-fg}Authenticated as {bold}${user.metadata.name}{/bold}{/green-fg}`)
-                    .then(() => connect(null, Object.assign({}, options, { user: user }))))
-                  .catch(error => error.response && error.response.statusCode === 401
-                    ? log(`{red-fg}Authentication failed for ${client.url}{/red-fg}`)
-                        // throttle reauthentication
-                        .then(wait(100))
-                        .then(() => logging(Object.assign({}, options, { message: `{red-fg}Authentication failed for ${client.url}{/red-fg}` })))
-                    : Promise.reject(error))
-              : logging(options))
-          : error.message
-            ? log(`{red-fg}Connection failed to ${client.url}{/red-fg}`)
-                // throttle reconnection
-                .then(wait(100))
-                .then(() => logging(Object.assign({}, options, { message: os.platform() === 'browser'
-                  // Fetch and XHR API do not expose connection network error details :(
-                  ? `{red-fg}Connection failed to ${client.url}{/red-fg}`
-                  : `{red-fg}${error.message}{/red-fg}` })))
-            : Promise.reject(error));
-    }
-
-    function logging(options = { closable: false }) {
-      cancellations.run('logging');
-      const { promise, cancellation } = login.prompt(screen, kube_config, kubebox, options);
-      cancellations.add('logging', cancellation);
-      return promise
-        .then(call(_ => {
-          cancellations.run('connect');
-          // it may be better to reset the dashboard when authentication has succeeded
-          dashboard.reset();
-        }))
-        .then(updateSessionAfterLogin)
-        .then(login => connect(login, Object.assign({}, options, { closable: false })));
-    }
-
-    function authenticate(login) {
-      if (!client.openshift)
-        return Promise.reject(Error(`No authentication available for: ${client.url}`));
-      // password takes precedence over token
-      return (isNotEmpty(login.token) && isEmpty(login.password) ? Promise.resolve(login.token)
-        // try retrieving an OAuth access token from the OpenShift OAuth server
-        : os.platform() === 'browser'
-          ? get(client.oauth_authorize_web(login))
-            .then(response => {
-              const path = URI.parse(response.url).path;
-              if (response.statusCode === 200 && path === '/oauth/token/display') {
-                return response.body.toString('utf8').match(/<code>(.*)<\/code>/)[1];
-              } else if (path === '/login') {
-                const error = Error('Authentication failed!');
-                // fake authentication error to emulate the implicit grant flow
-                response.statusCode = 401;
-                error.response = response;
-                throw error;
-              } else {
-                throw Error('Unsupported authentication!');
-              }
-            })
-          : get(client.oauth_authorize(login))
-            .then(response => response.headers.location.match(/access_token=([^&]+)/)[1]))
-        // test it authenticates ok
-        .then(token => get(client.get_user(token))
-          // then set the authorization header
-          .then(call(_ => client.headers['Authorization'] = `Bearer ${token}`))
-          // and return user details
-          .then(response => JSON.parse(response.body.toString('utf8'))));
-    }
-
-    // TODO: we may want to store / update the retrieved tokens into the Web browser local store
-    function updateSessionAfterLogin(login) {
-      kube_config.updateOrInsertContext(login);
-      client.master_api = kube_config.current_context.getMasterApi();
-      current_namespace = kube_config.current_context.namespace.name;
-      return login;
-    }
-  }
-}
-
-module.exports = Kubebox;
-
-},{"./client":1,"./config/config":3,"./http-then":"http-then","./promise":8,"./task":9,"./ui/blessed/patches":15,"./ui/debug":24,"./ui/ui":30,"./util":32,"blessed":"blessed","events":166,"os":191,"urijs":310}]},{},[])
-//# sourceMappingURL=kubebox.js.map
+},{"./IPv6":307,"./SecondLevelDomains":308,"./punycode":309}]},{},[]);
