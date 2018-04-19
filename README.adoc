@@ -69,9 +69,9 @@ endif::[]
 
 |
 * Configuration sourcing from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
+* Switch contexts interactively
 * Login and OAuth authentication support
-* Namespace selection
-* Pods list watching
+* Namespace selection and pods list watching
 * Pod / container log watching
 * Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
 * Container remote exec terminal
@@ -105,21 +105,17 @@ $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 Kubebox can be served from a service deployed in the target Kubernetes cluster.
 Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication with the Kubernetes master API is proxied by the server.
 
-==== Kubernetes
+To deploy the server in your Kubernetes cluster, run:
 
 ```sh
 # Replace the ROUTE_HOSTNAME variable
 $ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
-In order for the Ingress resource to work, the cluster must have an Ingress controller running. See {uri-ingress-controllers}[Ingress controllers] for more information.
-In case you use Minikube, this can be achieved with:
+In order for the Ingress resource to work, the cluster must have an Ingress controller running.
+See {uri-ingress-controllers}[Ingress controllers] for more information.
 
-```
-$ minikube addons enable ingress
-```
-
-==== OpenShift
+Alternatively, to deploy the server in your OpenShift cluster, run:
 
 ```sh
 $ oc new-app -f https://raw.github.com/astefanutti/kubebox/master/openshift.yaml
@@ -141,24 +137,12 @@ $ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
 
 === Online
 
-Kubebox is available online at https://astefanutti.github.com/kubebox. Note that this requires this address to match the allowed origins for CORS by the API server.
+Kubebox is available online at https://astefanutti.github.com/kubebox.
+Note that this requires this address to match the allowed origins for CORS by the API server.
 This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.g.:
 
 ```sh
 $ kube-apiserver --cors-allowed-origins .*
-```
-
-In case you use {uri-minikube}[Minikube], this can be achieved with:
-
-```sh
-$ minikube start --extra-config=apiserver.GenericServerRunOptions.CorsAllowedOriginList=.*
-```
-See {uri-minikube-kubernetes}[Configuring Kubernetes] for more information.
-
-Or if you use {uri-minishift}[Minishift]:
-
-```sh
-$ minishift openshift config set --patch '{"corsAllowedOrigins": [".*"]}'
 ```
 
 === NPM
