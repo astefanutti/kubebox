@@ -171,7 +171,8 @@
         brightWhite   : '#f1f1f0',
       },
     });
-    window.term = term;
+    // Required by blessed
+    term.writable = true;
     term.isTTY = true;
     term.open(document.getElementById('terminal'));
     term.focus();
