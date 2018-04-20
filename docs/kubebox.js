@@ -726,8 +726,8 @@ if (os.platform() === 'browser') {
     // lets grab the xterm from index.html and not reimport
     var Terminal = window.Terminal;
 } else {
-    var { Terminal } = require("xterm");
-    require("./../xterm/Terminal");
+    var { Terminal } = require('xterm');
+    require('../xterm/Terminal');
 }
 
 /*  the API class  */
@@ -1293,7 +1293,7 @@ module.exports = XTerm
 
 
 }).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":185,"./../xterm/Terminal":30,"_process":214,"blessed":"blessed","os":190,"xterm":undefined}],10:[function(require,module,exports){
+},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":185,"../xterm/Terminal":30,"_process":214,"blessed":"blessed","os":190,"xterm":undefined}],10:[function(require,module,exports){
 (function (process,global){
 const blessed = require('blessed');
 
@@ -2152,7 +2152,7 @@ var blessed = require('blessed')
    , Box = blessed.Box
    , InnerCanvas = require('drawille-canvas-blessed-contrib').Canvas
 
-function Canvas(options, canvasType) {  
+function Canvas(options, canvasType) {
 
   var self = this
 
@@ -3148,7 +3148,7 @@ class Exec extends Duplex {
       const buffer = Buffer.allocUnsafe(data.length + 1);
       // send to STDIN
       buffer.writeUInt8(0, 0);
-      if(typeof data === "string") {
+      if(typeof data === 'string') {
         // browser
         buffer.write(data, 1, 'binary');
       } else {
@@ -3949,9 +3949,9 @@ module.exports.NavBar     = require('./navbar');
 module.exports.spinner    = require('./spinner');
 
 },{"./dashboard":22,"./exec":24,"./login":25,"./namespaces":26,"./navbar":27,"./spinner":28}],30:[function(require,module,exports){
-"use strict";
+'use strict';
 
-const {Terminal} = require("xterm");
+const { Terminal } = require('xterm');
 
 Terminal.prototype._keyPress = function (ev) {
     var key;
@@ -3975,12 +3975,12 @@ Terminal.prototype._keyPress = function (ev) {
         return false;
     }
 
-    //monkey patch start
+    // PATCH BEGIN
     // work-around Blessed / Xterm interfacing as Blessed emits these events
     // while handling the keypress event
     // this.emit('keypress', key, ev);
     // this.emit('key', key, ev);
-    // monkey patch end
+    // PATCH END
     this.showCursor();
     this.handler(key);
     return true;
@@ -4033,11 +4033,11 @@ Terminal.prototype.bindMouse = function () {
                 data.push(0);
                 return;
             }
-            // monkey patch start
+            // PATCH BEGIN
             if (ch < 511) {
                 data.push(ch);
             }
-            // monkey patch end
+            // PATCH END
             else {
                 if (ch > 2047)
                     ch = 2047;
