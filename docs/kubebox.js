@@ -727,7 +727,8 @@ if (os.platform() === 'browser') {
     var Terminal = window.Terminal;
 } else {
     var { Terminal } = require('xterm');
-    require('../xterm/Terminal');
+    // Patches
+    require('../xterm/terminal');
 }
 
 /*  the API class  */
@@ -1293,7 +1294,7 @@ module.exports = XTerm
 
 
 }).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":185,"../xterm/Terminal":30,"_process":214,"blessed":"blessed","os":190,"xterm":undefined}],10:[function(require,module,exports){
+},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":185,"../xterm/terminal":30,"_process":214,"blessed":"blessed","os":190,"xterm":undefined}],10:[function(require,module,exports){
 (function (process,global){
 const blessed = require('blessed');
 
@@ -3975,11 +3976,9 @@ Terminal.prototype.resize = function (x, y) {
     this.cols = x;
     this.rows = y;
     this.buffers.setupTabStops(this.cols);
-    // PATCH BEGIN https://github.com/xtermjs/xterm.js/issues/1278
     if (this.charMeasure) { 
         this.charMeasure.measure(this.options);
     }
-    // PATCH END
     this.refresh(0, this.rows - 1);
     this.emit('resize', { cols: x, rows: y });
 };

@@ -4593,9 +4593,13 @@ var Terminal = (function (_super) {
             return;
         }
         if (x === this.cols && y === this.rows) {
+            // PATCH BEGIN https://github.com/xtermjs/xterm.js/issues/1278
+            if (this.charMeasure) { 
                 if (!this.charMeasure.width || !this.charMeasure.height) {
                     this.charMeasure.measure(this.options);
                 }
+            }
+            // PATCH END
             return;
         }
         if (x < 1)
