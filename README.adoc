@@ -19,9 +19,7 @@ endif::[]
 :uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.2.1
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
-:uri-minikube: https://github.com/kubernetes/minikube
-:uri-minikube-kubernetes: https://github.com/kubernetes/minikube/blob/master/docs/configuring_kubernetes.md
-:uri-minishift: https://github.com/minishift/minishift
+:uri-service-account: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 :uri-xterm-js: https://github.com/xtermjs/xterm.js
 
@@ -72,6 +70,8 @@ You can run Kubebox as an _in-cluster_ client with `kubectl`, e.g.:
 $ kubectl run kubebox -it --rm --image=astefanutti/kubebox --restart=Never
 ```
 
+See the <<RBAC, RBAC>> section for more information about RBAC authorization.
+
 === Docker
 
 You can run Kubebox using Docker, e.g.:
@@ -98,8 +98,8 @@ To deploy the server in your Kubernetes cluster, run:
 $ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
-In order for the Ingress resource to work, the cluster must have an Ingress controller running.
-See {uri-ingress-controllers}[Ingress controllers] for more information.
+For the Ingress resource to work, the cluster must have an Ingress controller running.
+See {uri-ingress-controllers}[Ingress controllers] for more information. Besides, see the <<RBAC, RBAC>> section for more information about RBAC authorization.
 
 Alternatively, to deploy the server in your OpenShift cluster, run:
 
@@ -132,6 +132,19 @@ Or locally:
 $ npm install kubebox
 $ `npm bin`/kubebox
 ```
+
+== RBAC
+
+If RBAC is enabled, Kubebox needs RBAC permissions to access the cluster resources.
+By default, while running as _in-cluster_ client or server, Kubebox uses the `default` service account credentials to access the API server.
+
+The following command can be run to bind the `cluster-admin` role to the `default` service account:
+
+```sh
+$ kubectl create clusterrolebinding default-cluster-admin --clusterrole=cluster-admin --serviceaccount=default:default
+```
+
+You can find more information in {uri-service-account}[Configure Service Accounts for Pods].
 
 == Commands
 
