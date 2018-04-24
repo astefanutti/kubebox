@@ -34,53 +34,17 @@ endif::[]
 </p>
 ++++
 
-=== Try
-
-++++
-<p align="center"/>
-  <a href="#run">Choose one of the following alternatives</a> (follow the links for detailed instructions):
-</p>
-<p align="center"/>
-  <i>Standalone Client Executable<a href="#executable">⇲</a></i>
-</p>
-<p align="center">
-  <i>In-cluster Client</i><br>
-  <code>$ kubectl run kubebox -it --rm --image=astefanutti/kubebox --restart=Never</code>
-<p/>
-<p align="center">
-  <i>Docker Client <a href="#docker">⇲</a></i><br>
-  <code>$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox</code>
-<p align="center"/>
-  <i>Web Server <a href="#server">⇲</a></i><br>
-  <code>$ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml</code>
-</p>
-<p align="center"/>
-  <i>Web Client <a href="#online">⇲</a></i><br>
-  <a href="https://astefanutti.github.com/kubebox">https://astefanutti.github.com/kubebox</a>
-</p>
-++++
-
-
 === Features
 
-[cols="2*.<a"]
-|===
-|Done |Plan
-
-|
-* Configuration sourcing from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
-* Switch contexts interactively
-* Login and OAuth authentication support
-* Namespace selection and pods list watching
-* Pod / container log watching
-* Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
-* Container remote exec terminal
-|
-* CRUD configuration operations
-* Cluster and node views
-* Cluster monitoring
-
-|===
+* [x] Configuration sourcing from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
+* [x] Switch contexts interactively
+* [x] Login and OAuth authentication support
+* [x] Namespace selection and pods list watching
+* [x] Container log scrolling / watching
+* [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
+* [x] Container remote exec terminal
+* [ ] CRUD configuration operations
+* [ ] Cluster and nodes views / monitoring
 
 == Run
 
@@ -99,6 +63,28 @@ $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
 # Windows
 $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 --
+
+=== Kubectl
+
+You can run Kubebox as an _in-cluster_ client with `kubectl`, e.g.:
+
+```sh
+$ kubectl run kubebox -it --rm --image=astefanutti/kubebox --restart=Never
+```
+
+=== Docker
+
+You can run Kubebox using Docker, e.g.:
+
+```sh
+$ docker run -it --rm astefanutti/kubebox
+```
+
+You may want to mount your home directory so that Kubebox can rely on the `~/.kube/config` file, e.g.:
+
+```sh
+$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
+```
 
 === Server
 
@@ -119,20 +105,6 @@ Alternatively, to deploy the server in your OpenShift cluster, run:
 
 ```sh
 $ oc new-app -f https://raw.github.com/astefanutti/kubebox/master/openshift.yaml
-```
-
-=== Docker
-
-You can run Kubebox using Docker, e.g.:
-
-```sh
-$ docker run -it --rm astefanutti/kubebox
-```
-
-You may want to mount your home directory so that Kubebox can rely on the `~/.kube/config` file, e.g.:
-
-```sh
-$ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
 ```
 
 === Online
