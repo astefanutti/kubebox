@@ -41,7 +41,7 @@ endif::[]
 * [x] Container log scrolling / watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
 * [x] Container remote exec terminal
-* [ ] CRUD configuration operations
+* [ ] Object configuration editor and CRUD operations
 * [ ] Cluster and nodes views / monitoring
 
 == Run
