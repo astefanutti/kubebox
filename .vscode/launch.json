@@ -12,6 +12,9 @@
             "args": [
                 ""
             ],
+            "env": {
+                // "KUBECONFIG": "/var/run/kubernetes/admin.kubeconfig"
+            },
             "cwd": "${workspaceRoot}",
             "console": "integratedTerminal"
         },
