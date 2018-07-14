@@ -78074,11 +78074,11 @@ class Kubebox extends EventEmitter {
               if (response.statusCode === 200 && path === '/oauth/token/display') {
                 return response.body.toString('utf8').match(/<code>(.*)<\/code>/)[1];
               } else if (path === '/login') {
-                const error = error('Authentication failed!');
+                const err = error('Authentication failed!');
                 // fake authentication error to emulate the implicit grant flow
                 response.statusCode = 401;
-                error.response = response;
-                throw error;
+                err.response = response;
+                throw err;
               } else {
                 throw error('Unsupported authentication!');
               }
