@@ -719,7 +719,7 @@ exports.Cancellations = Cancellations;
 */
 
 /*  external requirements  */
-const blessed = require("blessed");
+const blessed = require('blessed');
 const os      = require('os');
 
 if (os.platform() === 'browser') {
@@ -1281,19 +1281,12 @@ class XTerm extends blessed.Box {
             this._scrollingEnd()
     }
 
-    /*  kill widget  */
     kill() {
-        /*  tear down XTerm  */
-        // this.term.refresh = () => { }
-        // this.term.write("\x1b[H\x1b[J")
-        // this.term.clearCursorBlinkingInterval()
         this.term.dispose()
     }
 }
 
-/*  export API class the traditional way  */
 module.exports = XTerm
-
 
 }).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../../../node_modules/browserify/node_modules/is-buffer/index.js":184,"_process":213,"blessed":"blessed","os":189,"xterm":undefined}],10:[function(require,module,exports){
@@ -3132,9 +3125,7 @@ module.exports = screen => {
 (function (Buffer){
 'use strict';
 
-const blessed    = require('blessed'),
-      os         = require('os'),
-      { Duplex } = require('stream'),
+const { Duplex } = require('stream'),
       XTerm      = require('./blessed-xterm/blessed-xterm');
 
 class Exec extends Duplex {
@@ -3143,7 +3134,7 @@ class Exec extends Duplex {
     super();
     let terminal, term, self = this;
 
-    this._read = function (size) {
+    this._read = function (_) {
       self.resume();
     };
 
@@ -3162,7 +3153,7 @@ class Exec extends Duplex {
       }
     };
 
-    this.kill = function (data) {
+    this.kill = function () {
       screen.grabKeys = false;
       terminal.kill();
     };
@@ -3179,20 +3170,21 @@ class Exec extends Duplex {
     };
 
     terminal = new XTerm({
-      parent: screen,
-      handler: handler,
-      screenKeys: true,
-      label: `${namespace}/${pod}/${container}`,
-      left: 0,
-      top: 1,
-      width: '100%',
-      bottom: 1,
-      border: 'line',
-      debug: debug
+      parent     : screen,
+      handler    : handler,
+      screenKeys : true,
+      label      : `${namespace}/${pod}/${container}`,
+      left       : 0,
+      top        : 1,
+      width      : '100%',
+      bottom     : 1,
+      border     : 'line',
+      debug      : debug,
     });
     terminal.on('click', terminal.focus.bind(terminal));
-    terminal.on('keypress', (ch, key) => {
+    terminal.on('keypress', (_, key) => {
       switch(key.full) {
+        // FIXME: we should not capture the ESC key has this can be used, e.g. vi
         case 'escape':
         self.blur();
         break;
@@ -3224,7 +3216,7 @@ class Exec extends Duplex {
       screen.append(terminal);
       screen.append(status);
       self.focus();
-      terminal.once('render', function() {
+      terminal.once('render', function () {
         terminal.term.resize(terminal.width - terminal.iwidth, terminal.height - terminal.iheight);
         self.sendResize();
       });
@@ -3236,7 +3228,7 @@ class Exec extends Duplex {
         while (message = yield) {
           // skip empty data frame payload on connect!
           if (message.length <= 1) continue;
-          var channel = message[0].toString();
+          const channel = message[0].toString();
           message = message.slice(1).toString();
           switch (channel) {
           case '1':
@@ -3248,8 +3240,7 @@ class Exec extends Duplex {
           }
         }
       } catch (e) {
-        // HTTP chunked transfer-encoding / streaming requests abort on timeout instead of being ended.
-        // WebSocket upgraded requests end when timed out on OpenShift.
+        // FIXME
         console.log(e);
       }
       this.emit('exit');
@@ -3259,7 +3250,7 @@ class Exec extends Duplex {
 
 module.exports = Exec;
 }).call(this,require("buffer").Buffer)
-},{"./blessed-xterm/blessed-xterm":9,"blessed":"blessed","buffer":127,"os":189,"stream":248}],25:[function(require,module,exports){
+},{"./blessed-xterm/blessed-xterm":9,"buffer":127,"stream":248}],25:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -77902,7 +77893,7 @@ const Client       = require('./client'),
       task         = require('./task'),
       URI          = require('urijs');
 
-const { Cluster, Context, KubeConfig, Namespace, User } = require('./config/config');
+const { KubeConfig } = require('./config/config');
 const { Dashboard, login, namespaces, NavBar, spinner } = require('./ui/ui');
 const { isNotEmpty, isEmpty } = require('./util');
 const { call, wait } = require('./promise');
