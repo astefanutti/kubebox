@@ -867,21 +867,25 @@ class XTerm extends blessed.Box {
             scrollback: this.options.scrollback !== "none" ?
                 this.options.scrollback : this.height - this.iheight,
         });
-        this.term.cursorState = 1;
+        this.term._core.cursorState = 1;
 
         /*  monkey-patch XTerm to prevent it from effectively rendering
             anything to the Virtual DOM, as we just grab its character buffer.
             The alternative would be to listen on the XTerm "refresh" event,
             but this way XTerm would uselessly render the DOM elements.  */
-        this.term.refresh = (start, end) => {
+        this.term._core.refresh = (start, end) => {
             /*  enforce a new screen rendering,
                 which in turn will call our render() method, too  */
             this.screen.render()
         }
 
+        this.term._core.viewport = {
+            syncScrollArea: () => {},
+        };
+
         /*  monkey-patch XTerm to prevent any key handling  */
-        this.term.keyDown = () => { }
-        this.term.keyPress = () => { }
+        this.term._core.keyDown = () => { }
+        this.term._core.keyPress = () => { }
         this.term.focus();
 
         /*  pass-through title changes by application  */
@@ -988,12 +992,12 @@ class XTerm extends blessed.Box {
                 let x = ev.x - this.aleft
                 let y = ev.y - this.atop
                 let s
-                if (this.term.urxvtMouse) {
+                if (this.term._core.urxvtMouse) {
                     if (this.screen.program.sgrMouse)
                         b += 32
                     s = "\x1b[" + b + ";" + (x + 32) + ";" + (y + 32) + "M"
                 }
-                else if (this.term.sgrMouse) {
+                else if (this.term._core.sgrMouse) {
                     if (!this.screen.program.sgrMouse)
                         b -= 32
                     s = "\x1b[<" + b + ";" + x + ";" + y +
@@ -1035,7 +1039,7 @@ class XTerm extends blessed.Box {
 
         /*  on Blessed widget destruction, tear down everything  */
         this.on("destroy", () => {
-            this.kill()
+            clearInterval(this.refreshIntervalId);
             if (this._onScreenEventInput)
                 this.screen.program.input.removeListener("data", this._onScreenEventInputData)
             if (this._onWidgetEventKeypress)
@@ -1044,7 +1048,7 @@ class XTerm extends blessed.Box {
                 this.removeScreenEvent("keypress", this._onScreenEventKeypress)
             if (this._onScreenEventMouse)
                 this.removeScreenEvent("mouse", this._onScreenEventMouse)
-            clearInterval(this.refreshIntervalId);
+            this.kill()
         })
     }
 
@@ -1080,17 +1084,17 @@ class XTerm extends blessed.Box {
 
         let endRow = y1 == y2 ? x2 : null;
         // Get first row
-        result.push(this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + y1 - yi, true, x1 - xi, endRow));
+        result.push(this.term._core.buffer.translateBufferLineToString(this.term._core.buffer.ydisp + y1 - yi, true, x1 - xi, endRow));
 
         // Get middle rows
         for (let i = y1 + 1; i <= y2 - 1; i++) {
-            const lineText = this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + i - yi, true);
+            const lineText = this.term._core.buffer.translateBufferLineToString(this.term._core.buffer.ydisp + i - yi, true);
             result.push(lineText);
         }
 
         // Get last row
         if (y1 != y2) {
-            const lineText = this.term.buffer.translateBufferLineToString(this.term.buffer.ydisp + y2 - yi, true, 0, x2);
+            const lineText = this.term._core.buffer.translateBufferLineToString(this.term._core.buffer.ydisp + y2 - yi, true, 0, x2);
             result.push(lineText);
         }
 
@@ -1139,7 +1143,7 @@ class XTerm extends blessed.Box {
         for (let y = Math.max(yi, 0); y < yl; y++) {
             /*  fetch Blessed Screen and XTerm lines  */
             let sline = this.screen.lines[y]
-            let tline = this.term.buffer.lines.get(this.term.buffer.ydisp + y - yi)
+            let tline = this.term._core.buffer.lines.get(this.term._core.buffer.ydisp + y - yi)
             if (!sline || !tline)
                 break
 
@@ -1153,13 +1157,13 @@ class XTerm extends blessed.Box {
             }
 
             /*  determine cursor column position  */
-            if (y === yi + this.term.buffer.y
-                && this.term.cursorState
+            if (y === yi + this.term._core.buffer.y
+                && this.term._core.cursorState
                 && this.screen.focused === this
                 // FIXME : hasSelection -> select mode correct mapping?
-                && (this.term.buffer.ydisp === this.term.buffer.ybase || this.term.selectionManager.hasSelection)
-                && !this.term.cursorHidden)
-                cursor = xi + this.term.buffer.x
+                && (this.term._core.buffer.ydisp === this.term._core.buffer.ybase || this.term._core.selectionManager.hasSelection)
+                && !this.term._core.cursorHidden)
+                cursor = xi + this.term._core.buffer.x
             else
                 cursor = -1
 
@@ -1244,16 +1248,16 @@ class XTerm extends blessed.Box {
         this.emit("scrolling-end")
     }
     getScroll() {
-        return this.term.buffer.ydisp
+        return this.term._core.buffer.ydisp
     }
     getScrollHeight() {
         return this.term.rows - 1
     }
     getScrollPerc() {
-        return (this.term.buffer.ybase > 0 ? ((this.term.buffer.ydisp / this.term.buffer.ybase) * 100) : 100)
+        return (this.term._core.buffer.ybase > 0 ? ((this.term._core.buffer.ydisp / this.term._core.buffer.ybase) * 100) : 100)
     }
     setScrollPerc(i) {
-        return this.setScroll(Math.floor((i / 100) * this.term.buffer.ybase))
+        return this.setScroll(Math.floor((i / 100) * this.term._core.buffer.ybase))
     }
     setScroll(offset) {
         return this.scrollTo(offset)
@@ -1261,7 +1265,7 @@ class XTerm extends blessed.Box {
     scrollTo(offset) {
         if (!this.scrolling)
             this._scrollingStart()
-        this.term.scrollLines(offset - this.term.buffer.ydisp)
+        this.term.scrollLines(offset - this.term._core.buffer.ydisp)
         this.screen.render()
         this.emit("scroll")
     }
@@ -1280,10 +1284,10 @@ class XTerm extends blessed.Box {
     /*  kill widget  */
     kill() {
         /*  tear down XTerm  */
-        this.term.refresh = () => { }
-        this.term.write("\x1b[H\x1b[J")
+        // this.term.refresh = () => { }
+        // this.term.write("\x1b[H\x1b[J")
         // this.term.clearCursorBlinkingInterval()
-        this.term.destroy()
+        this.term.dispose()
     }
 }
 
@@ -3200,7 +3204,7 @@ class Exec extends Duplex {
     term.on('resize', self.sendResize.bind(self));
 
     this.termName = function () {
-      return term.termName;
+      return term.getOption('termName');
     };
 
     this.blur = function () {

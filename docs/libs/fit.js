@@ -18,10 +18,10 @@ function proposeGeometry(term) {
     var elementPaddingVer = elementPadding.top + elementPadding.bottom;
     var elementPaddingHor = elementPadding.right + elementPadding.left;
     var availableHeight = parentElementHeight - elementPaddingVer;
-    var availableWidth = parentElementWidth - elementPaddingHor/* - term.viewport.scrollBarWidth */;
+    var availableWidth = parentElementWidth - elementPaddingHor/*  - term._core.viewport.scrollBarWidth */;
     var geometry = {
-        cols: Math.floor(availableWidth / term.renderer.dimensions.actualCellWidth),
-        rows: Math.floor(availableHeight / term.renderer.dimensions.actualCellHeight)
+        cols: Math.floor(availableWidth / term._core.renderer.dimensions.actualCellWidth),
+        rows: Math.floor(availableHeight / term._core.renderer.dimensions.actualCellHeight)
     };
     return geometry;
 }
@@ -30,7 +30,7 @@ function fit(term) {
     var geometry = proposeGeometry(term);
     if (geometry) {
         if (term.rows !== geometry.rows || term.cols !== geometry.cols) {
-            term.renderer.clear();
+            term._core.renderer.clear();
             term.resize(geometry.cols, geometry.rows);
         }
     }
@@ -45,8 +45,6 @@ function apply(terminalConstructor) {
     };
 }
 exports.apply = apply;
-
-
 
 },{}]},{},[1])(1)
 });

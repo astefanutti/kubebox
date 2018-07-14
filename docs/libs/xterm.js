@@ -1,56 +1,67 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Terminal = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 var Strings = require("./Strings");
 var Browser_1 = require("./shared/utils/Browser");
-var RenderDebouncer_1 = require("./utils/RenderDebouncer");
-var Dom_1 = require("./utils/Dom");
+var RenderDebouncer_1 = require("./ui/RenderDebouncer");
+var Lifecycle_1 = require("./ui/Lifecycle");
+var Lifecycle_2 = require("./common/Lifecycle");
 var MAX_ROWS_TO_READ = 20;
-var AccessibilityManager = (function () {
+var AccessibilityManager = (function (_super) {
+    __extends(AccessibilityManager, _super);
     function AccessibilityManager(_terminal) {
-        var _this = this;
-        this._terminal = _terminal;
-        this._liveRegionLineCount = 0;
-        this._disposables = [];
-        this._charsToConsume = [];
-        this._accessibilityTreeRoot = document.createElement('div');
-        this._accessibilityTreeRoot.classList.add('xterm-accessibility');
-        this._rowContainer = document.createElement('div');
-        this._rowContainer.classList.add('xterm-accessibility-tree');
-        this._rowElements = [];
-        for (var i = 0; i < this._terminal.rows; i++) {
-            this._rowElements[i] = this._createAccessibilityTreeNode();
-            this._rowContainer.appendChild(this._rowElements[i]);
+        var _this = _super.call(this) || this;
+        _this._terminal = _terminal;
+        _this._liveRegionLineCount = 0;
+        _this._charsToConsume = [];
+        _this._accessibilityTreeRoot = document.createElement('div');
+        _this._accessibilityTreeRoot.classList.add('xterm-accessibility');
+        _this._rowContainer = document.createElement('div');
+        _this._rowContainer.classList.add('xterm-accessibility-tree');
+        _this._rowElements = [];
+        for (var i = 0; i < _this._terminal.rows; i++) {
+            _this._rowElements[i] = _this._createAccessibilityTreeNode();
+            _this._rowContainer.appendChild(_this._rowElements[i]);
         }
-        this._topBoundaryFocusListener = function (e) { return _this._onBoundaryFocus(e, 0); };
-        this._bottomBoundaryFocusListener = function (e) { return _this._onBoundaryFocus(e, 1); };
-        this._rowElements[0].addEventListener('focus', this._topBoundaryFocusListener);
-        this._rowElements[this._rowElements.length - 1].addEventListener('focus', this._bottomBoundaryFocusListener);
-        this._refreshRowsDimensions();
-        this._accessibilityTreeRoot.appendChild(this._rowContainer);
-        this._renderRowsDebouncer = new RenderDebouncer_1.RenderDebouncer(this._terminal, this._renderRows.bind(this));
-        this._refreshRows();
-        this._liveRegion = document.createElement('div');
-        this._liveRegion.classList.add('live-region');
-        this._liveRegion.setAttribute('aria-live', 'assertive');
-        this._accessibilityTreeRoot.appendChild(this._liveRegion);
-        this._terminal.element.insertAdjacentElement('afterbegin', this._accessibilityTreeRoot);
-        this._disposables.push(this._renderRowsDebouncer);
-        this._disposables.push(this._terminal.addDisposableListener('resize', function (data) { return _this._onResize(data.cols, data.rows); }));
-        this._disposables.push(this._terminal.addDisposableListener('refresh', function (data) { return _this._refreshRows(data.start, data.end); }));
-        this._disposables.push(this._terminal.addDisposableListener('scroll', function (data) { return _this._refreshRows(); }));
-        this._disposables.push(this._terminal.addDisposableListener('a11y.char', function (char) { return _this._onChar(char); }));
-        this._disposables.push(this._terminal.addDisposableListener('linefeed', function () { return _this._onChar('\n'); }));
-        this._disposables.push(this._terminal.addDisposableListener('a11y.tab', function (spaceCount) { return _this._onTab(spaceCount); }));
-        this._disposables.push(this._terminal.addDisposableListener('key', function (keyChar) { return _this._onKey(keyChar); }));
-        this._disposables.push(this._terminal.addDisposableListener('blur', function () { return _this._clearLiveRegion(); }));
-        this._disposables.push(this._terminal.addDisposableListener('dprchange', function () { return _this._refreshRowsDimensions(); }));
-        this._disposables.push(this._terminal.renderer.addDisposableListener('resize', function () { return _this._refreshRowsDimensions(); }));
-        this._disposables.push(Dom_1.addDisposableListener(window, 'resize', function () { return _this._refreshRowsDimensions(); }));
+        _this._topBoundaryFocusListener = function (e) { return _this._onBoundaryFocus(e, 0); };
+        _this._bottomBoundaryFocusListener = function (e) { return _this._onBoundaryFocus(e, 1); };
+        _this._rowElements[0].addEventListener('focus', _this._topBoundaryFocusListener);
+        _this._rowElements[_this._rowElements.length - 1].addEventListener('focus', _this._bottomBoundaryFocusListener);
+        _this._refreshRowsDimensions();
+        _this._accessibilityTreeRoot.appendChild(_this._rowContainer);
+        _this._renderRowsDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._terminal, _this._renderRows.bind(_this));
+        _this._refreshRows();
+        _this._liveRegion = document.createElement('div');
+        _this._liveRegion.classList.add('live-region');
+        _this._liveRegion.setAttribute('aria-live', 'assertive');
+        _this._accessibilityTreeRoot.appendChild(_this._liveRegion);
+        _this._terminal.element.insertAdjacentElement('afterbegin', _this._accessibilityTreeRoot);
+        _this.register(_this._renderRowsDebouncer);
+        _this.register(_this._terminal.addDisposableListener('resize', function (data) { return _this._onResize(data.cols, data.rows); }));
+        _this.register(_this._terminal.addDisposableListener('refresh', function (data) { return _this._refreshRows(data.start, data.end); }));
+        _this.register(_this._terminal.addDisposableListener('scroll', function (data) { return _this._refreshRows(); }));
+        _this.register(_this._terminal.addDisposableListener('a11y.char', function (char) { return _this._onChar(char); }));
+        _this.register(_this._terminal.addDisposableListener('linefeed', function () { return _this._onChar('\n'); }));
+        _this.register(_this._terminal.addDisposableListener('a11y.tab', function (spaceCount) { return _this._onTab(spaceCount); }));
+        _this.register(_this._terminal.addDisposableListener('key', function (keyChar) { return _this._onKey(keyChar); }));
+        _this.register(_this._terminal.addDisposableListener('blur', function () { return _this._clearLiveRegion(); }));
+        _this.register(_this._terminal.addDisposableListener('dprchange', function () { return _this._refreshRowsDimensions(); }));
+        _this.register(_this._terminal.renderer.addDisposableListener('resize', function () { return _this._refreshRowsDimensions(); }));
+        _this.register(Lifecycle_1.addDisposableDomListener(window, 'resize', function () { return _this._refreshRowsDimensions(); }));
+        return _this;
     }
     AccessibilityManager.prototype.dispose = function () {
-        this._disposables.forEach(function (d) { return d.dispose(); });
-        this._disposables.length = 0;
+        _super.prototype.dispose.call(this);
         this._terminal.element.removeChild(this._accessibilityTreeRoot);
         this._rowElements.length = 0;
     };
@@ -195,12 +206,10 @@ var AccessibilityManager = (function () {
         }
     };
     return AccessibilityManager;
-}());
+}(Lifecycle_2.Disposable));
 exports.AccessibilityManager = AccessibilityManager;
 
-
-
-},{"./Strings":15,"./shared/utils/Browser":39,"./utils/Dom":43,"./utils/RenderDebouncer":45}],2:[function(require,module,exports){
+},{"./Strings":13,"./common/Lifecycle":17,"./shared/utils/Browser":44,"./ui/Lifecycle":46,"./ui/RenderDebouncer":48}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -213,8 +222,9 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var CircularList_1 = require("./utils/CircularList");
+var CircularList_1 = require("./common/CircularList");
 var EventEmitter_1 = require("./EventEmitter");
+exports.DEFAULT_ATTR = (0 << 18) | (257 << 9) | (256 << 0);
 exports.CHAR_DATA_ATTR_INDEX = 0;
 exports.CHAR_DATA_CHAR_INDEX = 1;
 exports.CHAR_DATA_WIDTH_INDEX = 2;
@@ -275,7 +285,7 @@ var Buffer = (function () {
         }
         if (this.lines.length > 0) {
             if (this._terminal.cols < newCols) {
-                var ch = [this._terminal.defAttr, ' ', 1, 32];
+                var ch = [exports.DEFAULT_ATTR, ' ', 1, 32];
                 for (var i = 0; i < this.lines.length; i++) {
                     while (this.lines.get(i).length < newCols) {
                         this.lines.get(i).push(ch);
@@ -352,7 +362,7 @@ var Buffer = (function () {
                 if (startCol >= i) {
                     startIndex--;
                 }
-                if (endCol >= i) {
+                if (endCol > i) {
                     endIndex--;
                 }
             }
@@ -377,6 +387,17 @@ var Buffer = (function () {
             }
         }
         return lineString.substring(startIndex, endIndex);
+    };
+    Buffer.prototype.getWrappedRangeForLine = function (y) {
+        var first = y;
+        var last = y;
+        while (first > 0 && this.lines.get(first).isWrapped) {
+            first--;
+        }
+        while (last + 1 < this.lines.length && this.lines.get(last + 1).isWrapped) {
+            last++;
+        }
+        return { first: first, last: last };
     };
     Buffer.prototype.setupTabStops = function (i) {
         if (i != null) {
@@ -412,13 +433,13 @@ var Buffer = (function () {
         var _this = this;
         var marker = new Marker(y);
         this.markers.push(marker);
-        marker.disposables.push(this.lines.addDisposableListener('trim', function (amount) {
+        marker.register(this.lines.addDisposableListener('trim', function (amount) {
             marker.line -= amount;
             if (marker.line < 0) {
                 marker.dispose();
             }
         }));
-        marker.on('dispose', function () { return _this._removeMarker(marker); });
+        marker.register(marker.addDisposableListener('dispose', function () { return _this._removeMarker(marker); }));
         return marker;
     };
     Buffer.prototype._removeMarker = function (marker) {
@@ -432,9 +453,8 @@ var Marker = (function (_super) {
     function Marker(line) {
         var _this = _super.call(this) || this;
         _this.line = line;
-        _this._id = Marker.NEXT_ID++;
+        _this._id = Marker._nextId++;
         _this.isDisposed = false;
-        _this.disposables = [];
         return _this;
     }
     Object.defineProperty(Marker.prototype, "id", {
@@ -447,18 +467,15 @@ var Marker = (function (_super) {
             return;
         }
         this.isDisposed = true;
-        this.disposables.forEach(function (d) { return d.dispose(); });
-        this.disposables.length = 0;
         this.emit('dispose');
+        _super.prototype.dispose.call(this);
     };
-    Marker.NEXT_ID = 1;
+    Marker._nextId = 1;
     return Marker;
 }(EventEmitter_1.EventEmitter));
 exports.Marker = Marker;
 
-
-
-},{"./EventEmitter":8,"./utils/CircularList":41}],3:[function(require,module,exports){
+},{"./EventEmitter":7,"./common/CircularList":16}],3:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -540,9 +557,7 @@ var BufferSet = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.BufferSet = BufferSet;
 
-
-
-},{"./Buffer":2,"./EventEmitter":8}],4:[function(require,module,exports){
+},{"./Buffer":2,"./EventEmitter":7}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.wcwidth = (function (opts) {
@@ -657,7 +672,7 @@ exports.wcwidth = (function (opts) {
     }
     var control = opts.control | 0;
     var table = null;
-    function init_table() {
+    function initTable() {
         var CODEPOINTS = 65536;
         var BITWIDTH = 2;
         var ITEMSIZE = 32;
@@ -684,7 +699,7 @@ exports.wcwidth = (function (opts) {
         if (num < 127) {
             return 1;
         }
-        var t = table || init_table();
+        var t = table || initTable();
         if (num < 65536) {
             return t[num >> 4] >> ((num & 15) << 1) & 3;
         }
@@ -692,172 +707,7 @@ exports.wcwidth = (function (opts) {
     };
 })({ nul: 0, control: 0 });
 
-
-
 },{}],5:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.CHARSETS = {};
-exports.DEFAULT_CHARSET = exports.CHARSETS['B'];
-exports.CHARSETS['0'] = {
-    '`': '\u25c6',
-    'a': '\u2592',
-    'b': '\u0009',
-    'c': '\u000c',
-    'd': '\u000d',
-    'e': '\u000a',
-    'f': '\u00b0',
-    'g': '\u00b1',
-    'h': '\u2424',
-    'i': '\u000b',
-    'j': '\u2518',
-    'k': '\u2510',
-    'l': '\u250c',
-    'm': '\u2514',
-    'n': '\u253c',
-    'o': '\u23ba',
-    'p': '\u23bb',
-    'q': '\u2500',
-    'r': '\u23bc',
-    's': '\u23bd',
-    't': '\u251c',
-    'u': '\u2524',
-    'v': '\u2534',
-    'w': '\u252c',
-    'x': '\u2502',
-    'y': '\u2264',
-    'z': '\u2265',
-    '{': '\u03c0',
-    '|': '\u2260',
-    '}': '\u00a3',
-    '~': '\u00b7'
-};
-exports.CHARSETS['A'] = {
-    '#': '£'
-};
-exports.CHARSETS['B'] = null;
-exports.CHARSETS['4'] = {
-    '#': '£',
-    '@': '¾',
-    '[': 'ij',
-    '\\': '½',
-    ']': '|',
-    '{': '¨',
-    '|': 'f',
-    '}': '¼',
-    '~': '´'
-};
-exports.CHARSETS['C'] =
-    exports.CHARSETS['5'] = {
-        '[': 'Ä',
-        '\\': 'Ö',
-        ']': 'Å',
-        '^': 'Ü',
-        '`': 'é',
-        '{': 'ä',
-        '|': 'ö',
-        '}': 'å',
-        '~': 'ü'
-    };
-exports.CHARSETS['R'] = {
-    '#': '£',
-    '@': 'à',
-    '[': '°',
-    '\\': 'ç',
-    ']': '§',
-    '{': 'é',
-    '|': 'ù',
-    '}': 'è',
-    '~': '¨'
-};
-exports.CHARSETS['Q'] = {
-    '@': 'à',
-    '[': 'â',
-    '\\': 'ç',
-    ']': 'ê',
-    '^': 'î',
-    '`': 'ô',
-    '{': 'é',
-    '|': 'ù',
-    '}': 'è',
-    '~': 'û'
-};
-exports.CHARSETS['K'] = {
-    '@': '§',
-    '[': 'Ä',
-    '\\': 'Ö',
-    ']': 'Ü',
-    '{': 'ä',
-    '|': 'ö',
-    '}': 'ü',
-    '~': 'ß'
-};
-exports.CHARSETS['Y'] = {
-    '#': '£',
-    '@': '§',
-    '[': '°',
-    '\\': 'ç',
-    ']': 'é',
-    '`': 'ù',
-    '{': 'à',
-    '|': 'ò',
-    '}': 'è',
-    '~': 'ì'
-};
-exports.CHARSETS['E'] =
-    exports.CHARSETS['6'] = {
-        '@': 'Ä',
-        '[': 'Æ',
-        '\\': 'Ø',
-        ']': 'Å',
-        '^': 'Ü',
-        '`': 'ä',
-        '{': 'æ',
-        '|': 'ø',
-        '}': 'å',
-        '~': 'ü'
-    };
-exports.CHARSETS['Z'] = {
-    '#': '£',
-    '@': '§',
-    '[': '¡',
-    '\\': 'Ñ',
-    ']': '¿',
-    '{': '°',
-    '|': 'ñ',
-    '}': 'ç'
-};
-exports.CHARSETS['H'] =
-    exports.CHARSETS['7'] = {
-        '@': 'É',
-        '[': 'Ä',
-        '\\': 'Ö',
-        ']': 'Å',
-        '^': 'Ü',
-        '`': 'é',
-        '{': 'ä',
-        '|': 'ö',
-        '}': 'å',
-        '~': 'ü'
-    };
-exports.CHARSETS['='] = {
-    '#': 'ù',
-    '@': 'à',
-    '[': 'é',
-    '\\': 'ç',
-    ']': 'ê',
-    '^': 'î',
-    '_': 'è',
-    '`': 'ô',
-    '{': 'ä',
-    '|': 'ö',
-    '}': 'ü',
-    '~': 'û'
-};
-
-
-
-},{}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CompositionHelper = (function () {
@@ -978,57 +828,499 @@ var CompositionHelper = (function () {
 }());
 exports.CompositionHelper = CompositionHelper;
 
-
-
-},{}],7:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-var C0;
-(function (C0) {
-    C0.NUL = '\x00';
-    C0.SOH = '\x01';
-    C0.STX = '\x02';
-    C0.ETX = '\x03';
-    C0.EOT = '\x04';
-    C0.ENQ = '\x05';
-    C0.ACK = '\x06';
-    C0.BEL = '\x07';
-    C0.BS = '\x08';
-    C0.HT = '\x09';
-    C0.LF = '\x0a';
-    C0.VT = '\x0b';
-    C0.FF = '\x0c';
-    C0.CR = '\x0d';
-    C0.SO = '\x0e';
-    C0.SI = '\x0f';
-    C0.DLE = '\x10';
-    C0.DC1 = '\x11';
-    C0.DC2 = '\x12';
-    C0.DC3 = '\x13';
-    C0.DC4 = '\x14';
-    C0.NAK = '\x15';
-    C0.SYN = '\x16';
-    C0.ETB = '\x17';
-    C0.CAN = '\x18';
-    C0.EM = '\x19';
-    C0.SUB = '\x1a';
-    C0.ESC = '\x1b';
-    C0.FS = '\x1c';
-    C0.GS = '\x1d';
-    C0.RS = '\x1e';
-    C0.US = '\x1f';
-    C0.SP = '\x20';
-    C0.DEL = '\x7f';
-})(C0 = exports.C0 || (exports.C0 = {}));
+var Lifecycle_1 = require("./common/Lifecycle");
+function r(low, high) {
+    var c = high - low;
+    var arr = new Array(c);
+    while (c--) {
+        arr[c] = --high;
+    }
+    return arr;
+}
+var TransitionTable = (function () {
+    function TransitionTable(length) {
+        this.table = (typeof Uint8Array === 'undefined')
+            ? new Array(length)
+            : new Uint8Array(length);
+    }
+    TransitionTable.prototype.add = function (code, state, action, next) {
+        this.table[state << 8 | code] = ((action | 0) << 4) | ((next === undefined) ? state : next);
+    };
+    TransitionTable.prototype.addMany = function (codes, state, action, next) {
+        for (var i = 0; i < codes.length; i++) {
+            this.add(codes[i], state, action, next);
+        }
+    };
+    return TransitionTable;
+}());
+exports.TransitionTable = TransitionTable;
+var PRINTABLES = r(0x20, 0x7f);
+var EXECUTABLES = r(0x00, 0x18);
+EXECUTABLES.push(0x19);
+EXECUTABLES.concat(r(0x1c, 0x20));
+var DEFAULT_TRANSITION = 1 << 4 | 0;
+exports.VT500_TRANSITION_TABLE = (function () {
+    var table = new TransitionTable(4095);
+    var states = r(0, 13 + 1);
+    var state;
+    for (state in states) {
+        for (var code = 0; code < 160; ++code) {
+            table.add(code, state, 1, 0);
+        }
+    }
+    table.addMany(PRINTABLES, 0, 2, 0);
+    for (state in states) {
+        table.addMany([0x18, 0x1a, 0x99, 0x9a], state, 3, 0);
+        table.addMany(r(0x80, 0x90), state, 3, 0);
+        table.addMany(r(0x90, 0x98), state, 3, 0);
+        table.add(0x9c, state, 0, 0);
+        table.add(0x1b, state, 11, 1);
+        table.add(0x9d, state, 4, 8);
+        table.addMany([0x98, 0x9e, 0x9f], state, 0, 7);
+        table.add(0x9b, state, 11, 3);
+        table.add(0x90, state, 11, 9);
+    }
+    table.addMany(EXECUTABLES, 0, 3, 0);
+    table.addMany(EXECUTABLES, 1, 3, 1);
+    table.add(0x7f, 1, 0, 1);
+    table.addMany(EXECUTABLES, 8, 0, 8);
+    table.addMany(EXECUTABLES, 3, 3, 3);
+    table.add(0x7f, 3, 0, 3);
+    table.addMany(EXECUTABLES, 4, 3, 4);
+    table.add(0x7f, 4, 0, 4);
+    table.addMany(EXECUTABLES, 6, 3, 6);
+    table.addMany(EXECUTABLES, 5, 3, 5);
+    table.add(0x7f, 5, 0, 5);
+    table.addMany(EXECUTABLES, 2, 3, 2);
+    table.add(0x7f, 2, 0, 2);
+    table.add(0x5d, 1, 4, 8);
+    table.addMany(PRINTABLES, 8, 5, 8);
+    table.add(0x7f, 8, 5, 8);
+    table.addMany([0x9c, 0x1b, 0x18, 0x1a, 0x07], 8, 6, 0);
+    table.addMany(r(0x1c, 0x20), 8, 0, 8);
+    table.addMany([0x58, 0x5e, 0x5f], 1, 0, 7);
+    table.addMany(PRINTABLES, 7, 0, 7);
+    table.addMany(EXECUTABLES, 7, 0, 7);
+    table.add(0x9c, 7, 0, 0);
+    table.add(0x5b, 1, 11, 3);
+    table.addMany(r(0x40, 0x7f), 3, 7, 0);
+    table.addMany(r(0x30, 0x3a), 3, 8, 4);
+    table.add(0x3b, 3, 8, 4);
+    table.addMany([0x3c, 0x3d, 0x3e, 0x3f], 3, 9, 4);
+    table.addMany(r(0x30, 0x3a), 4, 8, 4);
+    table.add(0x3b, 4, 8, 4);
+    table.addMany(r(0x40, 0x7f), 4, 7, 0);
+    table.addMany([0x3a, 0x3c, 0x3d, 0x3e, 0x3f], 4, 0, 6);
+    table.addMany(r(0x20, 0x40), 6, 0, 6);
+    table.add(0x7f, 6, 0, 6);
+    table.addMany(r(0x40, 0x7f), 6, 0, 0);
+    table.add(0x3a, 3, 0, 6);
+    table.addMany(r(0x20, 0x30), 3, 9, 5);
+    table.addMany(r(0x20, 0x30), 5, 9, 5);
+    table.addMany(r(0x30, 0x40), 5, 0, 6);
+    table.addMany(r(0x40, 0x7f), 5, 7, 0);
+    table.addMany(r(0x20, 0x30), 4, 9, 5);
+    table.addMany(r(0x20, 0x30), 1, 9, 2);
+    table.addMany(r(0x20, 0x30), 2, 9, 2);
+    table.addMany(r(0x30, 0x7f), 2, 10, 0);
+    table.addMany(r(0x30, 0x50), 1, 10, 0);
+    table.addMany(r(0x51, 0x58), 1, 10, 0);
+    table.addMany([0x59, 0x5a, 0x5c], 1, 10, 0);
+    table.addMany(r(0x60, 0x7f), 1, 10, 0);
+    table.add(0x50, 1, 11, 9);
+    table.addMany(EXECUTABLES, 9, 0, 9);
+    table.add(0x7f, 9, 0, 9);
+    table.addMany(r(0x1c, 0x20), 9, 0, 9);
+    table.addMany(r(0x20, 0x30), 9, 9, 12);
+    table.add(0x3a, 9, 0, 11);
+    table.addMany(r(0x30, 0x3a), 9, 8, 10);
+    table.add(0x3b, 9, 8, 10);
+    table.addMany([0x3c, 0x3d, 0x3e, 0x3f], 9, 9, 10);
+    table.addMany(EXECUTABLES, 11, 0, 11);
+    table.addMany(r(0x20, 0x80), 11, 0, 11);
+    table.addMany(r(0x1c, 0x20), 11, 0, 11);
+    table.addMany(EXECUTABLES, 10, 0, 10);
+    table.add(0x7f, 10, 0, 10);
+    table.addMany(r(0x1c, 0x20), 10, 0, 10);
+    table.addMany(r(0x30, 0x3a), 10, 8, 10);
+    table.add(0x3b, 10, 8, 10);
+    table.addMany([0x3a, 0x3c, 0x3d, 0x3e, 0x3f], 10, 0, 11);
+    table.addMany(r(0x20, 0x30), 10, 9, 12);
+    table.addMany(EXECUTABLES, 12, 0, 12);
+    table.add(0x7f, 12, 0, 12);
+    table.addMany(r(0x1c, 0x20), 12, 0, 12);
+    table.addMany(r(0x20, 0x30), 12, 9, 12);
+    table.addMany(r(0x30, 0x40), 12, 0, 11);
+    table.addMany(r(0x40, 0x7f), 12, 12, 13);
+    table.addMany(r(0x40, 0x7f), 10, 12, 13);
+    table.addMany(r(0x40, 0x7f), 9, 12, 13);
+    table.addMany(EXECUTABLES, 13, 13, 13);
+    table.addMany(PRINTABLES, 13, 13, 13);
+    table.add(0x7f, 13, 0, 13);
+    table.addMany([0x1b, 0x9c], 13, 14, 0);
+    return table;
+})();
+var DcsDummy = (function () {
+    function DcsDummy() {
+    }
+    DcsDummy.prototype.hook = function (collect, params, flag) { };
+    DcsDummy.prototype.put = function (data, start, end) { };
+    DcsDummy.prototype.unhook = function () { };
+    return DcsDummy;
+}());
+var EscapeSequenceParser = (function (_super) {
+    __extends(EscapeSequenceParser, _super);
+    function EscapeSequenceParser(TRANSITIONS) {
+        if (TRANSITIONS === void 0) { TRANSITIONS = exports.VT500_TRANSITION_TABLE; }
+        var _this = _super.call(this) || this;
+        _this.TRANSITIONS = TRANSITIONS;
+        _this.initialState = 0;
+        _this.currentState = _this.initialState;
+        _this._osc = '';
+        _this._params = [0];
+        _this._collect = '';
+        _this._printHandlerFb = function (data, start, end) { };
+        _this._executeHandlerFb = function (code) { };
+        _this._csiHandlerFb = function (collect, params, flag) { };
+        _this._escHandlerFb = function (collect, flag) { };
+        _this._oscHandlerFb = function (identifier, data) { };
+        _this._dcsHandlerFb = new DcsDummy();
+        _this._errorHandlerFb = function (state) { return state; };
+        _this._printHandler = _this._printHandlerFb;
+        _this._executeHandlers = Object.create(null);
+        _this._csiHandlers = Object.create(null);
+        _this._escHandlers = Object.create(null);
+        _this._oscHandlers = Object.create(null);
+        _this._dcsHandlers = Object.create(null);
+        _this._activeDcsHandler = null;
+        _this._errorHandler = _this._errorHandlerFb;
+        return _this;
+    }
+    EscapeSequenceParser.prototype.dispose = function () {
+        this._printHandlerFb = null;
+        this._executeHandlerFb = null;
+        this._csiHandlerFb = null;
+        this._escHandlerFb = null;
+        this._oscHandlerFb = null;
+        this._dcsHandlerFb = null;
+        this._errorHandlerFb = null;
+        this._printHandler = null;
+        this._executeHandlers = null;
+        this._csiHandlers = null;
+        this._escHandlers = null;
+        this._oscHandlers = null;
+        this._dcsHandlers = null;
+        this._activeDcsHandler = null;
+        this._errorHandler = null;
+    };
+    EscapeSequenceParser.prototype.setPrintHandler = function (callback) {
+        this._printHandler = callback;
+    };
+    EscapeSequenceParser.prototype.clearPrintHandler = function () {
+        this._printHandler = this._printHandlerFb;
+    };
+    EscapeSequenceParser.prototype.setExecuteHandler = function (flag, callback) {
+        this._executeHandlers[flag.charCodeAt(0)] = callback;
+    };
+    EscapeSequenceParser.prototype.clearExecuteHandler = function (flag) {
+        if (this._executeHandlers[flag.charCodeAt(0)])
+            delete this._executeHandlers[flag.charCodeAt(0)];
+    };
+    EscapeSequenceParser.prototype.setExecuteHandlerFallback = function (callback) {
+        this._executeHandlerFb = callback;
+    };
+    EscapeSequenceParser.prototype.setCsiHandler = function (flag, callback) {
+        this._csiHandlers[flag.charCodeAt(0)] = callback;
+    };
+    EscapeSequenceParser.prototype.clearCsiHandler = function (flag) {
+        if (this._csiHandlers[flag.charCodeAt(0)])
+            delete this._csiHandlers[flag.charCodeAt(0)];
+    };
+    EscapeSequenceParser.prototype.setCsiHandlerFallback = function (callback) {
+        this._csiHandlerFb = callback;
+    };
+    EscapeSequenceParser.prototype.setEscHandler = function (collectAndFlag, callback) {
+        this._escHandlers[collectAndFlag] = callback;
+    };
+    EscapeSequenceParser.prototype.clearEscHandler = function (collectAndFlag) {
+        if (this._escHandlers[collectAndFlag])
+            delete this._escHandlers[collectAndFlag];
+    };
+    EscapeSequenceParser.prototype.setEscHandlerFallback = function (callback) {
+        this._escHandlerFb = callback;
+    };
+    EscapeSequenceParser.prototype.setOscHandler = function (ident, callback) {
+        this._oscHandlers[ident] = callback;
+    };
+    EscapeSequenceParser.prototype.clearOscHandler = function (ident) {
+        if (this._oscHandlers[ident])
+            delete this._oscHandlers[ident];
+    };
+    EscapeSequenceParser.prototype.setOscHandlerFallback = function (callback) {
+        this._oscHandlerFb = callback;
+    };
+    EscapeSequenceParser.prototype.setDcsHandler = function (collectAndFlag, handler) {
+        this._dcsHandlers[collectAndFlag] = handler;
+    };
+    EscapeSequenceParser.prototype.clearDcsHandler = function (collectAndFlag) {
+        if (this._dcsHandlers[collectAndFlag])
+            delete this._dcsHandlers[collectAndFlag];
+    };
+    EscapeSequenceParser.prototype.setDcsHandlerFallback = function (handler) {
+        this._dcsHandlerFb = handler;
+    };
+    EscapeSequenceParser.prototype.setErrorHandler = function (callback) {
+        this._errorHandler = callback;
+    };
+    EscapeSequenceParser.prototype.clearErrorHandler = function () {
+        this._errorHandler = this._errorHandlerFb;
+    };
+    EscapeSequenceParser.prototype.reset = function () {
+        this.currentState = this.initialState;
+        this._osc = '';
+        this._params = [0];
+        this._collect = '';
+        this._activeDcsHandler = null;
+    };
+    EscapeSequenceParser.prototype.parse = function (data) {
+        var code = 0;
+        var transition = 0;
+        var error = false;
+        var currentState = this.currentState;
+        var print = -1;
+        var dcs = -1;
+        var osc = this._osc;
+        var collect = this._collect;
+        var params = this._params;
+        var table = this.TRANSITIONS.table;
+        var dcsHandler = this._activeDcsHandler;
+        var callback = null;
+        var l = data.length;
+        for (var i = 0; i < l; ++i) {
+            code = data.charCodeAt(i);
+            if (currentState === 0 && code > 0x1f && code < 0x80) {
+                print = (~print) ? print : i;
+                do
+                    code = data.charCodeAt(++i);
+                while (i < l && code > 0x1f && code < 0x80);
+                i--;
+                continue;
+            }
+            if (currentState === 4 && (code > 0x2f && code < 0x39)) {
+                params[params.length - 1] = params[params.length - 1] * 10 + code - 48;
+                continue;
+            }
+            transition = (code < 0xa0) ? (table[currentState << 8 | code]) : DEFAULT_TRANSITION;
+            switch (transition >> 4) {
+                case 2:
+                    print = (~print) ? print : i;
+                    break;
+                case 3:
+                    if (~print) {
+                        this._printHandler(data, print, i);
+                        print = -1;
+                    }
+                    callback = this._executeHandlers[code];
+                    if (callback)
+                        callback();
+                    else
+                        this._executeHandlerFb(code);
+                    break;
+                case 0:
+                    if (~print) {
+                        this._printHandler(data, print, i);
+                        print = -1;
+                    }
+                    else if (~dcs) {
+                        dcsHandler.put(data, dcs, i);
+                        dcs = -1;
+                    }
+                    break;
+                case 1:
+                    if (code > 0x9f) {
+                        switch (currentState) {
+                            case 0:
+                                print = (~print) ? print : i;
+                                break;
+                            case 8:
+                                osc += String.fromCharCode(code);
+                                transition |= 8;
+                                break;
+                            case 6:
+                                transition |= 6;
+                                break;
+                            case 11:
+                                transition |= 11;
+                                break;
+                            case 13:
+                                dcs = (~dcs) ? dcs : i;
+                                transition |= 13;
+                                break;
+                            default:
+                                error = true;
+                        }
+                    }
+                    else {
+                        error = true;
+                    }
+                    if (error) {
+                        var inject = this._errorHandler({
+                            position: i,
+                            code: code,
+                            currentState: currentState,
+                            print: print,
+                            dcs: dcs,
+                            osc: osc,
+                            collect: collect,
+                            params: params,
+                            abort: false
+                        });
+                        if (inject.abort)
+                            return;
+                        error = false;
+                    }
+                    break;
+                case 7:
+                    callback = this._csiHandlers[code];
+                    if (callback)
+                        callback(params, collect);
+                    else
+                        this._csiHandlerFb(collect, params, code);
+                    break;
+                case 8:
+                    if (code === 0x3b)
+                        params.push(0);
+                    else
+                        params[params.length - 1] = params[params.length - 1] * 10 + code - 48;
+                    break;
+                case 9:
+                    collect += String.fromCharCode(code);
+                    break;
+                case 10:
+                    callback = this._escHandlers[collect + String.fromCharCode(code)];
+                    if (callback)
+                        callback(collect, code);
+                    else
+                        this._escHandlerFb(collect, code);
+                    break;
+                case 11:
+                    if (~print) {
+                        this._printHandler(data, print, i);
+                        print = -1;
+                    }
+                    osc = '';
+                    params = [0];
+                    collect = '';
+                    dcs = -1;
+                    break;
+                case 12:
+                    dcsHandler = this._dcsHandlers[collect + String.fromCharCode(code)];
+                    if (!dcsHandler)
+                        dcsHandler = this._dcsHandlerFb;
+                    dcsHandler.hook(collect, params, code);
+                    break;
+                case 13:
+                    dcs = (~dcs) ? dcs : i;
+                    break;
+                case 14:
+                    if (dcsHandler) {
+                        if (~dcs)
+                            dcsHandler.put(data, dcs, i);
+                        dcsHandler.unhook();
+                        dcsHandler = null;
+                    }
+                    if (code === 0x1b)
+                        transition |= 1;
+                    osc = '';
+                    params = [0];
+                    collect = '';
+                    dcs = -1;
+                    break;
+                case 4:
+                    if (~print) {
+                        this._printHandler(data, print, i);
+                        print = -1;
+                    }
+                    osc = '';
+                    break;
+                case 5:
+                    osc += data.charAt(i);
+                    break;
+                case 6:
+                    if (osc && code !== 0x18 && code !== 0x1a) {
+                        var idx = osc.indexOf(';');
+                        if (idx === -1) {
+                            this._oscHandlerFb(-1, osc);
+                        }
+                        else {
+                            var identifier = parseInt(osc.substring(0, idx));
+                            var content = osc.substring(idx + 1);
+                            callback = this._oscHandlers[identifier];
+                            if (callback)
+                                callback(content);
+                            else
+                                this._oscHandlerFb(identifier, content);
+                        }
+                    }
+                    if (code === 0x1b)
+                        transition |= 1;
+                    osc = '';
+                    params = [0];
+                    collect = '';
+                    dcs = -1;
+                    break;
+            }
+            currentState = transition & 15;
+        }
+        if (currentState === 0 && ~print) {
+            this._printHandler(data, print, data.length);
+        }
+        else if (currentState === 13 && ~dcs && dcsHandler) {
+            dcsHandler.put(data, dcs, data.length);
+        }
+        this._osc = osc;
+        this._collect = collect;
+        this._params = params;
+        this._activeDcsHandler = dcsHandler;
+        this.currentState = currentState;
+    };
+    return EscapeSequenceParser;
+}(Lifecycle_1.Disposable));
+exports.EscapeSequenceParser = EscapeSequenceParser;
 
-
-
-},{}],8:[function(require,module,exports){
+},{"./common/Lifecycle":17}],7:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter = (function () {
+var Lifecycle_1 = require("./common/Lifecycle");
+var EventEmitter = (function (_super) {
+    __extends(EventEmitter, _super);
     function EventEmitter() {
-        this._events = this._events || {};
+        var _this = _super.call(this) || this;
+        _this._events = _this._events || {};
+        return _this;
     }
     EventEmitter.prototype.on = function (type, listener) {
         this._events[type] = this._events[type] || [];
@@ -1082,54 +1374,266 @@ var EventEmitter = (function () {
         return this._events[type] || [];
     };
     EventEmitter.prototype.dispose = function () {
+        _super.prototype.dispose.call(this);
         this._events = {};
     };
     return EventEmitter;
-}());
+}(Lifecycle_1.Disposable));
 exports.EventEmitter = EventEmitter;
 
-
-
-},{}],9:[function(require,module,exports){
+},{"./common/Lifecycle":17}],8:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-var EscapeSequences_1 = require("./EscapeSequences");
-var Charsets_1 = require("./Charsets");
+var EscapeSequences_1 = require("./common/data/EscapeSequences");
+var Charsets_1 = require("./core/data/Charsets");
 var Buffer_1 = require("./Buffer");
 var CharWidth_1 = require("./CharWidth");
-var InputHandler = (function () {
-    function InputHandler(_terminal) {
+var EscapeSequenceParser_1 = require("./EscapeSequenceParser");
+var Lifecycle_1 = require("./common/Lifecycle");
+var GLEVEL = { '(': 0, ')': 1, '*': 2, '+': 3, '-': 1, '.': 2 };
+var RequestTerminfo = (function () {
+    function RequestTerminfo(_terminal) {
         this._terminal = _terminal;
     }
-    InputHandler.prototype.addChar = function (char, code) {
-        if (char >= ' ') {
+    RequestTerminfo.prototype.hook = function (collect, params, flag) {
+        this._data = '';
+    };
+    RequestTerminfo.prototype.put = function (data, start, end) {
+        this._data += data.substring(start, end);
+    };
+    RequestTerminfo.prototype.unhook = function () {
+        this._terminal.send(EscapeSequences_1.C0.ESC + "P0+r" + this._data + EscapeSequences_1.C0.ESC + "\\");
+    };
+    return RequestTerminfo;
+}());
+var DECRQSS = (function () {
+    function DECRQSS(_terminal) {
+        this._terminal = _terminal;
+    }
+    DECRQSS.prototype.hook = function (collect, params, flag) {
+        this._data = '';
+    };
+    DECRQSS.prototype.put = function (data, start, end) {
+        this._data += data.substring(start, end);
+    };
+    DECRQSS.prototype.unhook = function () {
+        switch (this._data) {
+            case '"q':
+                return this._terminal.send(EscapeSequences_1.C0.ESC + "P1$r0\"q" + EscapeSequences_1.C0.ESC + "\\");
+            case '"p':
+                return this._terminal.send(EscapeSequences_1.C0.ESC + "P1$r61\"p" + EscapeSequences_1.C0.ESC + "\\");
+            case 'r':
+                var pt = '' + (this._terminal.buffer.scrollTop + 1) +
+                    ';' + (this._terminal.buffer.scrollBottom + 1) + 'r';
+                return this._terminal.send(EscapeSequences_1.C0.ESC + "P1$r" + pt + EscapeSequences_1.C0.ESC + "\\");
+            case 'm':
+                return this._terminal.send(EscapeSequences_1.C0.ESC + "P1$r0m" + EscapeSequences_1.C0.ESC + "\\");
+            case ' q':
+                var STYLES = { 'block': 2, 'underline': 4, 'bar': 6 };
+                var style = STYLES[this._terminal.getOption('cursorStyle')];
+                style -= this._terminal.getOption('cursorBlink');
+                return this._terminal.send(EscapeSequences_1.C0.ESC + "P1$r" + style + " q" + EscapeSequences_1.C0.ESC + "\\");
+            default:
+                this._terminal.error('Unknown DCS $q %s', this._data);
+                this._terminal.send(EscapeSequences_1.C0.ESC + "P0$r" + this._data + EscapeSequences_1.C0.ESC + "\\");
+        }
+    };
+    return DECRQSS;
+}());
+var InputHandler = (function (_super) {
+    __extends(InputHandler, _super);
+    function InputHandler(_terminal, _parser) {
+        if (_parser === void 0) { _parser = new EscapeSequenceParser_1.EscapeSequenceParser(); }
+        var _this = _super.call(this) || this;
+        _this._terminal = _terminal;
+        _this._parser = _parser;
+        _this.register(_this._parser);
+        _this._surrogateHigh = '';
+        _this._parser.setCsiHandlerFallback(function (collect, params, flag) {
+            _this._terminal.error('Unknown CSI code: ', collect, params, String.fromCharCode(flag));
+        });
+        _this._parser.setEscHandlerFallback(function (collect, flag) {
+            _this._terminal.error('Unknown ESC code: ', collect, String.fromCharCode(flag));
+        });
+        _this._parser.setExecuteHandlerFallback(function (code) {
+            _this._terminal.error('Unknown EXECUTE code: ', code);
+        });
+        _this._parser.setOscHandlerFallback(function (identifier, data) {
+            _this._terminal.error('Unknown OSC code: ', identifier, data);
+        });
+        _this._parser.setPrintHandler(function (data, start, end) { return _this.print(data, start, end); });
+        _this._parser.setCsiHandler('@', function (params, collect) { return _this.insertChars(params); });
+        _this._parser.setCsiHandler('A', function (params, collect) { return _this.cursorUp(params); });
+        _this._parser.setCsiHandler('B', function (params, collect) { return _this.cursorDown(params); });
+        _this._parser.setCsiHandler('C', function (params, collect) { return _this.cursorForward(params); });
+        _this._parser.setCsiHandler('D', function (params, collect) { return _this.cursorBackward(params); });
+        _this._parser.setCsiHandler('E', function (params, collect) { return _this.cursorNextLine(params); });
+        _this._parser.setCsiHandler('F', function (params, collect) { return _this.cursorPrecedingLine(params); });
+        _this._parser.setCsiHandler('G', function (params, collect) { return _this.cursorCharAbsolute(params); });
+        _this._parser.setCsiHandler('H', function (params, collect) { return _this.cursorPosition(params); });
+        _this._parser.setCsiHandler('I', function (params, collect) { return _this.cursorForwardTab(params); });
+        _this._parser.setCsiHandler('J', function (params, collect) { return _this.eraseInDisplay(params); });
+        _this._parser.setCsiHandler('K', function (params, collect) { return _this.eraseInLine(params); });
+        _this._parser.setCsiHandler('L', function (params, collect) { return _this.insertLines(params); });
+        _this._parser.setCsiHandler('M', function (params, collect) { return _this.deleteLines(params); });
+        _this._parser.setCsiHandler('P', function (params, collect) { return _this.deleteChars(params); });
+        _this._parser.setCsiHandler('S', function (params, collect) { return _this.scrollUp(params); });
+        _this._parser.setCsiHandler('T', function (params, collect) { return _this.scrollDown(params, collect); });
+        _this._parser.setCsiHandler('X', function (params, collect) { return _this.eraseChars(params); });
+        _this._parser.setCsiHandler('Z', function (params, collect) { return _this.cursorBackwardTab(params); });
+        _this._parser.setCsiHandler('`', function (params, collect) { return _this.charPosAbsolute(params); });
+        _this._parser.setCsiHandler('a', function (params, collect) { return _this.hPositionRelative(params); });
+        _this._parser.setCsiHandler('b', function (params, collect) { return _this.repeatPrecedingCharacter(params); });
+        _this._parser.setCsiHandler('c', function (params, collect) { return _this.sendDeviceAttributes(params, collect); });
+        _this._parser.setCsiHandler('d', function (params, collect) { return _this.linePosAbsolute(params); });
+        _this._parser.setCsiHandler('e', function (params, collect) { return _this.vPositionRelative(params); });
+        _this._parser.setCsiHandler('f', function (params, collect) { return _this.hVPosition(params); });
+        _this._parser.setCsiHandler('g', function (params, collect) { return _this.tabClear(params); });
+        _this._parser.setCsiHandler('h', function (params, collect) { return _this.setMode(params, collect); });
+        _this._parser.setCsiHandler('l', function (params, collect) { return _this.resetMode(params, collect); });
+        _this._parser.setCsiHandler('m', function (params, collect) { return _this.charAttributes(params); });
+        _this._parser.setCsiHandler('n', function (params, collect) { return _this.deviceStatus(params, collect); });
+        _this._parser.setCsiHandler('p', function (params, collect) { return _this.softReset(params, collect); });
+        _this._parser.setCsiHandler('q', function (params, collect) { return _this.setCursorStyle(params, collect); });
+        _this._parser.setCsiHandler('r', function (params, collect) { return _this.setScrollRegion(params, collect); });
+        _this._parser.setCsiHandler('s', function (params, collect) { return _this.saveCursor(params); });
+        _this._parser.setCsiHandler('u', function (params, collect) { return _this.restoreCursor(params); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.BEL, function () { return _this.bell(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.LF, function () { return _this.lineFeed(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.VT, function () { return _this.lineFeed(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.FF, function () { return _this.lineFeed(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.CR, function () { return _this.carriageReturn(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.BS, function () { return _this.backspace(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.HT, function () { return _this.tab(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.SO, function () { return _this.shiftOut(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C0.SI, function () { return _this.shiftIn(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C1.IND, function () { return _this.index(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C1.NEL, function () { return _this.nextLine(); });
+        _this._parser.setExecuteHandler(EscapeSequences_1.C1.HTS, function () { return _this.tabSet(); });
+        _this._parser.setOscHandler(0, function (data) { return _this.setTitle(data); });
+        _this._parser.setOscHandler(2, function (data) { return _this.setTitle(data); });
+        _this._parser.setEscHandler('7', function () { return _this.saveCursor([]); });
+        _this._parser.setEscHandler('8', function () { return _this.restoreCursor([]); });
+        _this._parser.setEscHandler('D', function () { return _this.index(); });
+        _this._parser.setEscHandler('E', function () { return _this.nextLine(); });
+        _this._parser.setEscHandler('H', function () { return _this.tabSet(); });
+        _this._parser.setEscHandler('M', function () { return _this.reverseIndex(); });
+        _this._parser.setEscHandler('=', function () { return _this.keypadApplicationMode(); });
+        _this._parser.setEscHandler('>', function () { return _this.keypadNumericMode(); });
+        _this._parser.setEscHandler('c', function () { return _this.reset(); });
+        _this._parser.setEscHandler('n', function () { return _this.setgLevel(2); });
+        _this._parser.setEscHandler('o', function () { return _this.setgLevel(3); });
+        _this._parser.setEscHandler('|', function () { return _this.setgLevel(3); });
+        _this._parser.setEscHandler('}', function () { return _this.setgLevel(2); });
+        _this._parser.setEscHandler('~', function () { return _this.setgLevel(1); });
+        _this._parser.setEscHandler('%@', function () { return _this.selectDefaultCharset(); });
+        _this._parser.setEscHandler('%G', function () { return _this.selectDefaultCharset(); });
+        var _loop_1 = function (flag) {
+            this_1._parser.setEscHandler('(' + flag, function () { return _this.selectCharset('(' + flag); });
+            this_1._parser.setEscHandler(')' + flag, function () { return _this.selectCharset(')' + flag); });
+            this_1._parser.setEscHandler('*' + flag, function () { return _this.selectCharset('*' + flag); });
+            this_1._parser.setEscHandler('+' + flag, function () { return _this.selectCharset('+' + flag); });
+            this_1._parser.setEscHandler('-' + flag, function () { return _this.selectCharset('-' + flag); });
+            this_1._parser.setEscHandler('.' + flag, function () { return _this.selectCharset('.' + flag); });
+            this_1._parser.setEscHandler('/' + flag, function () { return _this.selectCharset('/' + flag); });
+        };
+        var this_1 = this;
+        for (var flag in Charsets_1.CHARSETS) {
+            _loop_1(flag);
+        }
+        _this._parser.setErrorHandler(function (state) {
+            _this._terminal.error('Parsing error: ', state);
+            return state;
+        });
+        _this._parser.setDcsHandler('$q', new DECRQSS(_this._terminal));
+        _this._parser.setDcsHandler('+q', new RequestTerminfo(_this._terminal));
+        return _this;
+    }
+    InputHandler.prototype.dispose = function () {
+        _super.prototype.dispose.call(this);
+        this._terminal = null;
+    };
+    InputHandler.prototype.parse = function (data) {
             var buffer = this._terminal.buffer;
-            var chWidth = CharWidth_1.wcwidth(code);
-            if (this._terminal.charset && this._terminal.charset[char]) {
-                char = this._terminal.charset[char];
+        var cursorStartX = buffer.x;
+        var cursorStartY = buffer.y;
+        if (this._terminal.debug) {
+            this._terminal.log('data: ' + data);
             }
-            if (this._terminal.options.screenReaderMode) {
+        if (this._surrogateHigh) {
+            data = this._surrogateHigh + data;
+            this._surrogateHigh = '';
+        }
+        this._parser.parse(data);
+        buffer = this._terminal.buffer;
+        if (buffer.x !== cursorStartX || buffer.y !== cursorStartY) {
+            this._terminal.emit('cursormove');
+        }
+    };
+    InputHandler.prototype.print = function (data, start, end) {
+        var char;
+        var code;
+        var low;
+        var chWidth;
+        var buffer = this._terminal.buffer;
+        var charset = this._terminal.charset;
+        var screenReaderMode = this._terminal.options.screenReaderMode;
+        var cols = this._terminal.cols;
+        var wraparoundMode = this._terminal.wraparoundMode;
+        var insertMode = this._terminal.insertMode;
+        var curAttr = this._terminal.curAttr;
+        var bufferRow = buffer.lines.get(buffer.y + buffer.ybase);
+        this._terminal.updateRange(buffer.y);
+        for (var stringPosition = start; stringPosition < end; ++stringPosition) {
+            char = data.charAt(stringPosition);
+            code = data.charCodeAt(stringPosition);
+            if (0xD800 <= code && code <= 0xDBFF) {
+                low = data.charCodeAt(stringPosition + 1);
+                if (isNaN(low)) {
+                    this._surrogateHigh = char;
+                    continue;
+                }
+                code = ((code - 0xD800) * 0x400) + (low - 0xDC00) + 0x10000;
+                char += data.charAt(stringPosition + 1);
+            }
+            if (0xDC00 <= code && code <= 0xDFFF) {
+                continue;
+            }
+            chWidth = CharWidth_1.wcwidth(code);
+            if (charset) {
+                char = charset[char] || char;
+                code = char.charCodeAt(0);
+            }
+            if (screenReaderMode) {
                 this._terminal.emit('a11y.char', char);
             }
-            var row = buffer.y + buffer.ybase;
             if (!chWidth && buffer.x) {
-                if (buffer.lines.get(row)[buffer.x - 1]) {
-                    if (!buffer.lines.get(row)[buffer.x - 1][Buffer_1.CHAR_DATA_WIDTH_INDEX]) {
-                        if (buffer.lines.get(row)[buffer.x - 2]) {
-                            buffer.lines.get(row)[buffer.x - 2][Buffer_1.CHAR_DATA_CHAR_INDEX] += char;
-                            buffer.lines.get(row)[buffer.x - 2][3] = char.charCodeAt(0);
+                if (bufferRow[buffer.x - 1]) {
+                    if (!bufferRow[buffer.x - 1][Buffer_1.CHAR_DATA_WIDTH_INDEX]) {
+                        if (bufferRow[buffer.x - 2]) {
+                            bufferRow[buffer.x - 2][Buffer_1.CHAR_DATA_CHAR_INDEX] += char;
+                            bufferRow[buffer.x - 2][Buffer_1.CHAR_DATA_CODE_INDEX] = code;
                         }
                     }
                     else {
-                        buffer.lines.get(row)[buffer.x - 1][Buffer_1.CHAR_DATA_CHAR_INDEX] += char;
-                        buffer.lines.get(row)[buffer.x - 1][3] = char.charCodeAt(0);
+                        bufferRow[buffer.x - 1][Buffer_1.CHAR_DATA_CHAR_INDEX] += char;
+                        bufferRow[buffer.x - 1][Buffer_1.CHAR_DATA_CODE_INDEX] = code;
                     }
-                    this._terminal.updateRange(buffer.y);
                 }
-                return;
+                continue;
             }
-            if (buffer.x + chWidth - 1 >= this._terminal.cols) {
-                if (this._terminal.wraparoundMode) {
+            if (buffer.x + chWidth - 1 >= cols) {
+                if (wraparoundMode) {
                     buffer.x = 0;
                     buffer.y++;
                     if (buffer.y > buffer.scrollBottom) {
@@ -1139,33 +1643,31 @@ var InputHandler = (function () {
                     else {
                         buffer.lines.get(buffer.y).isWrapped = true;
                     }
+                    bufferRow = buffer.lines.get(buffer.y + buffer.ybase);
                 }
                 else {
                     if (chWidth === 2) {
-                        return;
+                        continue;
                     }
                 }
             }
-            row = buffer.y + buffer.ybase;
-            if (this._terminal.insertMode) {
+            if (insertMode) {
                 for (var moves = 0; moves < chWidth; ++moves) {
-                    var removed = buffer.lines.get(buffer.y + buffer.ybase).pop();
+                    var removed = bufferRow.pop();
                     if (removed[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0
-                        && buffer.lines.get(row)[this._terminal.cols - 2]
-                        && buffer.lines.get(row)[this._terminal.cols - 2][Buffer_1.CHAR_DATA_WIDTH_INDEX] === 2) {
-                        buffer.lines.get(row)[this._terminal.cols - 2] = [this._terminal.curAttr, ' ', 1, ' '.charCodeAt(0)];
+                        && bufferRow[this._terminal.cols - 2]
+                        && bufferRow[this._terminal.cols - 2][Buffer_1.CHAR_DATA_WIDTH_INDEX] === 2) {
+                        bufferRow[this._terminal.cols - 2] = [curAttr, ' ', 1, 32];
                     }
-                    buffer.lines.get(row).splice(buffer.x, 0, [this._terminal.curAttr, ' ', 1, ' '.charCodeAt(0)]);
+                    bufferRow.splice(buffer.x, 0, [curAttr, ' ', 1, 32]);
                 }
             }
-            buffer.lines.get(row)[buffer.x] = [this._terminal.curAttr, char, chWidth, char.charCodeAt(0)];
-            buffer.x++;
-            this._terminal.updateRange(buffer.y);
+            bufferRow[buffer.x++] = [curAttr, char, chWidth, code];
             if (chWidth === 2) {
-                buffer.lines.get(row)[buffer.x] = [this._terminal.curAttr, '', 0, undefined];
-                buffer.x++;
+                bufferRow[buffer.x++] = [curAttr, '', 0, undefined];
             }
         }
+        this._terminal.updateRange(buffer.y);
     };
     InputHandler.prototype.bell = function () {
         this._terminal.bell();
@@ -1427,7 +1929,8 @@ var InputHandler = (function () {
         this._terminal.updateRange(buffer.scrollTop);
         this._terminal.updateRange(buffer.scrollBottom);
     };
-    InputHandler.prototype.scrollDown = function (params) {
+    InputHandler.prototype.scrollDown = function (params, collect) {
+        if (params.length < 2 && !collect) {
         var param = params[0] || 1;
         var buffer = this._terminal.buffer;
         while (param--) {
@@ -1436,6 +1939,7 @@ var InputHandler = (function () {
         }
         this._terminal.updateRange(buffer.scrollTop);
         this._terminal.updateRange(buffer.scrollBottom);
+        }
     };
     InputHandler.prototype.eraseChars = function (params) {
         var param = params[0];
@@ -1467,7 +1971,7 @@ var InputHandler = (function () {
             this._terminal.buffer.x = this._terminal.cols - 1;
         }
     };
-    InputHandler.prototype.HPositionRelative = function (params) {
+    InputHandler.prototype.hPositionRelative = function (params) {
         var param = params[0];
         if (param < 1) {
             param = 1;
@@ -1481,16 +1985,16 @@ var InputHandler = (function () {
         var param = params[0] || 1;
         var buffer = this._terminal.buffer;
         var line = buffer.lines.get(buffer.ybase + buffer.y);
-        var ch = line[buffer.x - 1] || [this._terminal.defAttr, ' ', 1, 32];
+        var ch = line[buffer.x - 1] || [Buffer_1.DEFAULT_ATTR, ' ', 1, 32];
         while (param--) {
             line[buffer.x++] = ch;
         }
     };
-    InputHandler.prototype.sendDeviceAttributes = function (params) {
+    InputHandler.prototype.sendDeviceAttributes = function (params, collect) {
         if (params[0] > 0) {
             return;
         }
-        if (!this._terminal.prefix) {
+        if (!collect) {
             if (this._terminal.is('xterm') || this._terminal.is('rxvt-unicode') || this._terminal.is('screen')) {
                 this._terminal.send(EscapeSequences_1.C0.ESC + '[?1;2c');
             }
@@ -1498,7 +2002,7 @@ var InputHandler = (function () {
                 this._terminal.send(EscapeSequences_1.C0.ESC + '[?6c');
             }
         }
-        else if (this._terminal.prefix === '>') {
+        else if (collect === '>') {
             if (this._terminal.is('xterm')) {
                 this._terminal.send(EscapeSequences_1.C0.ESC + '[>0;276;0c');
             }
@@ -1523,7 +2027,7 @@ var InputHandler = (function () {
             this._terminal.buffer.y = this._terminal.rows - 1;
         }
     };
-    InputHandler.prototype.VPositionRelative = function (params) {
+    InputHandler.prototype.vPositionRelative = function (params) {
         var param = params[0];
         if (param < 1) {
             param = 1;
@@ -1536,7 +2040,7 @@ var InputHandler = (function () {
             this._terminal.buffer.x--;
         }
     };
-    InputHandler.prototype.HVPosition = function (params) {
+    InputHandler.prototype.hVPosition = function (params) {
         if (params[0] < 1)
             params[0] = 1;
         if (params[1] < 1)
@@ -1559,14 +2063,14 @@ var InputHandler = (function () {
             this._terminal.buffer.tabs = {};
         }
     };
-    InputHandler.prototype.setMode = function (params) {
+    InputHandler.prototype.setMode = function (params, collect) {
         if (params.length > 1) {
             for (var i = 0; i < params.length; i++) {
                 this.setMode([params[i]]);
             }
             return;
         }
-        if (!this._terminal.prefix) {
+        if (!collect) {
             switch (params[0]) {
                 case 4:
                     this._terminal.insertMode = true;
@@ -1575,7 +2079,7 @@ var InputHandler = (function () {
                     break;
             }
         }
-        else if (this._terminal.prefix === '?') {
+        else if (collect === '?') {
             switch (params[0]) {
                 case 1:
                     this._terminal.applicationCursor = true;
@@ -1643,14 +2147,14 @@ var InputHandler = (function () {
             }
         }
     };
-    InputHandler.prototype.resetMode = function (params) {
+    InputHandler.prototype.resetMode = function (params, collect) {
         if (params.length > 1) {
             for (var i = 0; i < params.length; i++) {
                 this.resetMode([params[i]]);
             }
             return;
         }
-        if (!this._terminal.prefix) {
+        if (!collect) {
             switch (params[0]) {
                 case 4:
                     this._terminal.insertMode = false;
@@ -1659,7 +2163,7 @@ var InputHandler = (function () {
                     break;
             }
         }
-        else if (this._terminal.prefix === '?') {
+        else if (collect === '?') {
             switch (params[0]) {
                 case 1:
                     this._terminal.applicationCursor = false;
@@ -1725,7 +2229,7 @@ var InputHandler = (function () {
     };
     InputHandler.prototype.charAttributes = function (params) {
         if (params.length === 1 && params[0] === 0) {
-            this._terminal.curAttr = this._terminal.defAttr;
+            this._terminal.curAttr = Buffer_1.DEFAULT_ATTR;
             return;
         }
         var l = params.length;
@@ -1750,9 +2254,9 @@ var InputHandler = (function () {
                 bg = p - 100;
             }
             else if (p === 0) {
-                flags = this._terminal.defAttr >> 18;
-                fg = (this._terminal.defAttr >> 9) & 0x1ff;
-                bg = this._terminal.defAttr & 0x1ff;
+                flags = Buffer_1.DEFAULT_ATTR >> 18;
+                fg = (Buffer_1.DEFAULT_ATTR >> 9) & 0x1ff;
+                bg = Buffer_1.DEFAULT_ATTR & 0x1ff;
             }
             else if (p === 1) {
                 flags |= 1;
@@ -1792,10 +2296,10 @@ var InputHandler = (function () {
                 flags &= ~16;
             }
             else if (p === 39) {
-                fg = (this._terminal.defAttr >> 9) & 0x1ff;
+                fg = (Buffer_1.DEFAULT_ATTR >> 9) & 0x1ff;
             }
             else if (p === 49) {
-                bg = this._terminal.defAttr & 0x1ff;
+                bg = Buffer_1.DEFAULT_ATTR & 0x1ff;
             }
             else if (p === 38) {
                 if (params[i + 1] === 2) {
@@ -1826,8 +2330,8 @@ var InputHandler = (function () {
                 }
             }
             else if (p === 100) {
-                fg = (this._terminal.defAttr >> 9) & 0x1ff;
-                bg = this._terminal.defAttr & 0x1ff;
+                fg = (Buffer_1.DEFAULT_ATTR >> 9) & 0x1ff;
+                bg = Buffer_1.DEFAULT_ATTR & 0x1ff;
             }
             else {
                 this._terminal.error('Unknown SGR attribute: %d.', p);
@@ -1835,8 +2339,8 @@ var InputHandler = (function () {
         }
         this._terminal.curAttr = (flags << 18) | (fg << 9) | bg;
     };
-    InputHandler.prototype.deviceStatus = function (params) {
-        if (!this._terminal.prefix) {
+    InputHandler.prototype.deviceStatus = function (params, collect) {
+        if (!collect) {
             switch (params[0]) {
                 case 5:
                     this._terminal.send(EscapeSequences_1.C0.ESC + '[0n');
@@ -1850,7 +2354,7 @@ var InputHandler = (function () {
                     break;
             }
         }
-        else if (this._terminal.prefix === '?') {
+        else if (collect === '?') {
             switch (params[0]) {
                 case 6:
                     this._terminal.send(EscapeSequences_1.C0.ESC + '[?'
@@ -1870,7 +2374,8 @@ var InputHandler = (function () {
             }
         }
     };
-    InputHandler.prototype.softReset = function (params) {
+    InputHandler.prototype.softReset = function (params, collect) {
+        if (collect === '!') {
         this._terminal.cursorHidden = false;
         this._terminal.insertMode = false;
         this._terminal.originMode = false;
@@ -1880,13 +2385,15 @@ var InputHandler = (function () {
         this._terminal.applicationCursor = false;
         this._terminal.buffer.scrollTop = 0;
         this._terminal.buffer.scrollBottom = this._terminal.rows - 1;
-        this._terminal.curAttr = this._terminal.defAttr;
+            this._terminal.curAttr = Buffer_1.DEFAULT_ATTR;
         this._terminal.buffer.x = this._terminal.buffer.y = 0;
         this._terminal.charset = null;
         this._terminal.glevel = 0;
         this._terminal.charsets = [null];
+        }
     };
-    InputHandler.prototype.setCursorStyle = function (params) {
+    InputHandler.prototype.setCursorStyle = function (params, collect) {
+        if (collect === ' ') {
         var param = params[0] < 1 ? 1 : params[0];
         switch (param) {
             case 1:
@@ -1904,9 +2411,10 @@ var InputHandler = (function () {
         }
         var isBlinking = param % 2 === 1;
         this._terminal.setOption('cursorBlink', isBlinking);
+        }
     };
-    InputHandler.prototype.setScrollRegion = function (params) {
-        if (this._terminal.prefix)
+    InputHandler.prototype.setScrollRegion = function (params, collect) {
+        if (collect)
             return;
         this._terminal.buffer.scrollTop = (params[0] || 1) - 1;
         this._terminal.buffer.scrollBottom = (params[1] && params[1] <= this._terminal.rows ? params[1] : this._terminal.rows) - 1;
@@ -1916,18 +2424,66 @@ var InputHandler = (function () {
     InputHandler.prototype.saveCursor = function (params) {
         this._terminal.buffer.savedX = this._terminal.buffer.x;
         this._terminal.buffer.savedY = this._terminal.buffer.y;
+        this._terminal.savedCurAttr = this._terminal.curAttr;
     };
     InputHandler.prototype.restoreCursor = function (params) {
         this._terminal.buffer.x = this._terminal.buffer.savedX || 0;
         this._terminal.buffer.y = this._terminal.buffer.savedY || 0;
+        this._terminal.curAttr = this._terminal.savedCurAttr || Buffer_1.DEFAULT_ATTR;
+    };
+    InputHandler.prototype.setTitle = function (data) {
+        this._terminal.handleTitle(data);
+    };
+    InputHandler.prototype.nextLine = function () {
+        this._terminal.buffer.x = 0;
+        this.index();
+    };
+    InputHandler.prototype.keypadApplicationMode = function () {
+        this._terminal.log('Serial port requested application keypad.');
+        this._terminal.applicationKeypad = true;
+        if (this._terminal.viewport) {
+            this._terminal.viewport.syncScrollArea();
+        }
+    };
+    InputHandler.prototype.keypadNumericMode = function () {
+        this._terminal.log('Switching back to normal keypad.');
+        this._terminal.applicationKeypad = false;
+        if (this._terminal.viewport) {
+            this._terminal.viewport.syncScrollArea();
+        }
+    };
+    InputHandler.prototype.selectDefaultCharset = function () {
+        this._terminal.setgLevel(0);
+        this._terminal.setgCharset(0, Charsets_1.DEFAULT_CHARSET);
+    };
+    InputHandler.prototype.selectCharset = function (collectAndFlag) {
+        if (collectAndFlag.length !== 2)
+            return this.selectDefaultCharset();
+        if (collectAndFlag[0] === '/')
+            return;
+        this._terminal.setgCharset(GLEVEL[collectAndFlag[0]], Charsets_1.CHARSETS[collectAndFlag[1]] || Charsets_1.DEFAULT_CHARSET);
+    };
+    InputHandler.prototype.index = function () {
+        this._terminal.index();
+    };
+    InputHandler.prototype.tabSet = function () {
+        this._terminal.tabSet();
+    };
+    InputHandler.prototype.reverseIndex = function () {
+        this._terminal.reverseIndex();
+    };
+    InputHandler.prototype.reset = function () {
+        this._parser.reset();
+        this._terminal.reset();
+    };
+    InputHandler.prototype.setgLevel = function (level) {
+        this._terminal.setgLevel(level);
     };
     return InputHandler;
-}());
+}(Lifecycle_1.Disposable));
 exports.InputHandler = InputHandler;
 
-
-
-},{"./Buffer":2,"./CharWidth":4,"./Charsets":5,"./EscapeSequences":7}],10:[function(require,module,exports){
+},{"./Buffer":2,"./CharWidth":4,"./EscapeSequenceParser":6,"./common/Lifecycle":17,"./common/data/EscapeSequences":18,"./core/data/Charsets":19}],9:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -1940,7 +2496,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var MouseZoneManager_1 = require("./input/MouseZoneManager");
+var MouseZoneManager_1 = require("./ui/MouseZoneManager");
 var EventEmitter_1 = require("./EventEmitter");
 var Linkifier = (function (_super) {
     __extends(Linkifier, _super);
@@ -2122,505 +2678,7 @@ var Linkifier = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.Linkifier = Linkifier;
 
-
-
-},{"./EventEmitter":8,"./input/MouseZoneManager":20}],11:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var EscapeSequences_1 = require("./EscapeSequences");
-var Charsets_1 = require("./Charsets");
-var normalStateHandler = {};
-normalStateHandler[EscapeSequences_1.C0.BEL] = function (parser, handler) { return handler.bell(); };
-normalStateHandler[EscapeSequences_1.C0.LF] = function (parser, handler) { return handler.lineFeed(); };
-normalStateHandler[EscapeSequences_1.C0.VT] = normalStateHandler[EscapeSequences_1.C0.LF];
-normalStateHandler[EscapeSequences_1.C0.FF] = normalStateHandler[EscapeSequences_1.C0.LF];
-normalStateHandler[EscapeSequences_1.C0.CR] = function (parser, handler) { return handler.carriageReturn(); };
-normalStateHandler[EscapeSequences_1.C0.BS] = function (parser, handler) { return handler.backspace(); };
-normalStateHandler[EscapeSequences_1.C0.HT] = function (parser, handler) { return handler.tab(); };
-normalStateHandler[EscapeSequences_1.C0.SO] = function (parser, handler) { return handler.shiftOut(); };
-normalStateHandler[EscapeSequences_1.C0.SI] = function (parser, handler) { return handler.shiftIn(); };
-normalStateHandler[EscapeSequences_1.C0.ESC] = function (parser, handler) { return parser.setState(1); };
-var escapedStateHandler = {};
-escapedStateHandler['['] = function (parser, terminal) {
-    terminal.params = [];
-    terminal.currentParam = 0;
-    parser.setState(2);
-};
-escapedStateHandler[']'] = function (parser, terminal) {
-    terminal.params = [];
-    terminal.currentParam = 0;
-    parser.setState(4);
-};
-escapedStateHandler['P'] = function (parser, terminal) {
-    terminal.params = [];
-    terminal.currentParam = 0;
-    parser.setState(6);
-};
-escapedStateHandler['_'] = function (parser, terminal) {
-    parser.setState(7);
-};
-escapedStateHandler['^'] = function (parser, terminal) {
-    parser.setState(7);
-};
-escapedStateHandler['c'] = function (parser, terminal) {
-    terminal.reset();
-};
-escapedStateHandler['E'] = function (parser, terminal) {
-    terminal.buffer.x = 0;
-    terminal.index();
-    parser.setState(0);
-};
-escapedStateHandler['D'] = function (parser, terminal) {
-    terminal.index();
-    parser.setState(0);
-};
-escapedStateHandler['M'] = function (parser, terminal) {
-    terminal.reverseIndex();
-    parser.setState(0);
-};
-escapedStateHandler['%'] = function (parser, terminal) {
-    terminal.setgLevel(0);
-    terminal.setgCharset(0, Charsets_1.DEFAULT_CHARSET);
-    parser.setState(0);
-    parser.skipNextChar();
-};
-escapedStateHandler[EscapeSequences_1.C0.CAN] = function (parser) { return parser.setState(0); };
-var csiParamStateHandler = {};
-csiParamStateHandler['?'] = function (parser) { return parser.setPrefix('?'); };
-csiParamStateHandler['>'] = function (parser) { return parser.setPrefix('>'); };
-csiParamStateHandler['!'] = function (parser) { return parser.setPrefix('!'); };
-csiParamStateHandler['0'] = function (parser) { return parser.setParam(parser.getParam() * 10); };
-csiParamStateHandler['1'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 1); };
-csiParamStateHandler['2'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 2); };
-csiParamStateHandler['3'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 3); };
-csiParamStateHandler['4'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 4); };
-csiParamStateHandler['5'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 5); };
-csiParamStateHandler['6'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 6); };
-csiParamStateHandler['7'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 7); };
-csiParamStateHandler['8'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 8); };
-csiParamStateHandler['9'] = function (parser) { return parser.setParam(parser.getParam() * 10 + 9); };
-csiParamStateHandler['$'] = function (parser) { return parser.setPostfix('$'); };
-csiParamStateHandler['"'] = function (parser) { return parser.setPostfix('"'); };
-csiParamStateHandler[' '] = function (parser) { return parser.setPostfix(' '); };
-csiParamStateHandler['\''] = function (parser) { return parser.setPostfix('\''); };
-csiParamStateHandler[';'] = function (parser) { return parser.finalizeParam(); };
-csiParamStateHandler[EscapeSequences_1.C0.CAN] = function (parser) { return parser.setState(0); };
-var csiStateHandler = {};
-csiStateHandler['@'] = function (handler, params, prefix) { return handler.insertChars(params); };
-csiStateHandler['A'] = function (handler, params, prefix) { return handler.cursorUp(params); };
-csiStateHandler['B'] = function (handler, params, prefix) { return handler.cursorDown(params); };
-csiStateHandler['C'] = function (handler, params, prefix) { return handler.cursorForward(params); };
-csiStateHandler['D'] = function (handler, params, prefix) { return handler.cursorBackward(params); };
-csiStateHandler['E'] = function (handler, params, prefix) { return handler.cursorNextLine(params); };
-csiStateHandler['F'] = function (handler, params, prefix) { return handler.cursorPrecedingLine(params); };
-csiStateHandler['G'] = function (handler, params, prefix) { return handler.cursorCharAbsolute(params); };
-csiStateHandler['H'] = function (handler, params, prefix) { return handler.cursorPosition(params); };
-csiStateHandler['I'] = function (handler, params, prefix) { return handler.cursorForwardTab(params); };
-csiStateHandler['J'] = function (handler, params, prefix) { return handler.eraseInDisplay(params); };
-csiStateHandler['K'] = function (handler, params, prefix) { return handler.eraseInLine(params); };
-csiStateHandler['L'] = function (handler, params, prefix) { return handler.insertLines(params); };
-csiStateHandler['M'] = function (handler, params, prefix) { return handler.deleteLines(params); };
-csiStateHandler['P'] = function (handler, params, prefix) { return handler.deleteChars(params); };
-csiStateHandler['S'] = function (handler, params, prefix) { return handler.scrollUp(params); };
-csiStateHandler['T'] = function (handler, params, prefix) {
-    if (params.length < 2 && !prefix) {
-        handler.scrollDown(params);
-    }
-};
-csiStateHandler['X'] = function (handler, params, prefix) { return handler.eraseChars(params); };
-csiStateHandler['Z'] = function (handler, params, prefix) { return handler.cursorBackwardTab(params); };
-csiStateHandler['`'] = function (handler, params, prefix) { return handler.charPosAbsolute(params); };
-csiStateHandler['a'] = function (handler, params, prefix) { return handler.HPositionRelative(params); };
-csiStateHandler['b'] = function (handler, params, prefix) { return handler.repeatPrecedingCharacter(params); };
-csiStateHandler['c'] = function (handler, params, prefix) { return handler.sendDeviceAttributes(params); };
-csiStateHandler['d'] = function (handler, params, prefix) { return handler.linePosAbsolute(params); };
-csiStateHandler['e'] = function (handler, params, prefix) { return handler.VPositionRelative(params); };
-csiStateHandler['f'] = function (handler, params, prefix) { return handler.HVPosition(params); };
-csiStateHandler['g'] = function (handler, params, prefix) { return handler.tabClear(params); };
-csiStateHandler['h'] = function (handler, params, prefix) { return handler.setMode(params); };
-csiStateHandler['l'] = function (handler, params, prefix) { return handler.resetMode(params); };
-csiStateHandler['m'] = function (handler, params, prefix) { return handler.charAttributes(params); };
-csiStateHandler['n'] = function (handler, params, prefix) { return handler.deviceStatus(params); };
-csiStateHandler['p'] = function (handler, params, prefix) {
-    switch (prefix) {
-        case '!':
-            handler.softReset(params);
-            break;
-    }
-};
-csiStateHandler['q'] = function (handler, params, prefix, postfix) {
-    if (postfix === ' ') {
-        handler.setCursorStyle(params);
-    }
-};
-csiStateHandler['r'] = function (handler, params) { return handler.setScrollRegion(params); };
-csiStateHandler['s'] = function (handler, params) { return handler.saveCursor(params); };
-csiStateHandler['u'] = function (handler, params) { return handler.restoreCursor(params); };
-csiStateHandler[EscapeSequences_1.C0.CAN] = function (handler, params, prefix, postfix, parser) { return parser.setState(0); };
-var Parser = (function () {
-    function Parser(_inputHandler, _terminal) {
-        this._inputHandler = _inputHandler;
-        this._terminal = _terminal;
-        this._state = 0;
-    }
-    Parser.prototype.parse = function (data) {
-        var l = data.length;
-        var cs;
-        var ch;
-        var code;
-        var low;
-        var cursorStartX = this._terminal.buffer.x;
-        var cursorStartY = this._terminal.buffer.y;
-        if (this._terminal.debug) {
-            this._terminal.log('data: ' + data);
-        }
-        this._position = 0;
-        if (this._terminal.surrogate_high) {
-            data = this._terminal.surrogate_high + data;
-            this._terminal.surrogate_high = '';
-        }
-        for (; this._position < l; this._position++) {
-            ch = data[this._position];
-            code = data.charCodeAt(this._position);
-            if (0xD800 <= code && code <= 0xDBFF) {
-                low = data.charCodeAt(this._position + 1);
-                if (isNaN(low)) {
-                    this._terminal.surrogate_high = ch;
-                    continue;
-                }
-                code = ((code - 0xD800) * 0x400) + (low - 0xDC00) + 0x10000;
-                ch += data.charAt(this._position + 1);
-            }
-            if (0xDC00 <= code && code <= 0xDFFF) {
-                continue;
-            }
-            switch (this._state) {
-                case 0:
-                    if (ch in normalStateHandler) {
-                        normalStateHandler[ch](this, this._inputHandler);
-                    }
-                    else {
-                        this._inputHandler.addChar(ch, code);
-                    }
-                    break;
-                case 1:
-                    if (ch in escapedStateHandler) {
-                        escapedStateHandler[ch](this, this._terminal);
-                        break;
-                    }
-                    switch (ch) {
-                        case '(':
-                        case ')':
-                        case '*':
-                        case '+':
-                        case '-':
-                        case '.':
-                            switch (ch) {
-                                case '(':
-                                    this._terminal.gcharset = 0;
-                                    break;
-                                case ')':
-                                    this._terminal.gcharset = 1;
-                                    break;
-                                case '*':
-                                    this._terminal.gcharset = 2;
-                                    break;
-                                case '+':
-                                    this._terminal.gcharset = 3;
-                                    break;
-                                case '-':
-                                    this._terminal.gcharset = 1;
-                                    break;
-                                case '.':
-                                    this._terminal.gcharset = 2;
-                                    break;
-                            }
-                            this._state = 5;
-                            break;
-                        case '/':
-                            this._terminal.gcharset = 3;
-                            this._state = 5;
-                            this._position--;
-                            break;
-                        case 'N':
-                            this._state = 0;
-                            break;
-                        case 'O':
-                            this._state = 0;
-                            break;
-                        case 'n':
-                            this._terminal.setgLevel(2);
-                            this._state = 0;
-                            break;
-                        case 'o':
-                            this._terminal.setgLevel(3);
-                            this._state = 0;
-                            break;
-                        case '|':
-                            this._terminal.setgLevel(3);
-                            this._state = 0;
-                            break;
-                        case '}':
-                            this._terminal.setgLevel(2);
-                            this._state = 0;
-                            break;
-                        case '~':
-                            this._terminal.setgLevel(1);
-                            this._state = 0;
-                            break;
-                        case '7':
-                            this._inputHandler.saveCursor();
-                            this._state = 0;
-                            break;
-                        case '8':
-                            this._inputHandler.restoreCursor();
-                            this._state = 0;
-                            break;
-                        case '#':
-                            this._state = 0;
-                            this._position++;
-                            break;
-                        case 'H':
-                            this._terminal.tabSet();
-                            this._state = 0;
-                            break;
-                        case '=':
-                            this._terminal.log('Serial port requested application keypad.');
-                            this._terminal.applicationKeypad = true;
-                            if (this._terminal.viewport) {
-                                this._terminal.viewport.syncScrollArea();
-                            }
-                            this._state = 0;
-                            break;
-                        case '>':
-                            this._terminal.log('Switching back to normal keypad.');
-                            this._terminal.applicationKeypad = false;
-                            if (this._terminal.viewport) {
-                                this._terminal.viewport.syncScrollArea();
-                            }
-                            this._state = 0;
-                            break;
-                        default:
-                            this._state = 0;
-                            this._terminal.error('Unknown ESC control: %s.', ch);
-                            break;
-                    }
-                    break;
-                case 5:
-                    if (ch in Charsets_1.CHARSETS) {
-                        cs = Charsets_1.CHARSETS[ch];
-                        if (ch === '/') {
-                            this.skipNextChar();
-                        }
-                    }
-                    else {
-                        cs = Charsets_1.DEFAULT_CHARSET;
-                    }
-                    this._terminal.setgCharset(this._terminal.gcharset, cs);
-                    this._terminal.gcharset = null;
-                    this._state = 0;
-                    break;
-                case 4:
-                    if (ch === EscapeSequences_1.C0.ESC || ch === EscapeSequences_1.C0.BEL) {
-                        if (ch === EscapeSequences_1.C0.ESC)
-                            this._position++;
-                        this._terminal.params.push(this._terminal.currentParam);
-                        switch (this._terminal.params[0]) {
-                            case 0:
-                            case 1:
-                            case 2:
-                                if (this._terminal.params[1]) {
-                                    this._terminal.title = this._terminal.params[1];
-                                    this._terminal.handleTitle(this._terminal.title);
-                                }
-                                break;
-                            case 3:
-                                break;
-                            case 4:
-                            case 5:
-                                break;
-                            case 10:
-                            case 11:
-                            case 12:
-                            case 13:
-                            case 14:
-                            case 15:
-                            case 16:
-                            case 17:
-                            case 18:
-                            case 19:
-                                break;
-                            case 46:
-                                break;
-                            case 50:
-                                break;
-                            case 51:
-                                break;
-                            case 52:
-                                break;
-                            case 104:
-                            case 105:
-                            case 110:
-                            case 111:
-                            case 112:
-                            case 113:
-                            case 114:
-                            case 115:
-                            case 116:
-                            case 117:
-                            case 118:
-                                break;
-                        }
-                        this._terminal.params = [];
-                        this._terminal.currentParam = 0;
-                        this._state = 0;
-                    }
-                    else {
-                        if (!this._terminal.params.length) {
-                            if (ch >= '0' && ch <= '9') {
-                                this._terminal.currentParam =
-                                    this._terminal.currentParam * 10 + ch.charCodeAt(0) - 48;
-                            }
-                            else if (ch === ';') {
-                                this._terminal.params.push(this._terminal.currentParam);
-                                this._terminal.currentParam = '';
-                            }
-                        }
-                        else {
-                            this._terminal.currentParam += ch;
-                        }
-                    }
-                    break;
-                case 2:
-                    if (ch in csiParamStateHandler) {
-                        csiParamStateHandler[ch](this);
-                        break;
-                    }
-                    this.finalizeParam();
-                    this._state = 3;
-                case 3:
-                    if (ch in csiStateHandler) {
-                        if (this._terminal.debug) {
-                            this._terminal.log("CSI " + (this._terminal.prefix ? this._terminal.prefix : '') + " " + (this._terminal.params ? this._terminal.params.join(';') : '') + " " + (this._terminal.postfix ? this._terminal.postfix : '') + " " + ch);
-                        }
-                        csiStateHandler[ch](this._inputHandler, this._terminal.params, this._terminal.prefix, this._terminal.postfix, this);
-                    }
-                    else {
-                        this._terminal.error('Unknown CSI code: %s.', ch);
-                    }
-                    this._state = 0;
-                    this._terminal.prefix = '';
-                    this._terminal.postfix = '';
-                    break;
-                case 6:
-                    if (ch === EscapeSequences_1.C0.ESC || ch === EscapeSequences_1.C0.BEL) {
-                        if (ch === EscapeSequences_1.C0.ESC)
-                            this._position++;
-                        var pt = void 0;
-                        var valid = void 0;
-                        switch (this._terminal.prefix) {
-                            case '':
-                                break;
-                            case '$q':
-                                pt = this._terminal.currentParam;
-                                valid = false;
-                                switch (pt) {
-                                    case '"q':
-                                        pt = '0"q';
-                                        break;
-                                    case '"p':
-                                        pt = '61"p';
-                                        break;
-                                    case 'r':
-                                        pt = ''
-                                            + (this._terminal.buffer.scrollTop + 1)
-                                            + ';'
-                                            + (this._terminal.buffer.scrollBottom + 1)
-                                            + 'r';
-                                        break;
-                                    case 'm':
-                                        pt = '0m';
-                                        break;
-                                    default:
-                                        this._terminal.error('Unknown DCS Pt: %s.', pt);
-                                        pt = '';
-                                        break;
-                                }
-                                this._terminal.send(EscapeSequences_1.C0.ESC + 'P' + +valid + '$r' + pt + EscapeSequences_1.C0.ESC + '\\');
-                                break;
-                            case '+p':
-                                break;
-                            case '+q':
-                                pt = this._terminal.currentParam;
-                                valid = false;
-                                this._terminal.send(EscapeSequences_1.C0.ESC + 'P' + +valid + '+r' + pt + EscapeSequences_1.C0.ESC + '\\');
-                                break;
-                            default:
-                                this._terminal.error('Unknown DCS prefix: %s.', this._terminal.prefix);
-                                break;
-                        }
-                        this._terminal.currentParam = 0;
-                        this._terminal.prefix = '';
-                        this._state = 0;
-                    }
-                    else if (!this._terminal.currentParam) {
-                        if (!this._terminal.prefix && ch !== '$' && ch !== '+') {
-                            this._terminal.currentParam = ch;
-                        }
-                        else if (this._terminal.prefix.length === 2) {
-                            this._terminal.currentParam = ch;
-                        }
-                        else {
-                            this._terminal.prefix += ch;
-                        }
-                    }
-                    else {
-                        this._terminal.currentParam += ch;
-                    }
-                    break;
-                case 7:
-                    if (ch === EscapeSequences_1.C0.ESC || ch === EscapeSequences_1.C0.BEL) {
-                        if (ch === EscapeSequences_1.C0.ESC)
-                            this._position++;
-                        this._state = 0;
-                    }
-                    break;
-            }
-        }
-        if (this._terminal.buffer.x !== cursorStartX || this._terminal.buffer.y !== cursorStartY) {
-            this._terminal.emit('cursormove');
-        }
-        return this._state;
-    };
-    Parser.prototype.setState = function (state) {
-        this._state = state;
-    };
-    Parser.prototype.setPrefix = function (prefix) {
-        this._terminal.prefix = prefix;
-    };
-    Parser.prototype.setPostfix = function (postfix) {
-        this._terminal.postfix = postfix;
-    };
-    Parser.prototype.setParam = function (param) {
-        this._terminal.currentParam = param;
-    };
-    Parser.prototype.getParam = function () {
-        return this._terminal.currentParam;
-    };
-    Parser.prototype.finalizeParam = function () {
-        this._terminal.params.push(this._terminal.currentParam);
-        this._terminal.currentParam = 0;
-    };
-    Parser.prototype.skipNextChar = function () {
-        this._position++;
-    };
-    return Parser;
-}());
-exports.Parser = Parser;
-
-
-
-},{"./Charsets":5,"./EscapeSequences":7}],12:[function(require,module,exports){
+},{"./EventEmitter":7,"./ui/MouseZoneManager":47}],10:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -2659,6 +2717,10 @@ var SelectionManager = (function (_super) {
         _this._activeSelectionMode = 0;
         return _this;
     }
+    SelectionManager.prototype.dispose = function () {
+        _super.prototype.dispose.call(this);
+        this._removeMouseDownListeners();
+    };
     Object.defineProperty(SelectionManager.prototype, "_buffer", {
         get: function () {
             return this._terminal.buffers.active;
@@ -2714,8 +2776,18 @@ var SelectionManager = (function (_super) {
             if (!start || !end) {
                 return '';
             }
-            var startRowEndCol = start[1] === end[1] ? end[0] : null;
             var result = [];
+            if (this._activeSelectionMode === 3) {
+                if (start[0] === end[0]) {
+                    return '';
+                }
+                for (var i = start[1]; i <= end[1]; i++) {
+                    var lineText = this._buffer.translateBufferLineToString(i, true, start[0], end[0]);
+                    result.push(lineText);
+                }
+            }
+            else {
+            var startRowEndCol = start[1] === end[1] ? end[0] : null;
             result.push(this._buffer.translateBufferLineToString(start[1], true, start[0], startRowEndCol));
             for (var i = start[1] + 1; i <= end[1] - 1; i++) {
                 var bufferLine = this._buffer.lines.get(i);
@@ -2736,6 +2808,7 @@ var SelectionManager = (function (_super) {
                 else {
                     result.push(lineText);
                 }
+            }
             }
             var formattedResult = result.map(function (line) {
                 return line.replace(ALL_NON_BREAKING_SPACE_REGEX, ' ');
@@ -2764,7 +2837,11 @@ var SelectionManager = (function (_super) {
     };
     SelectionManager.prototype._refresh = function () {
         this._refreshAnimationFrame = null;
-        this.emit('refresh', { start: this._model.finalSelectionStart, end: this._model.finalSelectionEnd });
+        this.emit('refresh', {
+            start: this._model.finalSelectionStart,
+            end: this._model.finalSelectionEnd,
+            columnSelectMode: this._activeSelectionMode === 3
+        });
     };
     SelectionManager.prototype.isClickInSelection = function (event) {
         var coords = this._getMouseBufferCoords(event);
@@ -2829,7 +2906,10 @@ var SelectionManager = (function (_super) {
         return (offset / Math.abs(offset)) + Math.round(offset * (DRAG_SCROLL_MAX_SPEED - 1));
     };
     SelectionManager.prototype.shouldForceSelection = function (event) {
-        return Browser.isMac ? event.altKey : event.shiftKey;
+        if (Browser.isMac) {
+            return event.altKey && this._terminal.options.macOptionClickForcesSelection;
+        }
+        return event.shiftKey;
     };
     SelectionManager.prototype.onMouseDown = function (event) {
         this._mouseDownTimeStamp = event.timeStamp;
@@ -2884,7 +2964,7 @@ var SelectionManager = (function (_super) {
     SelectionManager.prototype._onSingleClick = function (event) {
         this._model.selectionStartLength = 0;
         this._model.isSelectAllActive = false;
-        this._activeSelectionMode = 0;
+        this._activeSelectionMode = this.shouldColumnSelect(event) ? 3 : 0;
         this._model.selectionStart = this._getMouseBufferCoords(event);
         if (!this._model.selectionStart) {
             return;
@@ -2915,6 +2995,9 @@ var SelectionManager = (function (_super) {
             this._activeSelectionMode = 2;
             this._selectLineAt(coords[1]);
         }
+    };
+    SelectionManager.prototype.shouldColumnSelect = function (event) {
+        return event.altKey && !(Browser.isMac && this._terminal.options.macOptionClickForcesSelection);
     };
     SelectionManager.prototype._onMouseMove = function (event) {
         event.stopImmediatePropagation();
@@ -3103,16 +3186,16 @@ var SelectionManager = (function (_super) {
         return WORD_SEPARATORS.indexOf(charData[Buffer_1.CHAR_DATA_CHAR_INDEX]) >= 0;
     };
     SelectionManager.prototype._selectLineAt = function (line) {
-        this._model.selectionStart = [0, line];
-        this._model.selectionStartLength = this._terminal.cols;
+        var wrappedRange = this._buffer.getWrappedRangeForLine(line);
+        this._model.selectionStart = [0, wrappedRange.first];
+        this._model.selectionEnd = [this._terminal.cols, wrappedRange.last];
+        this._model.selectionStartLength = 0;
     };
     return SelectionManager;
 }(EventEmitter_1.EventEmitter));
 exports.SelectionManager = SelectionManager;
 
-
-
-},{"./Buffer":2,"./EventEmitter":8,"./SelectionModel":13,"./handlers/AltClickHandler":18,"./shared/utils/Browser":39,"./utils/MouseHelper":44}],13:[function(require,module,exports){
+},{"./Buffer":2,"./EventEmitter":7,"./SelectionModel":11,"./handlers/AltClickHandler":21,"./shared/utils/Browser":44,"./utils/MouseHelper":51}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var SelectionModel = (function () {
@@ -3188,9 +3271,7 @@ var SelectionModel = (function () {
 }());
 exports.SelectionModel = SelectionModel;
 
-
-
-},{}],14:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_BELL_SOUND = 'data:audio/wav;base64,UklGRigBAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQBAADpAFgCwAMlBZoG/wdmCcoKRAypDQ8PbRDBEQQTOxRtFYcWlBePGIUZXhoiG88bcBz7HHIdzh0WHlMeZx51HmkeUx4WHs8dah0AHXwc3hs9G4saxRnyGBIYGBcQFv8U4RPAEoYRQBACD70NWwwHC6gJOwjWBloF7gOBAhABkf8b/qv8R/ve+Xf4Ife79W/0JfPZ8Z/wde9N7ijtE+wU6xvqM+lb6H7nw+YX5mrlxuQz5Mzje+Ma49fioeKD4nXiYeJy4pHitOL04j/jn+MN5IPkFOWs5U3mDefM55/ogOl36m7rdOyE7abuyu8D8Unyj/Pg9D/2qfcb+Yn6/vuK/Qj/lAAlAg==';
@@ -3233,18 +3314,14 @@ var SoundManager = (function () {
 }());
 exports.SoundManager = SoundManager;
 
-
-
-},{}],15:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.blankLine = 'Blank line';
 exports.promptLabel = 'Terminal input';
 exports.tooMuchOutput = 'Too much output to announce, navigate to rows manually to read';
 
-
-
-},{}],16:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -3263,50 +3340,29 @@ var CompositionHelper_1 = require("./CompositionHelper");
 var EventEmitter_1 = require("./EventEmitter");
 var Viewport_1 = require("./Viewport");
 var Clipboard_1 = require("./handlers/Clipboard");
-var EscapeSequences_1 = require("./EscapeSequences");
+var EscapeSequences_1 = require("./common/data/EscapeSequences");
 var InputHandler_1 = require("./InputHandler");
-var Parser_1 = require("./Parser");
 var Renderer_1 = require("./renderer/Renderer");
 var Linkifier_1 = require("./Linkifier");
 var SelectionManager_1 = require("./SelectionManager");
-var CharMeasure_1 = require("./utils/CharMeasure");
+var CharMeasure_1 = require("./ui/CharMeasure");
 var Browser = require("./shared/utils/Browser");
-var Dom = require("./utils/Dom");
+var Lifecycle_1 = require("./ui/Lifecycle");
 var Strings = require("./Strings");
 var MouseHelper_1 = require("./utils/MouseHelper");
 var Clone_1 = require("./utils/Clone");
 var SoundManager_1 = require("./SoundManager");
 var ColorManager_1 = require("./renderer/ColorManager");
-var MouseZoneManager_1 = require("./input/MouseZoneManager");
+var MouseZoneManager_1 = require("./ui/MouseZoneManager");
 var AccessibilityManager_1 = require("./AccessibilityManager");
-var ScreenDprMonitor_1 = require("./utils/ScreenDprMonitor");
+var ScreenDprMonitor_1 = require("./ui/ScreenDprMonitor");
 var CharAtlasCache_1 = require("./renderer/atlas/CharAtlasCache");
-var KEYCODE_KEY_MAPPINGS = {
-    48: ['0', ')'],
-    49: ['1', '!'],
-    50: ['2', '@'],
-    51: ['3', '#'],
-    52: ['4', '$'],
-    53: ['5', '%'],
-    54: ['6', '^'],
-    55: ['7', '&'],
-    56: ['8', '*'],
-    57: ['9', '('],
-    186: [';', ':'],
-    187: ['=', '+'],
-    188: [',', '<'],
-    189: ['-', '_'],
-    190: ['.', '>'],
-    191: ['/', '?'],
-    192: ['`', '~'],
-    219: ['[', '{'],
-    220: ['\\', '|'],
-    221: [']', '}'],
-    222: ['\'', '"']
-};
+var DomRenderer_1 = require("./renderer/dom/DomRenderer");
+var Keyboard_1 = require("./core/input/Keyboard");
 var document = (typeof window !== 'undefined') ? window.document : null;
 var WRITE_BUFFER_PAUSE_THRESHOLD = 5;
 var WRITE_BATCH_SIZE = 300;
+var CONSTRUCTOR_ONLY_OPTIONS = ['cols', 'rows', 'rendererType'];
 var DEFAULT_OPTIONS = {
     cols: 80,
     rows: 24,
@@ -3330,13 +3386,15 @@ var DEFAULT_OPTIONS = {
     screenReaderMode: false,
     debug: false,
     macOptionIsMeta: false,
+    macOptionClickForcesSelection: false,
     cancelEvents: false,
     disableStdin: false,
     useFlowControl: false,
     allowTransparency: false,
     tabStopWidth: 8,
     theme: null,
-    rightClickSelectsWord: Browser.isMac
+    rightClickSelectsWord: Browser.isMac,
+    rendererType: 'canvas'
 };
 var Terminal = (function (_super) {
     __extends(Terminal, _super);
@@ -3350,8 +3408,7 @@ var Terminal = (function (_super) {
     }
     Terminal.prototype.dispose = function () {
         _super.prototype.dispose.call(this);
-        this._disposables.forEach(function (d) { return d.dispose(); });
-        this._disposables.length = 0;
+        this._customKeyEventHandler = null;
         CharAtlasCache_1.removeTerminalFromCache(this);
         this.handler = function () { };
         this.write = function () { };
@@ -3364,12 +3421,10 @@ var Terminal = (function (_super) {
     };
     Terminal.prototype._setup = function () {
         var _this = this;
-        this._disposables = [];
         Object.keys(DEFAULT_OPTIONS).forEach(function (key) {
             if (_this.options[key] == null) {
                 _this.options[key] = DEFAULT_OPTIONS[key];
             }
-            _this[key] = _this.options[key];
         });
         this._parent = document ? document.body : null;
         this.cols = this.options.cols;
@@ -3391,18 +3446,15 @@ var Terminal = (function (_super) {
         this.gcharset = null;
         this.glevel = 0;
         this.charsets = [null];
-        this.defAttr = (0 << 18) | (257 << 9) | (256 << 0);
-        this.curAttr = (0 << 18) | (257 << 9) | (256 << 0);
+        this.curAttr = Buffer_1.DEFAULT_ATTR;
         this.params = [];
         this.currentParam = 0;
-        this.prefix = '';
-        this.postfix = '';
         this.writeBuffer = [];
         this._writeInProgress = false;
         this._xoffSentToCatchUp = false;
         this._userScrolling = false;
         this._inputHandler = new InputHandler_1.InputHandler(this);
-        this._parser = new Parser_1.Parser(this._inputHandler, this);
+        this.register(this._inputHandler);
         this.renderer = this.renderer || null;
         this.selectionManager = this.selectionManager || null;
         this.linkifier = this.linkifier || new Linkifier_1.Linkifier(this);
@@ -3421,15 +3473,8 @@ var Terminal = (function (_super) {
         enumerable: true,
         configurable: true
     });
-    Object.defineProperty(Terminal, "strings", {
-        get: function () {
-            return Strings;
-        },
-        enumerable: true,
-        configurable: true
-    });
     Terminal.prototype.eraseAttr = function () {
-        return (this.defAttr & ~0x1ff) | (this.curAttr & 0x1ff);
+        return (Buffer_1.DEFAULT_ATTR & ~0x1ff) | (this.curAttr & 0x1ff);
     };
     Terminal.prototype.focus = function () {
         if (this.textarea) {
@@ -3447,14 +3492,14 @@ var Terminal = (function (_super) {
         if (!(key in DEFAULT_OPTIONS)) {
             throw new Error('No option with key "' + key + '"');
         }
-        if (typeof this.options[key] !== 'undefined') {
             return this.options[key];
-        }
-        return this[key];
     };
     Terminal.prototype.setOption = function (key, value) {
         if (!(key in DEFAULT_OPTIONS)) {
             throw new Error('No option with key "' + key + '"');
+        }
+        if (CONSTRUCTOR_ONLY_OPTIONS.indexOf(key) !== -1) {
+            console.error("Option \"" + key + "\" can only be set in the constructor");
         }
         switch (key) {
             case 'bellStyle':
@@ -3515,7 +3560,6 @@ var Terminal = (function (_super) {
                 }
                 break;
         }
-        this[key] = value;
         this.options[key] = value;
         switch (key) {
             case 'fontFamily':
@@ -3525,6 +3569,7 @@ var Terminal = (function (_super) {
                     this.charMeasure.measure(this.options);
                 }
                 break;
+            case 'drawBoldTextInBrightColors':
             case 'experimentalCharAtlas':
             case 'enableBold':
             case 'letterSpacing':
@@ -3586,62 +3631,63 @@ var Terminal = (function (_super) {
     Terminal.prototype._initGlobal = function () {
         var _this = this;
         this._bindKeys();
-        on(this.element, 'copy', function (event) {
+        this.register(Lifecycle_1.addDisposableDomListener(this.element, 'copy', function (event) {
             if (!_this.hasSelection()) {
                 return;
             }
             Clipboard_1.copyHandler(event, _this, _this.selectionManager);
-        });
+        }));
         var pasteHandlerWrapper = function (event) { return Clipboard_1.pasteHandler(event, _this); };
-        on(this.textarea, 'paste', pasteHandlerWrapper);
-        on(this.element, 'paste', pasteHandlerWrapper);
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'paste', pasteHandlerWrapper));
+        this.register(Lifecycle_1.addDisposableDomListener(this.element, 'paste', pasteHandlerWrapper));
         if (Browser.isFirefox) {
-            on(this.element, 'mousedown', function (event) {
+            this.register(Lifecycle_1.addDisposableDomListener(this.element, 'mousedown', function (event) {
                 if (event.button === 2) {
                     Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager, _this.options.rightClickSelectsWord);
                 }
-            });
+            }));
         }
         else {
-            on(this.element, 'contextmenu', function (event) {
+            this.register(Lifecycle_1.addDisposableDomListener(this.element, 'contextmenu', function (event) {
                 Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager, _this.options.rightClickSelectsWord);
-            });
+            }));
         }
         if (Browser.isLinux) {
-            on(this.element, 'auxclick', function (event) {
+            this.register(Lifecycle_1.addDisposableDomListener(this.element, 'auxclick', function (event) {
                 if (event.button === 1) {
                     Clipboard_1.moveTextAreaUnderMouseCursor(event, _this.textarea);
                 }
-            });
+            }));
         }
     };
     Terminal.prototype._bindKeys = function () {
         var _this = this;
         var self = this;
-        on(this.element, 'keydown', function (ev) {
+        this.register(Lifecycle_1.addDisposableDomListener(this.element, 'keydown', function (ev) {
             if (document.activeElement !== this) {
                 return;
             }
             self._keyDown(ev);
-        }, true);
-        on(this.element, 'keypress', function (ev) {
+        }, true));
+        this.register(Lifecycle_1.addDisposableDomListener(this.element, 'keypress', function (ev) {
             if (document.activeElement !== this) {
                 return;
             }
             self._keyPress(ev);
-        }, true);
-        on(this.element, 'keyup', function (ev) {
-            if (!wasMondifierKeyOnlyEvent(ev)) {
+        }, true));
+        this.register(Lifecycle_1.addDisposableDomListener(this.element, 'keyup', function (ev) {
+            if (!wasModifierKeyOnlyEvent(ev)) {
                 _this.focus();
             }
-        }, true);
-        on(this.textarea, 'keydown', function (ev) { return _this._keyDown(ev); }, true);
-        on(this.textarea, 'keypress', function (ev) { return _this._keyPress(ev); }, true);
-        on(this.textarea, 'compositionstart', function () { return _this._compositionHelper.compositionstart(); });
-        on(this.textarea, 'compositionupdate', function (e) { return _this._compositionHelper.compositionupdate(e); });
-        on(this.textarea, 'compositionend', function () { return _this._compositionHelper.compositionend(); });
-        this.on('refresh', function () { return _this._compositionHelper.updateCompositionElements(); });
-        this.on('refresh', function (data) { return _this._queueLinkification(data.start, data.end); });
+            self._keyUp(ev);
+        }, true));
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'keydown', function (ev) { return _this._keyDown(ev); }, true));
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'keypress', function (ev) { return _this._keyPress(ev); }, true));
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'compositionstart', function () { return _this._compositionHelper.compositionstart(); }));
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'compositionupdate', function (e) { return _this._compositionHelper.compositionupdate(e); }));
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'compositionend', function () { return _this._compositionHelper.compositionend(); }));
+        this.register(this.addDisposableListener('refresh', function () { return _this._compositionHelper.updateCompositionElements(); }));
+        this.register(this.addDisposableListener('refresh', function (data) { return _this._queueLinkification(data.start, data.end); }));
     };
     Terminal.prototype.open = function (parent) {
         var _this = this;
@@ -3653,6 +3699,7 @@ var Terminal = (function (_super) {
         this._document = this._parent.ownerDocument;
         this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
         this._screenDprMonitor.setListener(function () { return _this.emit('dprchange', window.devicePixelRatio); });
+        this.register(this._screenDprMonitor);
         this.element = this._document.createElement('div');
         this.element.dir = 'ltr';
         this.element.classList.add('terminal');
@@ -3673,7 +3720,8 @@ var Terminal = (function (_super) {
         this.screenElement.appendChild(this._helperContainer);
         fragment.appendChild(this.screenElement);
         this._mouseZoneManager = new MouseZoneManager_1.MouseZoneManager(this);
-        this.on('scroll', function () { return _this._mouseZoneManager.clearAll(); });
+        this.register(this._mouseZoneManager);
+        this.register(this.addDisposableListener('scroll', function () { return _this._mouseZoneManager.clearAll(); }));
         this.linkifier.attachToDom(this._mouseZoneManager);
         this.textarea = document.createElement('textarea');
         this.textarea.classList.add('xterm-helper-textarea');
@@ -3683,8 +3731,8 @@ var Terminal = (function (_super) {
         this.textarea.setAttribute('autocapitalize', 'off');
         this.textarea.setAttribute('spellcheck', 'false');
         this.textarea.tabIndex = 0;
-        this.textarea.addEventListener('focus', function () { return _this._onTextAreaFocus(); });
-        this.textarea.addEventListener('blur', function () { return _this._onTextAreaBlur(); });
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'focus', function () { return _this._onTextAreaFocus(); }));
+        this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'blur', function () { return _this._onTextAreaBlur(); }));
         this._helperContainer.appendChild(this.textarea);
         this._compositionView = document.createElement('div');
         this._compositionView.classList.add('composition-view');
@@ -3692,31 +3740,41 @@ var Terminal = (function (_super) {
         this._helperContainer.appendChild(this._compositionView);
         this.charMeasure = new CharMeasure_1.CharMeasure(document, this._helperContainer);
         this.element.appendChild(fragment);
+        switch (this.options.rendererType) {
+            case 'canvas':
         this.renderer = new Renderer_1.Renderer(this, this.options.theme);
+                break;
+            case 'dom':
+                this.renderer = new DomRenderer_1.DomRenderer(this, this.options.theme);
+                break;
+            default: throw new Error("Unrecognized rendererType \"" + this.options.rendererType + "\"");
+        }
+        this.register(this.renderer);
         this.options.theme = null;
         this.viewport = new Viewport_1.Viewport(this, this._viewportElement, this._viewportScrollArea, this.charMeasure);
         this.viewport.onThemeChanged(this.renderer.colorManager.colors);
-        this.on('cursormove', function () { return _this.renderer.onCursorMove(); });
-        this.on('resize', function () { return _this.renderer.onResize(_this.cols, _this.rows); });
-        this.on('blur', function () { return _this.renderer.onBlur(); });
-        this.on('focus', function () { return _this.renderer.onFocus(); });
-        this.on('dprchange', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); });
-        this._disposables.push(Dom.addDisposableListener(window, 'resize', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); }));
-        this.charMeasure.on('charsizechanged', function () { return _this.renderer.onResize(_this.cols, _this.rows); });
-        this.renderer.on('resize', function (dimensions) { return _this.viewport.syncScrollArea(); });
+        this.register(this.viewport);
+        this.register(this.addDisposableListener('cursormove', function () { return _this.renderer.onCursorMove(); }));
+        this.register(this.addDisposableListener('resize', function () { return _this.renderer.onResize(_this.cols, _this.rows); }));
+        this.register(this.addDisposableListener('blur', function () { return _this.renderer.onBlur(); }));
+        this.register(this.addDisposableListener('focus', function () { return _this.renderer.onFocus(); }));
+        this.register(this.addDisposableListener('dprchange', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); }));
+        this.register(Lifecycle_1.addDisposableDomListener(window, 'resize', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); }));
+        this.register(this.charMeasure.addDisposableListener('charsizechanged', function () { return _this.renderer.onCharSizeChanged(); }));
+        this.register(this.renderer.addDisposableListener('resize', function (dimensions) { return _this.viewport.syncScrollArea(); }));
         this.selectionManager = new SelectionManager_1.SelectionManager(this, this.charMeasure);
-        this.element.addEventListener('mousedown', function (e) { return _this.selectionManager.onMouseDown(e); });
-        this.selectionManager.on('refresh', function (data) { return _this.renderer.onSelectionChanged(data.start, data.end); });
-        this.selectionManager.on('newselection', function (text) {
+        this.register(Lifecycle_1.addDisposableDomListener(this.element, 'mousedown', function (e) { return _this.selectionManager.onMouseDown(e); }));
+        this.register(this.selectionManager.addDisposableListener('refresh', function (data) { return _this.renderer.onSelectionChanged(data.start, data.end, data.columnSelectMode); }));
+        this.register(this.selectionManager.addDisposableListener('newselection', function (text) {
             _this.textarea.value = text;
             _this.textarea.focus();
             _this.textarea.select();
-        });
-        this.on('scroll', function () {
+        }));
+        this.register(this.addDisposableListener('scroll', function () {
             _this.viewport.syncScrollArea();
             _this.selectionManager.refresh();
-        });
-        this._viewportElement.addEventListener('scroll', function () { return _this.selectionManager.refresh(); });
+        }));
+        this.register(Lifecycle_1.addDisposableDomListener(this._viewportElement, 'scroll', function () { return _this.selectionManager.refresh(); }));
         this.mouseHelper = new MouseHelper_1.MouseHelper(this.renderer);
         if (this.options.screenReaderMode) {
             this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this);
@@ -3731,9 +3789,6 @@ var Terminal = (function (_super) {
         if (this.viewport) {
             this.viewport.onThemeChanged(colors);
         }
-    };
-    Terminal.applyAddon = function (addon) {
-        addon.apply(Terminal);
     };
     Terminal.prototype.bindMouse = function () {
         var _this = this;
@@ -3908,7 +3963,7 @@ var Terminal = (function (_super) {
             button = (32 + (mod << 2)) + button;
             return button;
         }
-        on(el, 'mousedown', function (ev) {
+        this.register(Lifecycle_1.addDisposableDomListener(el, 'mousedown', function (ev) {
             ev.preventDefault();
             _this.focus();
             if (!_this.mouseEvents || _this.selectionManager.shouldForceSelection(ev)) {
@@ -3920,21 +3975,31 @@ var Terminal = (function (_super) {
                 sendButton(ev);
                 return _this.cancel(ev);
             }
-            if (_this.normalMouse)
-                on(_this._document, 'mousemove', sendMove);
-            if (!_this.x10Mouse) {
-                var handler_1 = function (ev) {
+            var moveHandler;
+            if (_this.normalMouse) {
+                moveHandler = function (event) {
+                    if (!_this.normalMouse) {
+                        return;
+                    }
+                    sendMove(event);
+                };
+                _this._document.addEventListener('mousemove', moveHandler);
+            }
+            var handler = function (ev) {
+                if (_this.normalMouse && !_this.x10Mouse) {
                     sendButton(ev);
-                    if (_this.normalMouse)
-                        off(_this._document, 'mousemove', sendMove);
-                    off(_this._document, 'mouseup', handler_1);
+                }
+                if (moveHandler) {
+                    _this._document.removeEventListener('mousemove', moveHandler);
+                    moveHandler = null;
+                }
+                _this._document.removeEventListener('mouseup', handler);
                     return _this.cancel(ev);
                 };
-                on(_this._document, 'mouseup', handler_1);
-            }
+            _this._document.addEventListener('mouseup', handler);
             return _this.cancel(ev);
-        });
-        on(el, 'wheel', function (ev) {
+        }));
+        this.register(Lifecycle_1.addDisposableDomListener(el, 'wheel', function (ev) {
             if (!_this.mouseEvents) {
                 if (!_this.buffer.hasScrollback) {
                     var amount = _this.viewport.getLinesScrolled(ev);
@@ -3954,25 +4019,25 @@ var Terminal = (function (_super) {
                 return;
             sendButton(ev);
             ev.preventDefault();
-        });
-        on(el, 'wheel', function (ev) {
+        }));
+        this.register(Lifecycle_1.addDisposableDomListener(el, 'wheel', function (ev) {
             if (_this.mouseEvents)
                 return;
             _this.viewport.onWheel(ev);
             return _this.cancel(ev);
-        });
-        on(el, 'touchstart', function (ev) {
+        }));
+        this.register(Lifecycle_1.addDisposableDomListener(el, 'touchstart', function (ev) {
             if (_this.mouseEvents)
                 return;
             _this.viewport.onTouchStart(ev);
             return _this.cancel(ev);
-        });
-        on(el, 'touchmove', function (ev) {
+        }));
+        this.register(Lifecycle_1.addDisposableDomListener(el, 'touchmove', function (ev) {
             if (_this.mouseEvents)
                 return;
             _this.viewport.onTouchMove(ev);
             return _this.cancel(ev);
-        });
+        }));
     };
     Terminal.prototype.refresh = function (start, end) {
         if (this.renderer) {
@@ -3982,6 +4047,14 @@ var Terminal = (function (_super) {
     Terminal.prototype._queueLinkification = function (start, end) {
         if (this.linkifier) {
             this.linkifier.linkifyRows(start, end);
+        }
+    };
+    Terminal.prototype.updateCursorStyle = function (ev) {
+        if (this.selectionManager && this.selectionManager.shouldColumnSelect(ev)) {
+            this.element.classList.add('xterm-cursor-crosshair');
+        }
+        else {
+            this.element.classList.remove('xterm-cursor-crosshair');
         }
     };
     Terminal.prototype.showCursor = function () {
@@ -4089,8 +4162,7 @@ var Terminal = (function (_super) {
             }
             this._refreshStart = this.buffer.y;
             this._refreshEnd = this.buffer.y;
-            var state = this._parser.parse(data);
-            this._parser.setState(state);
+            this._inputHandler.parse(data);
             this.updateRange(this.buffer.y);
             this.refresh(this._refreshStart, this._refreshEnd);
         }
@@ -4151,35 +4223,40 @@ var Terminal = (function (_super) {
             this.selectionManager.selectLines(start, end);
         }
     };
-    Terminal.prototype._keyDown = function (ev) {
-        if (this._customKeyEventHandler && this._customKeyEventHandler(ev) === false) {
+    Terminal.prototype._keyDown = function (event) {
+        if (this._customKeyEventHandler && this._customKeyEventHandler(event) === false) {
             return false;
         }
-        if (!this._compositionHelper.keydown(ev)) {
+        if (!this._compositionHelper.keydown(event)) {
             if (this.buffer.ybase !== this.buffer.ydisp) {
                 this.scrollToBottom();
             }
             return false;
         }
-        var result = this._evaluateKeyEscapeSequence(ev);
-        if (result.scrollLines) {
-            this.scrollLines(result.scrollLines);
-            return this.cancel(ev, true);
+        var result = Keyboard_1.evaluateKeyboardEvent(event, this.applicationCursor, this.browser.isMac, this.options.macOptionIsMeta);
+        this.updateCursorStyle(event);
+        if (result.type === 3 || result.type === 2) {
+            var scrollCount = this.rows - 1;
+            this.scrollLines(result.type === 2 ? -scrollCount : scrollCount);
+            return this.cancel(event, true);
         }
-        if (this._isThirdLevelShift(this.browser, ev)) {
+        if (result.type === 1) {
+            this.selectAll();
+        }
+        if (this._isThirdLevelShift(this.browser, event)) {
             return true;
         }
         if (result.cancel) {
-            this.cancel(ev, true);
+            this.cancel(event, true);
         }
         if (!result.key) {
             return true;
         }
-        this.emit('keydown', ev);
-        this.emit('key', result.key, ev);
+        this.emit('keydown', event);
+        this.emit('key', result.key, event);
         this.showCursor();
         this.handler(result.key);
-        return this.cancel(ev, true);
+        return this.cancel(event, true);
     };
     Terminal.prototype._isThirdLevelShift = function (browser, ev) {
         var thirdLevelKey = (browser.isMac && !this.options.macOptionIsMeta && ev.altKey && !ev.ctrlKey && !ev.metaKey) ||
@@ -4188,322 +4265,6 @@ var Terminal = (function (_super) {
             return thirdLevelKey;
         }
         return thirdLevelKey && (!ev.keyCode || ev.keyCode > 47);
-    };
-    Terminal.prototype._evaluateKeyEscapeSequence = function (ev) {
-        var result = {
-            cancel: false,
-            key: undefined,
-            scrollLines: undefined
-        };
-        var modifiers = (ev.shiftKey ? 1 : 0) | (ev.altKey ? 2 : 0) | (ev.ctrlKey ? 4 : 0) | (ev.metaKey ? 8 : 0);
-        switch (ev.keyCode) {
-            case 0:
-                if (ev.key === 'UIKeyInputUpArrow') {
-                    if (this.applicationCursor) {
-                        result.key = EscapeSequences_1.C0.ESC + 'OA';
-                    }
-                    else {
-                        result.key = EscapeSequences_1.C0.ESC + '[A';
-                    }
-                }
-                else if (ev.key === 'UIKeyInputLeftArrow') {
-                    if (this.applicationCursor) {
-                        result.key = EscapeSequences_1.C0.ESC + 'OD';
-                    }
-                    else {
-                        result.key = EscapeSequences_1.C0.ESC + '[D';
-                    }
-                }
-                else if (ev.key === 'UIKeyInputRightArrow') {
-                    if (this.applicationCursor) {
-                        result.key = EscapeSequences_1.C0.ESC + 'OC';
-                    }
-                    else {
-                        result.key = EscapeSequences_1.C0.ESC + '[C';
-                    }
-                }
-                else if (ev.key === 'UIKeyInputDownArrow') {
-                    if (this.applicationCursor) {
-                        result.key = EscapeSequences_1.C0.ESC + 'OB';
-                    }
-                    else {
-                        result.key = EscapeSequences_1.C0.ESC + '[B';
-                    }
-                }
-                break;
-            case 8:
-                if (ev.shiftKey) {
-                    result.key = EscapeSequences_1.C0.BS;
-                    break;
-                }
-                else if (ev.altKey) {
-                    result.key = EscapeSequences_1.C0.ESC + EscapeSequences_1.C0.DEL;
-                    break;
-                }
-                result.key = EscapeSequences_1.C0.DEL;
-                break;
-            case 9:
-                if (ev.shiftKey) {
-                    result.key = EscapeSequences_1.C0.ESC + '[Z';
-                    break;
-                }
-                result.key = EscapeSequences_1.C0.HT;
-                result.cancel = true;
-                break;
-            case 13:
-                result.key = EscapeSequences_1.C0.CR;
-                result.cancel = true;
-                break;
-            case 27:
-                result.key = EscapeSequences_1.C0.ESC;
-                result.cancel = true;
-                break;
-            case 37:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'D';
-                    if (result.key === EscapeSequences_1.C0.ESC + '[1;3D') {
-                        result.key = (this.browser.isMac) ? EscapeSequences_1.C0.ESC + 'b' : EscapeSequences_1.C0.ESC + '[1;5D';
-                    }
-                }
-                else if (this.applicationCursor) {
-                    result.key = EscapeSequences_1.C0.ESC + 'OD';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[D';
-                }
-                break;
-            case 39:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'C';
-                    if (result.key === EscapeSequences_1.C0.ESC + '[1;3C') {
-                        result.key = (this.browser.isMac) ? EscapeSequences_1.C0.ESC + 'f' : EscapeSequences_1.C0.ESC + '[1;5C';
-                    }
-                }
-                else if (this.applicationCursor) {
-                    result.key = EscapeSequences_1.C0.ESC + 'OC';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[C';
-                }
-                break;
-            case 38:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'A';
-                    if (result.key === EscapeSequences_1.C0.ESC + '[1;3A') {
-                        result.key = EscapeSequences_1.C0.ESC + '[1;5A';
-                    }
-                }
-                else if (this.applicationCursor) {
-                    result.key = EscapeSequences_1.C0.ESC + 'OA';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[A';
-                }
-                break;
-            case 40:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'B';
-                    if (result.key === EscapeSequences_1.C0.ESC + '[1;3B') {
-                        result.key = EscapeSequences_1.C0.ESC + '[1;5B';
-                    }
-                }
-                else if (this.applicationCursor) {
-                    result.key = EscapeSequences_1.C0.ESC + 'OB';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[B';
-                }
-                break;
-            case 45:
-                if (!ev.shiftKey && !ev.ctrlKey) {
-                    result.key = EscapeSequences_1.C0.ESC + '[2~';
-                }
-                break;
-            case 46:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[3;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[3~';
-                }
-                break;
-            case 36:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'H';
-                }
-                else if (this.applicationCursor) {
-                    result.key = EscapeSequences_1.C0.ESC + 'OH';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[H';
-                }
-                break;
-            case 35:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'F';
-                }
-                else if (this.applicationCursor) {
-                    result.key = EscapeSequences_1.C0.ESC + 'OF';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[F';
-                }
-                break;
-            case 33:
-                if (ev.shiftKey) {
-                    result.scrollLines = -(this.rows - 1);
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[5~';
-                }
-                break;
-            case 34:
-                if (ev.shiftKey) {
-                    result.scrollLines = this.rows - 1;
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[6~';
-                }
-                break;
-            case 112:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'P';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + 'OP';
-                }
-                break;
-            case 113:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'Q';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + 'OQ';
-                }
-                break;
-            case 114:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'R';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + 'OR';
-                }
-                break;
-            case 115:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'S';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + 'OS';
-                }
-                break;
-            case 116:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[15;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[15~';
-                }
-                break;
-            case 117:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[17;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[17~';
-                }
-                break;
-            case 118:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[18;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[18~';
-                }
-                break;
-            case 119:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[19;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[19~';
-                }
-                break;
-            case 120:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[20;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[20~';
-                }
-                break;
-            case 121:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[21;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[21~';
-                }
-                break;
-            case 122:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[23;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[23~';
-                }
-                break;
-            case 123:
-                if (modifiers) {
-                    result.key = EscapeSequences_1.C0.ESC + '[24;' + (modifiers + 1) + '~';
-                }
-                else {
-                    result.key = EscapeSequences_1.C0.ESC + '[24~';
-                }
-                break;
-            default:
-                if (ev.ctrlKey && !ev.shiftKey && !ev.altKey && !ev.metaKey) {
-                    if (ev.keyCode >= 65 && ev.keyCode <= 90) {
-                        result.key = String.fromCharCode(ev.keyCode - 64);
-                    }
-                    else if (ev.keyCode === 32) {
-                        result.key = String.fromCharCode(0);
-                    }
-                    else if (ev.keyCode >= 51 && ev.keyCode <= 55) {
-                        result.key = String.fromCharCode(ev.keyCode - 51 + 27);
-                    }
-                    else if (ev.keyCode === 56) {
-                        result.key = String.fromCharCode(127);
-                    }
-                    else if (ev.keyCode === 219) {
-                        result.key = String.fromCharCode(27);
-                    }
-                    else if (ev.keyCode === 220) {
-                        result.key = String.fromCharCode(28);
-                    }
-                    else if (ev.keyCode === 221) {
-                        result.key = String.fromCharCode(29);
-                    }
-                }
-                else if ((!this.browser.isMac || this.options.macOptionIsMeta) && ev.altKey && !ev.metaKey) {
-                    var keyMapping = KEYCODE_KEY_MAPPINGS[ev.keyCode];
-                    var key = keyMapping && keyMapping[!ev.shiftKey ? 0 : 1];
-                    if (key) {
-                        result.key = EscapeSequences_1.C0.ESC + key;
-                    }
-                    else if (ev.keyCode >= 65 && ev.keyCode <= 90) {
-                        var keyCode = ev.ctrlKey ? ev.keyCode - 64 : ev.keyCode + 32;
-                        result.key = EscapeSequences_1.C0.ESC + String.fromCharCode(keyCode);
-                    }
-                }
-                else if (this.browser.isMac && !ev.altKey && !ev.ctrlKey && ev.metaKey) {
-                    if (ev.keyCode === 65) {
-                        this.selectAll();
-                    }
-                }
-                break;
-        }
-        return result;
     };
     Terminal.prototype.setgLevel = function (g) {
         this.glevel = g;
@@ -4514,6 +4275,9 @@ var Terminal = (function (_super) {
         if (this.glevel === g) {
             this.charset = charset;
         }
+    };
+    Terminal.prototype._keyUp = function (ev) {
+        this.updateCursorStyle(ev);
     };
     Terminal.prototype._keyPress = function (ev) {
         var key;
@@ -4661,7 +4425,7 @@ var Terminal = (function (_super) {
         this.eraseRight(0, y);
     };
     Terminal.prototype.blankLine = function (cur, isWrapped, cols) {
-        var attr = cur ? this.eraseAttr() : this.defAttr;
+        var attr = cur ? this.eraseAttr() : Buffer_1.DEFAULT_ATTR;
         var ch = [attr, ' ', 1, 32];
         var line = [];
         if (isWrapped) {
@@ -4677,7 +4441,7 @@ var Terminal = (function (_super) {
         if (cur) {
             return [this.eraseAttr(), ' ', 1, 32];
         }
-        return [this.defAttr, ' ', 1, 32];
+        return [Buffer_1.DEFAULT_ATTR, ' ', 1, 32];
     };
     Terminal.prototype.is = function (term) {
         return (this.options.termName + '').indexOf(term) === 0;
@@ -4724,9 +4488,11 @@ var Terminal = (function (_super) {
         this.options.cols = this.cols;
         var customKeyEventHandler = this._customKeyEventHandler;
         var inputHandler = this._inputHandler;
+        var cursorState = this.cursorState;
         this._setup();
         this._customKeyEventHandler = customKeyEventHandler;
         this._inputHandler = inputHandler;
+        this.cursorState = cursorState;
         this.refresh(0, this.rows - 1);
         if (this.viewport) {
             this.viewport.syncScrollArea();
@@ -4744,42 +4510,6 @@ var Terminal = (function (_super) {
         return false;
     };
     Terminal.prototype.matchColor = function (r1, g1, b1) {
-        return matchColor_(r1, g1, b1);
-    };
-    Terminal.prototype._visualBell = function () {
-        return false;
-    };
-    Terminal.prototype._soundBell = function () {
-        return this.options.bellStyle === 'sound';
-    };
-    return Terminal;
-}(EventEmitter_1.EventEmitter));
-exports.Terminal = Terminal;
-function globalOn(el, type, handler, capture) {
-    if (!Array.isArray(el)) {
-        el = [el];
-    }
-    el.forEach(function (element) {
-        element.addEventListener(type, handler, capture || false);
-    });
-}
-var on = globalOn;
-function off(el, type, handler, capture) {
-    if (capture === void 0) { capture = false; }
-    el.removeEventListener(type, handler, capture);
-}
-function wasMondifierKeyOnlyEvent(ev) {
-    return ev.keyCode === 16 ||
-        ev.keyCode === 17 ||
-        ev.keyCode === 18;
-}
-var matchColorCache = {};
-function matchColorDistance(r1, g1, b1, r2, g2, b2) {
-    return Math.pow(30 * (r1 - r2), 2)
-        + Math.pow(59 * (g1 - g2), 2)
-        + Math.pow(11 * (b1 - b2), 2);
-}
-function matchColor_(r1, g1, b1) {
     var hash = (r1 << 16) | (g1 << 8) | b1;
     if (matchColorCache[hash] != null) {
         return matchColorCache[hash];
@@ -4808,30 +4538,62 @@ function matchColor_(r1, g1, b1) {
         }
     }
     return matchColorCache[hash] = li;
+    };
+    Terminal.prototype._visualBell = function () {
+        return false;
+    };
+    Terminal.prototype._soundBell = function () {
+        return this.options.bellStyle === 'sound';
+    };
+    return Terminal;
+}(EventEmitter_1.EventEmitter));
+exports.Terminal = Terminal;
+function wasModifierKeyOnlyEvent(ev) {
+    return ev.keyCode === 16 ||
+        ev.keyCode === 17 ||
+        ev.keyCode === 18;
+}
+var matchColorCache = {};
+function matchColorDistance(r1, g1, b1, r2, g2, b2) {
+    return Math.pow(30 * (r1 - r2), 2)
+        + Math.pow(59 * (g1 - g2), 2)
+        + Math.pow(11 * (b1 - b2), 2);
 }
 
-
-
-},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":3,"./CompositionHelper":6,"./EscapeSequences":7,"./EventEmitter":8,"./InputHandler":9,"./Linkifier":10,"./Parser":11,"./SelectionManager":12,"./SoundManager":14,"./Strings":15,"./Viewport":17,"./handlers/Clipboard":19,"./input/MouseZoneManager":20,"./renderer/ColorManager":22,"./renderer/Renderer":26,"./renderer/atlas/CharAtlasCache":30,"./shared/utils/Browser":39,"./utils/CharMeasure":40,"./utils/Clone":42,"./utils/Dom":43,"./utils/MouseHelper":44,"./utils/ScreenDprMonitor":46}],17:[function(require,module,exports){
+},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":3,"./CompositionHelper":5,"./EventEmitter":7,"./InputHandler":8,"./Linkifier":9,"./SelectionManager":10,"./SoundManager":12,"./Strings":13,"./Viewport":15,"./common/data/EscapeSequences":18,"./core/input/Keyboard":20,"./handlers/Clipboard":22,"./renderer/ColorManager":25,"./renderer/Renderer":29,"./renderer/atlas/CharAtlasCache":33,"./renderer/dom/DomRenderer":40,"./shared/utils/Browser":44,"./ui/CharMeasure":45,"./ui/Lifecycle":46,"./ui/MouseZoneManager":47,"./ui/ScreenDprMonitor":49,"./utils/Clone":50,"./utils/MouseHelper":51}],15:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
+var Lifecycle_1 = require("./common/Lifecycle");
+var Lifecycle_2 = require("./ui/Lifecycle");
 var FALLBACK_SCROLL_BAR_WIDTH = 15;
-var Viewport = (function () {
+var Viewport = (function (_super) {
+    __extends(Viewport, _super);
     function Viewport(_terminal, _viewportElement, _scrollArea, _charMeasure) {
-        var _this = this;
-        this._terminal = _terminal;
-        this._viewportElement = _viewportElement;
-        this._scrollArea = _scrollArea;
-        this._charMeasure = _charMeasure;
-        this.scrollBarWidth = 0;
-        this._currentRowHeight = 0;
-        this._lastRecordedBufferLength = 0;
-        this._lastRecordedViewportHeight = 0;
-        this._lastRecordedBufferHeight = 0;
-        this._wheelPartialScroll = 0;
-        this.scrollBarWidth = (this._viewportElement.offsetWidth - this._scrollArea.offsetWidth) || FALLBACK_SCROLL_BAR_WIDTH;
-        this._viewportElement.addEventListener('scroll', this._onScroll.bind(this));
+        var _this = _super.call(this) || this;
+        _this._terminal = _terminal;
+        _this._viewportElement = _viewportElement;
+        _this._scrollArea = _scrollArea;
+        _this._charMeasure = _charMeasure;
+        _this.scrollBarWidth = 0;
+        _this._currentRowHeight = 0;
+        _this._lastRecordedBufferLength = 0;
+        _this._lastRecordedViewportHeight = 0;
+        _this._lastRecordedBufferHeight = 0;
+        _this._wheelPartialScroll = 0;
+        _this.scrollBarWidth = (_this._viewportElement.offsetWidth - _this._scrollArea.offsetWidth) || FALLBACK_SCROLL_BAR_WIDTH;
+        _this.register(Lifecycle_2.addDisposableDomListener(_this._viewportElement, 'scroll', _this._onScroll.bind(_this)));
         setTimeout(function () { return _this.syncScrollArea(); }, 0);
+        return _this;
     }
     Viewport.prototype.onThemeChanged = function (colors) {
         this._viewportElement.style.backgroundColor = colors.background.css;
@@ -4923,15 +4685,767 @@ var Viewport = (function () {
         ev.preventDefault();
     };
     return Viewport;
-}());
+}(Lifecycle_1.Disposable));
 exports.Viewport = Viewport;
 
+},{"./common/Lifecycle":17,"./ui/Lifecycle":46}],16:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter_1 = require("../EventEmitter");
+var CircularList = (function (_super) {
+    __extends(CircularList, _super);
+    function CircularList(_maxLength) {
+        var _this = _super.call(this) || this;
+        _this._maxLength = _maxLength;
+        _this._array = new Array(_this._maxLength);
+        _this._startIndex = 0;
+        _this._length = 0;
+        return _this;
+    }
+    Object.defineProperty(CircularList.prototype, "maxLength", {
+        get: function () {
+            return this._maxLength;
+        },
+        set: function (newMaxLength) {
+            if (this._maxLength === newMaxLength) {
+                return;
+            }
+            var newArray = new Array(newMaxLength);
+            for (var i = 0; i < Math.min(newMaxLength, this.length); i++) {
+                newArray[i] = this._array[this._getCyclicIndex(i)];
+            }
+            this._array = newArray;
+            this._maxLength = newMaxLength;
+            this._startIndex = 0;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(CircularList.prototype, "length", {
+        get: function () {
+            return this._length;
+        },
+        set: function (newLength) {
+            if (newLength > this._length) {
+                for (var i = this._length; i < newLength; i++) {
+                    this._array[i] = undefined;
+                }
+            }
+            this._length = newLength;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    CircularList.prototype.get = function (index) {
+        return this._array[this._getCyclicIndex(index)];
+    };
+    CircularList.prototype.set = function (index, value) {
+        this._array[this._getCyclicIndex(index)] = value;
+    };
+    CircularList.prototype.push = function (value) {
+        this._array[this._getCyclicIndex(this._length)] = value;
+        if (this._length === this._maxLength) {
+            this._startIndex++;
+            if (this._startIndex === this._maxLength) {
+                this._startIndex = 0;
+            }
+            this.emit('trim', 1);
+        }
+        else {
+            this._length++;
+        }
+    };
+    CircularList.prototype.pop = function () {
+        return this._array[this._getCyclicIndex(this._length-- - 1)];
+    };
+    CircularList.prototype.splice = function (start, deleteCount) {
+        var items = [];
+        for (var _i = 2; _i < arguments.length; _i++) {
+            items[_i - 2] = arguments[_i];
+        }
+        if (deleteCount) {
+            for (var i = start; i < this._length - deleteCount; i++) {
+                this._array[this._getCyclicIndex(i)] = this._array[this._getCyclicIndex(i + deleteCount)];
+            }
+            this._length -= deleteCount;
+        }
+        if (items && items.length) {
+            for (var i = this._length - 1; i >= start; i--) {
+                this._array[this._getCyclicIndex(i + items.length)] = this._array[this._getCyclicIndex(i)];
+            }
+            for (var i = 0; i < items.length; i++) {
+                this._array[this._getCyclicIndex(start + i)] = items[i];
+            }
+            if (this._length + items.length > this.maxLength) {
+                var countToTrim = (this._length + items.length) - this.maxLength;
+                this._startIndex += countToTrim;
+                this._length = this.maxLength;
+                this.emit('trim', countToTrim);
+            }
+            else {
+                this._length += items.length;
+            }
+        }
+    };
+    CircularList.prototype.trimStart = function (count) {
+        if (count > this._length) {
+            count = this._length;
+        }
+        this._startIndex += count;
+        this._length -= count;
+        this.emit('trim', count);
+    };
+    CircularList.prototype.shiftElements = function (start, count, offset) {
+        if (count <= 0) {
+            return;
+        }
+        if (start < 0 || start >= this._length) {
+            throw new Error('start argument out of range');
+        }
+        if (start + offset < 0) {
+            throw new Error('Cannot shift elements in list beyond index 0');
+        }
+        if (offset > 0) {
+            for (var i = count - 1; i >= 0; i--) {
+                this.set(start + i + offset, this.get(start + i));
+            }
+            var expandListBy = (start + count + offset) - this._length;
+            if (expandListBy > 0) {
+                this._length += expandListBy;
+                while (this._length > this.maxLength) {
+                    this._length--;
+                    this._startIndex++;
+                    this.emit('trim', 1);
+                }
+            }
+        }
+        else {
+            for (var i = 0; i < count; i++) {
+                this.set(start + i + offset, this.get(start + i));
+            }
+        }
+    };
+    CircularList.prototype._getCyclicIndex = function (index) {
+        return (this._startIndex + index) % this.maxLength;
+    };
+    return CircularList;
+}(EventEmitter_1.EventEmitter));
+exports.CircularList = CircularList;
 
+},{"../EventEmitter":7}],17:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var Disposable = (function () {
+    function Disposable() {
+        this._disposables = [];
+    }
+    Disposable.prototype.dispose = function () {
+        this._disposables.forEach(function (d) { return d.dispose(); });
+        this._disposables.length = 0;
+    };
+    Disposable.prototype.register = function (d) {
+        this._disposables.push(d);
+    };
+    return Disposable;
+}());
+exports.Disposable = Disposable;
 
 },{}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var EscapeSequences_1 = require("../EscapeSequences");
+var C0;
+(function (C0) {
+    C0.NUL = '\x00';
+    C0.SOH = '\x01';
+    C0.STX = '\x02';
+    C0.ETX = '\x03';
+    C0.EOT = '\x04';
+    C0.ENQ = '\x05';
+    C0.ACK = '\x06';
+    C0.BEL = '\x07';
+    C0.BS = '\x08';
+    C0.HT = '\x09';
+    C0.LF = '\x0a';
+    C0.VT = '\x0b';
+    C0.FF = '\x0c';
+    C0.CR = '\x0d';
+    C0.SO = '\x0e';
+    C0.SI = '\x0f';
+    C0.DLE = '\x10';
+    C0.DC1 = '\x11';
+    C0.DC2 = '\x12';
+    C0.DC3 = '\x13';
+    C0.DC4 = '\x14';
+    C0.NAK = '\x15';
+    C0.SYN = '\x16';
+    C0.ETB = '\x17';
+    C0.CAN = '\x18';
+    C0.EM = '\x19';
+    C0.SUB = '\x1a';
+    C0.ESC = '\x1b';
+    C0.FS = '\x1c';
+    C0.GS = '\x1d';
+    C0.RS = '\x1e';
+    C0.US = '\x1f';
+    C0.SP = '\x20';
+    C0.DEL = '\x7f';
+})(C0 = exports.C0 || (exports.C0 = {}));
+var C1;
+(function (C1) {
+    C1.PAD = '\x80';
+    C1.HOP = '\x81';
+    C1.BPH = '\x82';
+    C1.NBH = '\x83';
+    C1.IND = '\x84';
+    C1.NEL = '\x85';
+    C1.SSA = '\x86';
+    C1.ESA = '\x87';
+    C1.HTS = '\x88';
+    C1.HTJ = '\x89';
+    C1.VTS = '\x8a';
+    C1.PLD = '\x8b';
+    C1.PLU = '\x8c';
+    C1.RI = '\x8d';
+    C1.SS2 = '\x8e';
+    C1.SS3 = '\x8f';
+    C1.DCS = '\x90';
+    C1.PU1 = '\x91';
+    C1.PU2 = '\x92';
+    C1.STS = '\x93';
+    C1.CCH = '\x94';
+    C1.MW = '\x95';
+    C1.SPA = '\x96';
+    C1.EPA = '\x97';
+    C1.SOS = '\x98';
+    C1.SGCI = '\x99';
+    C1.SCI = '\x9a';
+    C1.CSI = '\x9b';
+    C1.ST = '\x9c';
+    C1.OSC = '\x9d';
+    C1.PM = '\x9e';
+    C1.APC = '\x9f';
+})(C1 = exports.C1 || (exports.C1 = {}));
+
+},{}],19:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CHARSETS = {};
+exports.DEFAULT_CHARSET = exports.CHARSETS['B'];
+exports.CHARSETS['0'] = {
+    '`': '\u25c6',
+    'a': '\u2592',
+    'b': '\u0009',
+    'c': '\u000c',
+    'd': '\u000d',
+    'e': '\u000a',
+    'f': '\u00b0',
+    'g': '\u00b1',
+    'h': '\u2424',
+    'i': '\u000b',
+    'j': '\u2518',
+    'k': '\u2510',
+    'l': '\u250c',
+    'm': '\u2514',
+    'n': '\u253c',
+    'o': '\u23ba',
+    'p': '\u23bb',
+    'q': '\u2500',
+    'r': '\u23bc',
+    's': '\u23bd',
+    't': '\u251c',
+    'u': '\u2524',
+    'v': '\u2534',
+    'w': '\u252c',
+    'x': '\u2502',
+    'y': '\u2264',
+    'z': '\u2265',
+    '{': '\u03c0',
+    '|': '\u2260',
+    '}': '\u00a3',
+    '~': '\u00b7'
+};
+exports.CHARSETS['A'] = {
+    '#': '£'
+};
+exports.CHARSETS['B'] = null;
+exports.CHARSETS['4'] = {
+    '#': '£',
+    '@': '¾',
+    '[': 'ij',
+    '\\': '½',
+    ']': '|',
+    '{': '¨',
+    '|': 'f',
+    '}': '¼',
+    '~': '´'
+};
+exports.CHARSETS['C'] =
+    exports.CHARSETS['5'] = {
+        '[': 'Ä',
+        '\\': 'Ö',
+        ']': 'Å',
+        '^': 'Ü',
+        '`': 'é',
+        '{': 'ä',
+        '|': 'ö',
+        '}': 'å',
+        '~': 'ü'
+    };
+exports.CHARSETS['R'] = {
+    '#': '£',
+    '@': 'à',
+    '[': '°',
+    '\\': 'ç',
+    ']': '§',
+    '{': 'é',
+    '|': 'ù',
+    '}': 'è',
+    '~': '¨'
+};
+exports.CHARSETS['Q'] = {
+    '@': 'à',
+    '[': 'â',
+    '\\': 'ç',
+    ']': 'ê',
+    '^': 'î',
+    '`': 'ô',
+    '{': 'é',
+    '|': 'ù',
+    '}': 'è',
+    '~': 'û'
+};
+exports.CHARSETS['K'] = {
+    '@': '§',
+    '[': 'Ä',
+    '\\': 'Ö',
+    ']': 'Ü',
+    '{': 'ä',
+    '|': 'ö',
+    '}': 'ü',
+    '~': 'ß'
+};
+exports.CHARSETS['Y'] = {
+    '#': '£',
+    '@': '§',
+    '[': '°',
+    '\\': 'ç',
+    ']': 'é',
+    '`': 'ù',
+    '{': 'à',
+    '|': 'ò',
+    '}': 'è',
+    '~': 'ì'
+};
+exports.CHARSETS['E'] =
+    exports.CHARSETS['6'] = {
+        '@': 'Ä',
+        '[': 'Æ',
+        '\\': 'Ø',
+        ']': 'Å',
+        '^': 'Ü',
+        '`': 'ä',
+        '{': 'æ',
+        '|': 'ø',
+        '}': 'å',
+        '~': 'ü'
+    };
+exports.CHARSETS['Z'] = {
+    '#': '£',
+    '@': '§',
+    '[': '¡',
+    '\\': 'Ñ',
+    ']': '¿',
+    '{': '°',
+    '|': 'ñ',
+    '}': 'ç'
+};
+exports.CHARSETS['H'] =
+    exports.CHARSETS['7'] = {
+        '@': 'É',
+        '[': 'Ä',
+        '\\': 'Ö',
+        ']': 'Å',
+        '^': 'Ü',
+        '`': 'é',
+        '{': 'ä',
+        '|': 'ö',
+        '}': 'å',
+        '~': 'ü'
+    };
+exports.CHARSETS['='] = {
+    '#': 'ù',
+    '@': 'à',
+    '[': 'é',
+    '\\': 'ç',
+    ']': 'ê',
+    '^': 'î',
+    '_': 'è',
+    '`': 'ô',
+    '{': 'ä',
+    '|': 'ö',
+    '}': 'ü',
+    '~': 'û'
+};
+
+},{}],20:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var EscapeSequences_1 = require("../../common/data/EscapeSequences");
+var KEYCODE_KEY_MAPPINGS = {
+    48: ['0', ')'],
+    49: ['1', '!'],
+    50: ['2', '@'],
+    51: ['3', '#'],
+    52: ['4', '$'],
+    53: ['5', '%'],
+    54: ['6', '^'],
+    55: ['7', '&'],
+    56: ['8', '*'],
+    57: ['9', '('],
+    186: [';', ':'],
+    187: ['=', '+'],
+    188: [',', '<'],
+    189: ['-', '_'],
+    190: ['.', '>'],
+    191: ['/', '?'],
+    192: ['`', '~'],
+    219: ['[', '{'],
+    220: ['\\', '|'],
+    221: [']', '}'],
+    222: ['\'', '"']
+};
+function evaluateKeyboardEvent(ev, applicationCursorMode, isMac, macOptionIsMeta) {
+    var result = {
+        type: 0,
+        cancel: false,
+        key: undefined
+    };
+    var modifiers = (ev.shiftKey ? 1 : 0) | (ev.altKey ? 2 : 0) | (ev.ctrlKey ? 4 : 0) | (ev.metaKey ? 8 : 0);
+    switch (ev.keyCode) {
+        case 0:
+            if (ev.key === 'UIKeyInputUpArrow') {
+                if (applicationCursorMode) {
+                    result.key = EscapeSequences_1.C0.ESC + 'OA';
+                }
+                else {
+                    result.key = EscapeSequences_1.C0.ESC + '[A';
+                }
+            }
+            else if (ev.key === 'UIKeyInputLeftArrow') {
+                if (applicationCursorMode) {
+                    result.key = EscapeSequences_1.C0.ESC + 'OD';
+                }
+                else {
+                    result.key = EscapeSequences_1.C0.ESC + '[D';
+                }
+            }
+            else if (ev.key === 'UIKeyInputRightArrow') {
+                if (applicationCursorMode) {
+                    result.key = EscapeSequences_1.C0.ESC + 'OC';
+                }
+                else {
+                    result.key = EscapeSequences_1.C0.ESC + '[C';
+                }
+            }
+            else if (ev.key === 'UIKeyInputDownArrow') {
+                if (applicationCursorMode) {
+                    result.key = EscapeSequences_1.C0.ESC + 'OB';
+                }
+                else {
+                    result.key = EscapeSequences_1.C0.ESC + '[B';
+                }
+            }
+            break;
+        case 8:
+            if (ev.shiftKey) {
+                result.key = EscapeSequences_1.C0.BS;
+                break;
+            }
+            else if (ev.altKey) {
+                result.key = EscapeSequences_1.C0.ESC + EscapeSequences_1.C0.DEL;
+                break;
+            }
+            result.key = EscapeSequences_1.C0.DEL;
+            break;
+        case 9:
+            if (ev.shiftKey) {
+                result.key = EscapeSequences_1.C0.ESC + '[Z';
+                break;
+            }
+            result.key = EscapeSequences_1.C0.HT;
+            result.cancel = true;
+            break;
+        case 13:
+            result.key = EscapeSequences_1.C0.CR;
+            result.cancel = true;
+            break;
+        case 27:
+            result.key = EscapeSequences_1.C0.ESC;
+            result.cancel = true;
+            break;
+        case 37:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'D';
+                if (result.key === EscapeSequences_1.C0.ESC + '[1;3D') {
+                    result.key = isMac ? EscapeSequences_1.C0.ESC + 'b' : EscapeSequences_1.C0.ESC + '[1;5D';
+                }
+            }
+            else if (applicationCursorMode) {
+                result.key = EscapeSequences_1.C0.ESC + 'OD';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[D';
+            }
+            break;
+        case 39:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'C';
+                if (result.key === EscapeSequences_1.C0.ESC + '[1;3C') {
+                    result.key = isMac ? EscapeSequences_1.C0.ESC + 'f' : EscapeSequences_1.C0.ESC + '[1;5C';
+                }
+            }
+            else if (applicationCursorMode) {
+                result.key = EscapeSequences_1.C0.ESC + 'OC';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[C';
+            }
+            break;
+        case 38:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'A';
+                if (result.key === EscapeSequences_1.C0.ESC + '[1;3A') {
+                    result.key = EscapeSequences_1.C0.ESC + '[1;5A';
+                }
+            }
+            else if (applicationCursorMode) {
+                result.key = EscapeSequences_1.C0.ESC + 'OA';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[A';
+            }
+            break;
+        case 40:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'B';
+                if (result.key === EscapeSequences_1.C0.ESC + '[1;3B') {
+                    result.key = EscapeSequences_1.C0.ESC + '[1;5B';
+                }
+            }
+            else if (applicationCursorMode) {
+                result.key = EscapeSequences_1.C0.ESC + 'OB';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[B';
+            }
+            break;
+        case 45:
+            if (!ev.shiftKey && !ev.ctrlKey) {
+                result.key = EscapeSequences_1.C0.ESC + '[2~';
+            }
+            break;
+        case 46:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[3;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[3~';
+            }
+            break;
+        case 36:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'H';
+            }
+            else if (applicationCursorMode) {
+                result.key = EscapeSequences_1.C0.ESC + 'OH';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[H';
+            }
+            break;
+        case 35:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'F';
+            }
+            else if (applicationCursorMode) {
+                result.key = EscapeSequences_1.C0.ESC + 'OF';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[F';
+            }
+            break;
+        case 33:
+            if (ev.shiftKey) {
+                result.type = 2;
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[5~';
+            }
+            break;
+        case 34:
+            if (ev.shiftKey) {
+                result.type = 3;
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[6~';
+            }
+            break;
+        case 112:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'P';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + 'OP';
+            }
+            break;
+        case 113:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'Q';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + 'OQ';
+            }
+            break;
+        case 114:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'R';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + 'OR';
+            }
+            break;
+        case 115:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[1;' + (modifiers + 1) + 'S';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + 'OS';
+            }
+            break;
+        case 116:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[15;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[15~';
+            }
+            break;
+        case 117:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[17;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[17~';
+            }
+            break;
+        case 118:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[18;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[18~';
+            }
+            break;
+        case 119:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[19;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[19~';
+            }
+            break;
+        case 120:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[20;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[20~';
+            }
+            break;
+        case 121:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[21;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[21~';
+            }
+            break;
+        case 122:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[23;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[23~';
+            }
+            break;
+        case 123:
+            if (modifiers) {
+                result.key = EscapeSequences_1.C0.ESC + '[24;' + (modifiers + 1) + '~';
+            }
+            else {
+                result.key = EscapeSequences_1.C0.ESC + '[24~';
+            }
+            break;
+        default:
+            if (ev.ctrlKey && !ev.shiftKey && !ev.altKey && !ev.metaKey) {
+                if (ev.keyCode >= 65 && ev.keyCode <= 90) {
+                    result.key = String.fromCharCode(ev.keyCode - 64);
+                }
+                else if (ev.keyCode === 32) {
+                    result.key = String.fromCharCode(0);
+                }
+                else if (ev.keyCode >= 51 && ev.keyCode <= 55) {
+                    result.key = String.fromCharCode(ev.keyCode - 51 + 27);
+                }
+                else if (ev.keyCode === 56) {
+                    result.key = String.fromCharCode(127);
+                }
+                else if (ev.keyCode === 219) {
+                    result.key = String.fromCharCode(27);
+                }
+                else if (ev.keyCode === 220) {
+                    result.key = String.fromCharCode(28);
+                }
+                else if (ev.keyCode === 221) {
+                    result.key = String.fromCharCode(29);
+                }
+            }
+            else if ((!isMac || macOptionIsMeta) && ev.altKey && !ev.metaKey) {
+                var keyMapping = KEYCODE_KEY_MAPPINGS[ev.keyCode];
+                var key = keyMapping && keyMapping[!ev.shiftKey ? 0 : 1];
+                if (key) {
+                    result.key = EscapeSequences_1.C0.ESC + key;
+                }
+                else if (ev.keyCode >= 65 && ev.keyCode <= 90) {
+                    var keyCode = ev.ctrlKey ? ev.keyCode - 64 : ev.keyCode + 32;
+                    result.key = EscapeSequences_1.C0.ESC + String.fromCharCode(keyCode);
+                }
+            }
+            else if (isMac && !ev.altKey && !ev.ctrlKey && ev.metaKey) {
+                if (ev.keyCode === 65) {
+                    result.type = 1;
+                }
+            }
+            break;
+    }
+    return result;
+}
+exports.evaluateKeyboardEvent = evaluateKeyboardEvent;
+
+},{"../../common/data/EscapeSequences":18}],21:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var EscapeSequences_1 = require("../common/data/EscapeSequences");
 var AltClickHandler = (function () {
     function AltClickHandler(_mouseEvent, _terminal) {
         this._mouseEvent = _mouseEvent;
@@ -5067,9 +5581,7 @@ function repeat(count, str) {
     return rpt;
 }
 
-
-
-},{"../EscapeSequences":7}],19:[function(require,module,exports){
+},{"../common/data/EscapeSequences":18}],22:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function prepareTextForTerminal(text) {
@@ -5146,170 +5658,148 @@ function rightClickHandler(ev, textarea, selectionManager, shouldSelectWord) {
 }
 exports.rightClickHandler = rightClickHandler;
 
-
-
-},{}],20:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var HOVER_DURATION = 500;
-var MouseZoneManager = (function () {
-    function MouseZoneManager(_terminal) {
-        var _this = this;
-        this._terminal = _terminal;
-        this._zones = [];
-        this._areZonesActive = false;
-        this._tooltipTimeout = null;
-        this._currentZone = null;
-        this._lastHoverCoords = [null, null];
-        this._terminal.element.addEventListener('mousedown', function (e) { return _this._onMouseDown(e); });
-        this._mouseMoveListener = function (e) { return _this._onMouseMove(e); };
-        this._clickListener = function (e) { return _this._onClick(e); };
+var Terminal_1 = require("../Terminal");
+var Strings = require("../Strings");
+var Terminal = (function () {
+    function Terminal(options) {
+        this._core = new Terminal_1.Terminal(options);
     }
-    MouseZoneManager.prototype.add = function (zone) {
-        this._zones.push(zone);
-        if (this._zones.length === 1) {
-            this._activate();
-        }
+    Object.defineProperty(Terminal.prototype, "element", {
+        get: function () { return this._core.element; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "textarea", {
+        get: function () { return this._core.textarea; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "rows", {
+        get: function () { return this._core.rows; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "cols", {
+        get: function () { return this._core.cols; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "markers", {
+        get: function () { return this._core.markers; },
+        enumerable: true,
+        configurable: true
+    });
+    Terminal.prototype.blur = function () {
+        this._core.blur();
     };
-    MouseZoneManager.prototype.clearAll = function (start, end) {
-        if (this._zones.length === 0) {
-            return;
-        }
-        if (!end) {
-            start = 0;
-            end = this._terminal.rows - 1;
-        }
-        for (var i = 0; i < this._zones.length; i++) {
-            var zone = this._zones[i];
-            if ((zone.y1 > start && zone.y1 <= end + 1) ||
-                (zone.y2 > start && zone.y2 <= end + 1) ||
-                (zone.y1 < start && zone.y2 > end + 1)) {
-                if (this._currentZone && this._currentZone === zone) {
-                    this._currentZone.leaveCallback();
-                    this._currentZone = null;
-                }
-                this._zones.splice(i--, 1);
-            }
-        }
-        if (this._zones.length === 0) {
-            this._deactivate();
-        }
+    Terminal.prototype.focus = function () {
+        this._core.focus();
     };
-    MouseZoneManager.prototype._activate = function () {
-        if (!this._areZonesActive) {
-            this._areZonesActive = true;
-            this._terminal.element.addEventListener('mousemove', this._mouseMoveListener);
-            this._terminal.element.addEventListener('click', this._clickListener);
-        }
+    Terminal.prototype.on = function (type, listener) {
+        this._core.on(type, listener);
     };
-    MouseZoneManager.prototype._deactivate = function () {
-        if (this._areZonesActive) {
-            this._areZonesActive = false;
-            this._terminal.element.removeEventListener('mousemove', this._mouseMoveListener);
-            this._terminal.element.removeEventListener('click', this._clickListener);
-        }
+    Terminal.prototype.off = function (type, listener) {
+        this._core.off(type, listener);
     };
-    MouseZoneManager.prototype._onMouseMove = function (e) {
-        if (this._lastHoverCoords[0] !== e.pageX || this._lastHoverCoords[1] !== e.pageY) {
-            this._onHover(e);
-            this._lastHoverCoords = [e.pageX, e.pageY];
-        }
+    Terminal.prototype.emit = function (type, data) {
+        this._core.emit(type, data);
     };
-    MouseZoneManager.prototype._onHover = function (e) {
-        var _this = this;
-        var zone = this._findZoneEventAt(e);
-        if (zone === this._currentZone) {
-            return;
-        }
-        if (this._currentZone) {
-            this._currentZone.leaveCallback();
-            this._currentZone = null;
-            if (this._tooltipTimeout) {
-                clearTimeout(this._tooltipTimeout);
-            }
-        }
-        if (!zone) {
-            return;
-        }
-        this._currentZone = zone;
-        if (zone.hoverCallback) {
-            zone.hoverCallback(e);
-        }
-        this._tooltipTimeout = setTimeout(function () { return _this._onTooltip(e); }, HOVER_DURATION);
+    Terminal.prototype.addDisposableListener = function (type, handler) {
+        return this._core.addDisposableListener(type, handler);
     };
-    MouseZoneManager.prototype._onTooltip = function (e) {
-        this._tooltipTimeout = null;
-        var zone = this._findZoneEventAt(e);
-        if (zone && zone.tooltipCallback) {
-            zone.tooltipCallback(e);
-        }
+    Terminal.prototype.resize = function (columns, rows) {
+        this._core.resize(columns, rows);
     };
-    MouseZoneManager.prototype._onMouseDown = function (e) {
-        if (!this._areZonesActive) {
-            return;
-        }
-        var zone = this._findZoneEventAt(e);
-        if (zone) {
-            if (zone.willLinkActivate(e)) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-            }
-        }
+    Terminal.prototype.writeln = function (data) {
+        this._core.writeln(data);
     };
-    MouseZoneManager.prototype._onClick = function (e) {
-        var zone = this._findZoneEventAt(e);
-        if (zone) {
-            zone.clickCallback(e);
-            e.preventDefault();
-            e.stopImmediatePropagation();
-        }
+    Terminal.prototype.open = function (parent) {
+        this._core.open(parent);
     };
-    MouseZoneManager.prototype._findZoneEventAt = function (e) {
-        var coords = this._terminal.mouseHelper.getCoords(e, this._terminal.screenElement, this._terminal.charMeasure, this._terminal.options.lineHeight, this._terminal.cols, this._terminal.rows);
-        if (!coords) {
-            return null;
-        }
-        var x = coords[0];
-        var y = coords[1];
-        for (var i = 0; i < this._zones.length; i++) {
-            var zone = this._zones[i];
-            if (zone.y1 === zone.y2) {
-                if (y === zone.y1 && x >= zone.x1 && x < zone.x2) {
-                    return zone;
-                }
-            }
-            else {
-                if ((y === zone.y1 && x >= zone.x1) ||
-                    (y === zone.y2 && x < zone.x2) ||
-                    (y > zone.y1 && y < zone.y2)) {
-                    return zone;
-                }
-            }
-        }
-        return null;
+    Terminal.prototype.attachCustomKeyEventHandler = function (customKeyEventHandler) {
+        this._core.attachCustomKeyEventHandler(customKeyEventHandler);
     };
-    return MouseZoneManager;
+    Terminal.prototype.registerLinkMatcher = function (regex, handler, options) {
+        return this._core.registerLinkMatcher(regex, handler, options);
+    };
+    Terminal.prototype.deregisterLinkMatcher = function (matcherId) {
+        this._core.deregisterLinkMatcher(matcherId);
+    };
+    Terminal.prototype.addMarker = function (cursorYOffset) {
+        return this._core.addMarker(cursorYOffset);
+    };
+    Terminal.prototype.hasSelection = function () {
+        return this._core.hasSelection();
+    };
+    Terminal.prototype.getSelection = function () {
+        return this._core.getSelection();
+    };
+    Terminal.prototype.clearSelection = function () {
+        this._core.clearSelection();
+    };
+    Terminal.prototype.selectAll = function () {
+        this._core.selectAll();
+    };
+    Terminal.prototype.selectLines = function (start, end) {
+        this._core.selectLines(start, end);
+    };
+    Terminal.prototype.dispose = function () {
+        this._core.dispose();
+    };
+    Terminal.prototype.destroy = function () {
+        this._core.destroy();
+    };
+    Terminal.prototype.scrollLines = function (amount) {
+        this._core.scrollLines(amount);
+    };
+    Terminal.prototype.scrollPages = function (pageCount) {
+        this._core.scrollPages(pageCount);
+    };
+    Terminal.prototype.scrollToTop = function () {
+        this._core.scrollToTop();
+    };
+    Terminal.prototype.scrollToBottom = function () {
+        this._core.scrollToBottom();
+    };
+    Terminal.prototype.scrollToLine = function (line) {
+        this._core.scrollToLine(line);
+    };
+    Terminal.prototype.clear = function () {
+        this._core.clear();
+    };
+    Terminal.prototype.write = function (data) {
+        this._core.write(data);
+    };
+    Terminal.prototype.getOption = function (key) {
+        return this._core.getOption(key);
+    };
+    Terminal.prototype.setOption = function (key, value) {
+        this._core.setOption(key, value);
+    };
+    Terminal.prototype.refresh = function (start, end) {
+        this._core.refresh(start, end);
+    };
+    Terminal.prototype.reset = function () {
+        this._core.reset();
+    };
+    Terminal.applyAddon = function (addon) {
+        addon.apply(Terminal);
+    };
+    Object.defineProperty(Terminal, "strings", {
+        get: function () {
+            return Strings;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    return Terminal;
 }());
-exports.MouseZoneManager = MouseZoneManager;
-var MouseZone = (function () {
-    function MouseZone(x1, y1, x2, y2, clickCallback, hoverCallback, tooltipCallback, leaveCallback, willLinkActivate) {
-        this.x1 = x1;
-        this.y1 = y1;
-        this.x2 = x2;
-        this.y2 = y2;
-        this.clickCallback = clickCallback;
-        this.hoverCallback = hoverCallback;
-        this.tooltipCallback = tooltipCallback;
-        this.leaveCallback = leaveCallback;
-        this.willLinkActivate = willLinkActivate;
-    }
-    return MouseZone;
-}());
-exports.MouseZone = MouseZone;
+exports.Terminal = Terminal;
 
-
-
-},{}],21:[function(require,module,exports){
+},{"../Strings":13,"../Terminal":14}],24:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./atlas/Types");
@@ -5343,7 +5833,9 @@ var BaseRenderLayer = (function () {
     BaseRenderLayer.prototype.onFocus = function (terminal) { };
     BaseRenderLayer.prototype.onCursorMove = function (terminal) { };
     BaseRenderLayer.prototype.onGridChanged = function (terminal, startRow, endRow) { };
-    BaseRenderLayer.prototype.onSelectionChanged = function (terminal, start, end) { };
+    BaseRenderLayer.prototype.onSelectionChanged = function (terminal, start, end, columnSelectMode) {
+        if (columnSelectMode === void 0) { columnSelectMode = false; }
+    };
     BaseRenderLayer.prototype.onThemeChanged = function (terminal, colorSet) {
         this._refreshCharAtlas(terminal, colorSet);
     };
@@ -5462,9 +5954,7 @@ var BaseRenderLayer = (function () {
 }());
 exports.BaseRenderLayer = BaseRenderLayer;
 
-
-
-},{"../Buffer":2,"./atlas/CharAtlasCache":30,"./atlas/Types":36}],22:[function(require,module,exports){
+},{"../Buffer":2,"./atlas/CharAtlasCache":33,"./atlas/Types":39}],25:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var DEFAULT_FOREGROUND = fromHex('#ffffff');
@@ -5592,9 +6082,7 @@ var ColorManager = (function () {
 }());
 exports.ColorManager = ColorManager;
 
-
-
-},{}],23:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5881,9 +6369,7 @@ var CursorBlinkStateManager = (function () {
     return CursorBlinkStateManager;
 }());
 
-
-
-},{"../Buffer":2,"./BaseRenderLayer":21}],24:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":24}],27:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var GridCache = (function () {
@@ -5913,9 +6399,7 @@ var GridCache = (function () {
 }());
 exports.GridCache = GridCache;
 
-
-
-},{}],25:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5977,9 +6461,7 @@ var LinkRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.LinkRenderLayer = LinkRenderLayer;
 
-
-
-},{"./BaseRenderLayer":21}],26:[function(require,module,exports){
+},{"./BaseRenderLayer":24}],29:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -5998,8 +6480,8 @@ var CursorRenderLayer_1 = require("./CursorRenderLayer");
 var ColorManager_1 = require("./ColorManager");
 var LinkRenderLayer_1 = require("./LinkRenderLayer");
 var EventEmitter_1 = require("../EventEmitter");
-var RenderDebouncer_1 = require("../utils/RenderDebouncer");
-var ScreenDprMonitor_1 = require("../utils/ScreenDprMonitor");
+var RenderDebouncer_1 = require("../ui/RenderDebouncer");
+var ScreenDprMonitor_1 = require("../ui/ScreenDprMonitor");
 var Renderer = (function (_super) {
     __extends(Renderer, _super);
     function Renderer(_terminal, theme) {
@@ -6038,9 +6520,11 @@ var Renderer = (function (_super) {
         _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._terminal, _this._renderRows.bind(_this));
         _this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
         _this._screenDprMonitor.setListener(function () { return _this.onWindowResize(window.devicePixelRatio); });
+        _this.register(_this._screenDprMonitor);
         if ('IntersectionObserver' in window) {
-            var observer = new IntersectionObserver(function (e) { return _this.onIntersectionChange(e[0]); }, { threshold: 0 });
-            observer.observe(_this._terminal.element);
+            var observer_1 = new IntersectionObserver(function (e) { return _this.onIntersectionChange(e[0]); }, { threshold: 0 });
+            observer_1.observe(_this._terminal.element);
+            _this.register({ dispose: function () { return observer_1.disconnect(); } });
         }
         return _this;
     }
@@ -6099,9 +6583,10 @@ var Renderer = (function (_super) {
         var _this = this;
         this._runOperation(function (l) { return l.onFocus(_this._terminal); });
     };
-    Renderer.prototype.onSelectionChanged = function (start, end) {
+    Renderer.prototype.onSelectionChanged = function (start, end, columnSelectMode) {
         var _this = this;
-        this._runOperation(function (l) { return l.onSelectionChanged(_this._terminal, start, end); });
+        if (columnSelectMode === void 0) { columnSelectMode = false; }
+        this._runOperation(function (l) { return l.onSelectionChanged(_this._terminal, start, end, columnSelectMode); });
     };
     Renderer.prototype.onCursorMove = function () {
         var _this = this;
@@ -6157,9 +6642,7 @@ var Renderer = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.Renderer = Renderer;
 
-
-
-},{"../EventEmitter":8,"../utils/RenderDebouncer":45,"../utils/ScreenDprMonitor":46,"./ColorManager":22,"./CursorRenderLayer":23,"./LinkRenderLayer":25,"./SelectionRenderLayer":27,"./TextRenderLayer":28}],27:[function(require,module,exports){
+},{"../EventEmitter":7,"../ui/RenderDebouncer":48,"../ui/ScreenDprMonitor":49,"./ColorManager":25,"./CursorRenderLayer":26,"./LinkRenderLayer":28,"./SelectionRenderLayer":30,"./TextRenderLayer":31}],30:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -6177,30 +6660,29 @@ var SelectionRenderLayer = (function (_super) {
     __extends(SelectionRenderLayer, _super);
     function SelectionRenderLayer(container, zIndex, colors) {
         var _this = _super.call(this, container, 'selection', zIndex, true, colors) || this;
-        _this._state = {
-            start: null,
-            end: null
-        };
+        _this._clearState();
         return _this;
     }
-    SelectionRenderLayer.prototype.resize = function (terminal, dim) {
-        _super.prototype.resize.call(this, terminal, dim);
+    SelectionRenderLayer.prototype._clearState = function () {
         this._state = {
             start: null,
-            end: null
+            end: null,
+            columnSelectMode: null,
+            ydisp: null
         };
+        };
+    SelectionRenderLayer.prototype.resize = function (terminal, dim) {
+        _super.prototype.resize.call(this, terminal, dim);
+        this._clearState();
     };
     SelectionRenderLayer.prototype.reset = function (terminal) {
         if (this._state.start && this._state.end) {
-            this._state = {
-                start: null,
-                end: null
-            };
+            this._clearState();
             this.clearAll();
         }
     };
-    SelectionRenderLayer.prototype.onSelectionChanged = function (terminal, start, end) {
-        if (this._state.start === start || this._state.end === end) {
+    SelectionRenderLayer.prototype.onSelectionChanged = function (terminal, start, end, columnSelectMode) {
+        if (!this._didStateChange(start, end, columnSelectMode, terminal.buffer.ydisp)) {
             return;
         }
         this.clearAll();
@@ -6214,9 +6696,16 @@ var SelectionRenderLayer = (function (_super) {
         if (viewportCappedStartRow >= terminal.rows || viewportCappedEndRow < 0) {
             return;
         }
+        this._ctx.fillStyle = this._colors.selection.css;
+        if (columnSelectMode) {
+            var startCol = viewportStartRow === viewportCappedStartRow ? start[0] : 0;
+            var width = end[0] - startCol;
+            var height = viewportCappedEndRow - viewportCappedStartRow + 1;
+            this.fillCells(startCol, viewportCappedStartRow, width, height);
+        }
+        else {
         var startCol = viewportStartRow === viewportCappedStartRow ? start[0] : 0;
         var startRowEndCol = viewportCappedStartRow === viewportCappedEndRow ? end[0] : terminal.cols;
-        this._ctx.fillStyle = this._colors.selection.css;
         this.fillCells(startCol, viewportCappedStartRow, startRowEndCol - startCol, 1);
         var middleRowsCount = Math.max(viewportCappedEndRow - viewportCappedStartRow - 1, 0);
         this.fillCells(0, viewportCappedStartRow + 1, terminal.cols, middleRowsCount);
@@ -6224,16 +6713,29 @@ var SelectionRenderLayer = (function (_super) {
             var endCol = viewportEndRow === viewportCappedEndRow ? end[0] : terminal.cols;
             this.fillCells(0, viewportCappedEndRow, endCol, 1);
         }
+        }
         this._state.start = [start[0], start[1]];
         this._state.end = [end[0], end[1]];
+        this._state.columnSelectMode = columnSelectMode;
+        this._state.ydisp = terminal.buffer.ydisp;
+    };
+    SelectionRenderLayer.prototype._didStateChange = function (start, end, columnSelectMode, ydisp) {
+        return !this._areCoordinatesEqual(start, this._state.start) ||
+            !this._areCoordinatesEqual(end, this._state.end) ||
+            columnSelectMode !== this._state.columnSelectMode ||
+            ydisp !== this._state.ydisp;
+    };
+    SelectionRenderLayer.prototype._areCoordinatesEqual = function (coord1, coord2) {
+        if (!coord1 || !coord2) {
+            return false;
+        }
+        return coord1[0] === coord2[0] && coord1[1] === coord2[1];
     };
     return SelectionRenderLayer;
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.SelectionRenderLayer = SelectionRenderLayer;
 
-
-
-},{"./BaseRenderLayer":21}],28:[function(require,module,exports){
+},{"./BaseRenderLayer":24}],31:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -6376,7 +6878,9 @@ var TextRenderLayer = (function (_super) {
         if (this._state.cache.length === 0) {
             return;
         }
+        if (this._charAtlas) {
         this._charAtlas.beginFrame();
+        }
         this.clearCells(0, firstRow, terminal.cols, lastRow - firstRow + 1);
         this._drawBackground(terminal, firstRow, lastRow);
         this._drawForeground(terminal, firstRow, lastRow);
@@ -6407,9 +6911,7 @@ var TextRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.TextRenderLayer = TextRenderLayer;
 
-
-
-},{"../Buffer":2,"./BaseRenderLayer":21,"./GridCache":24,"./atlas/Types":36}],29:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":24,"./GridCache":27,"./atlas/Types":39}],32:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var BaseCharAtlas = (function () {
@@ -6428,9 +6930,7 @@ var BaseCharAtlas = (function () {
 }());
 exports.default = BaseCharAtlas;
 
-
-
-},{}],30:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CharAtlasUtils_1 = require("./CharAtlasUtils");
@@ -6493,9 +6993,7 @@ function removeTerminalFromCache(terminal) {
 }
 exports.removeTerminalFromCache = removeTerminalFromCache;
 
-
-
-},{"./CharAtlasUtils":31,"./DynamicCharAtlas":32,"./NoneCharAtlas":34,"./StaticCharAtlas":35}],31:[function(require,module,exports){
+},{"./CharAtlasUtils":34,"./DynamicCharAtlas":35,"./NoneCharAtlas":37,"./StaticCharAtlas":38}],34:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function generateConfig(scaledCharWidth, scaledCharHeight, terminal, colors) {
@@ -6541,9 +7039,7 @@ function configEquals(a, b) {
 }
 exports.configEquals = configEquals;
 
-
-
-},{}],32:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -6696,9 +7192,7 @@ var DynamicCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = DynamicCharAtlas;
 
-
-
-},{"../../shared/atlas/CharAtlasGenerator":37,"../ColorManager":22,"./BaseCharAtlas":29,"./LRUMap":33,"./Types":36}],33:[function(require,module,exports){
+},{"../../shared/atlas/CharAtlasGenerator":42,"../ColorManager":25,"./BaseCharAtlas":32,"./LRUMap":36,"./Types":39}],36:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var LRUMap = (function () {
@@ -6801,9 +7295,7 @@ var LRUMap = (function () {
 }());
 exports.default = LRUMap;
 
-
-
-},{}],34:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -6829,9 +7321,7 @@ var NoneCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = NoneCharAtlas;
 
-
-
-},{"./BaseCharAtlas":29}],35:[function(require,module,exports){
+},{"./BaseCharAtlas":32}],38:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -6911,17 +7401,338 @@ var StaticCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = StaticCharAtlas;
 
-
-
-},{"../../shared/atlas/CharAtlasGenerator":37,"../../shared/atlas/Types":38,"./BaseCharAtlas":29,"./Types":36}],36:[function(require,module,exports){
+},{"../../shared/atlas/CharAtlasGenerator":42,"../../shared/atlas/Types":43,"./BaseCharAtlas":32,"./Types":39}],39:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.INVERTED_DEFAULT_COLOR = -1;
 exports.DIM_OPACITY = 0.5;
 
+},{}],40:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter_1 = require("../../EventEmitter");
+var ColorManager_1 = require("../ColorManager");
+var RenderDebouncer_1 = require("../../ui/RenderDebouncer");
+var DomRendererRowFactory_1 = require("./DomRendererRowFactory");
+var TERMINAL_CLASS_PREFIX = 'xterm-dom-renderer-owner-';
+var ROW_CONTAINER_CLASS = 'xterm-rows';
+var FG_CLASS_PREFIX = 'xterm-fg-';
+var BG_CLASS_PREFIX = 'xterm-bg-';
+var FOCUS_CLASS = 'xterm-focus';
+var SELECTION_CLASS = 'xterm-selection';
+var nextTerminalId = 1;
+var DomRenderer = (function (_super) {
+    __extends(DomRenderer, _super);
+    function DomRenderer(_terminal, theme) {
+        var _this = _super.call(this) || this;
+        _this._terminal = _terminal;
+        _this._terminalClass = nextTerminalId++;
+        _this._rowElements = [];
+        var allowTransparency = _this._terminal.options.allowTransparency;
+        _this.colorManager = new ColorManager_1.ColorManager(document, allowTransparency);
+        _this.setTheme(theme);
+        _this._rowContainer = document.createElement('div');
+        _this._rowContainer.classList.add(ROW_CONTAINER_CLASS);
+        _this._rowContainer.style.lineHeight = 'normal';
+        _this._rowContainer.setAttribute('aria-hidden', 'true');
+        _this._refreshRowElements(_this._terminal.rows, _this._terminal.cols);
+        _this._selectionContainer = document.createElement('div');
+        _this._selectionContainer.classList.add(SELECTION_CLASS);
+        _this._selectionContainer.setAttribute('aria-hidden', 'true');
+        _this.dimensions = {
+            scaledCharWidth: null,
+            scaledCharHeight: null,
+            scaledCellWidth: null,
+            scaledCellHeight: null,
+            scaledCharLeft: null,
+            scaledCharTop: null,
+            scaledCanvasWidth: null,
+            scaledCanvasHeight: null,
+            canvasWidth: null,
+            canvasHeight: null,
+            actualCellWidth: null,
+            actualCellHeight: null
+        };
+        _this._updateDimensions();
+        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._terminal, _this._renderRows.bind(_this));
+        _this._rowFactory = new DomRendererRowFactory_1.DomRendererRowFactory(document);
+        _this._terminal.element.classList.add(TERMINAL_CLASS_PREFIX + _this._terminalClass);
+        _this._terminal.screenElement.appendChild(_this._rowContainer);
+        _this._terminal.screenElement.appendChild(_this._selectionContainer);
+        return _this;
+    }
+    DomRenderer.prototype._updateDimensions = function () {
+        var _this = this;
+        this.dimensions.scaledCharWidth = this._terminal.charMeasure.width * window.devicePixelRatio;
+        this.dimensions.scaledCharHeight = this._terminal.charMeasure.height * window.devicePixelRatio;
+        this.dimensions.scaledCellWidth = this.dimensions.scaledCharWidth;
+        this.dimensions.scaledCellHeight = this.dimensions.scaledCharHeight;
+        this.dimensions.scaledCharLeft = 0;
+        this.dimensions.scaledCharTop = 0;
+        this.dimensions.scaledCanvasWidth = this.dimensions.scaledCellWidth * this._terminal.cols;
+        this.dimensions.scaledCanvasHeight = this.dimensions.scaledCellHeight * this._terminal.rows;
+        this.dimensions.canvasWidth = this._terminal.charMeasure.width * this._terminal.cols;
+        this.dimensions.canvasHeight = this._terminal.charMeasure.height * this._terminal.rows;
+        this.dimensions.actualCellWidth = this._terminal.charMeasure.width;
+        this.dimensions.actualCellHeight = this._terminal.charMeasure.height;
+        this._rowElements.forEach(function (element) {
+            element.style.width = _this.dimensions.canvasWidth + "px";
+            element.style.height = _this._terminal.charMeasure.height + "px";
+        });
+        if (!this._dimensionsStyleElement) {
+            this._dimensionsStyleElement = document.createElement('style');
+            this._terminal.screenElement.appendChild(this._dimensionsStyleElement);
+        }
+        var styles = this._terminalSelector + " ." + ROW_CONTAINER_CLASS + " span {" +
+            " display: inline-block;" +
+            " height: 100%;" +
+            " vertical-align: top;" +
+            (" width: " + this._terminal.charMeasure.width + "px") +
+            "}";
+        this._dimensionsStyleElement.innerHTML = styles;
+        this._selectionContainer.style.height = this._terminal._viewportElement.style.height;
+        this._rowContainer.style.width = this.dimensions.canvasWidth + "px";
+        this._rowContainer.style.height = this.dimensions.canvasHeight + "px";
+    };
+    DomRenderer.prototype.setTheme = function (theme) {
+        var _this = this;
+        if (theme) {
+            this.colorManager.setTheme(theme);
+        }
+        if (!this._themeStyleElement) {
+            this._themeStyleElement = document.createElement('style');
+            this._terminal.screenElement.appendChild(this._themeStyleElement);
+        }
+        var styles = this._terminalSelector + " ." + ROW_CONTAINER_CLASS + " {" +
+            (" color: " + this.colorManager.colors.foreground.css + ";") +
+            (" background-color: " + this.colorManager.colors.background.css + ";") +
+            (" font-family: " + this._terminal.getOption('fontFamily') + ";") +
+            (" font-size: " + this._terminal.getOption('fontSize') + "px;") +
+            "}";
+        styles +=
+            this._terminalSelector + " span:not(." + DomRendererRowFactory_1.BOLD_CLASS + ") {" +
+                (" font-weight: " + this._terminal.options.fontWeight + ";") +
+                "}" +
+                (this._terminalSelector + " span." + DomRendererRowFactory_1.BOLD_CLASS + " {") +
+                (" font-weight: " + this._terminal.options.fontWeightBold + ";") +
+                "}" +
+                (this._terminalSelector + " span." + DomRendererRowFactory_1.ITALIC_CLASS + " {") +
+                " font-style: italic;" +
+                "}";
+        styles +=
+            this._terminalSelector + " ." + ROW_CONTAINER_CLASS + "." + FOCUS_CLASS + " ." + DomRendererRowFactory_1.CURSOR_CLASS + " {" +
+                (" background-color: " + this.colorManager.colors.cursor.css + ";") +
+                (" color: " + this.colorManager.colors.cursorAccent.css + ";") +
+                "}" +
+                (this._terminalSelector + " ." + ROW_CONTAINER_CLASS + ":not(." + FOCUS_CLASS + ") ." + DomRendererRowFactory_1.CURSOR_CLASS + " {") +
+                " outline: 1px solid #fff;" +
+                " outline-offset: -1px;" +
+                "}";
+        styles +=
+            this._terminalSelector + " ." + SELECTION_CLASS + " {" +
+                " position: absolute;" +
+                " top: 0;" +
+                " left: 0;" +
+                " z-index: 1;" +
+                " pointer-events: none;" +
+                "}" +
+                (this._terminalSelector + " ." + SELECTION_CLASS + " div {") +
+                " position: absolute;" +
+                (" background-color: " + this.colorManager.colors.selection.css + ";") +
+                "}";
+        this.colorManager.colors.ansi.forEach(function (c, i) {
+            styles +=
+                _this._terminalSelector + " ." + FG_CLASS_PREFIX + i + " { color: " + c.css + "; }" +
+                    (_this._terminalSelector + " ." + BG_CLASS_PREFIX + i + " { background-color: " + c.css + "; }");
+        });
+        this._themeStyleElement.innerHTML = styles;
+        return this.colorManager.colors;
+    };
+    DomRenderer.prototype.onWindowResize = function (devicePixelRatio) {
+        this._updateDimensions();
+    };
+    DomRenderer.prototype._refreshRowElements = function (cols, rows) {
+        for (var i = this._rowElements.length; i <= rows; i++) {
+            var row = document.createElement('div');
+            this._rowContainer.appendChild(row);
+            this._rowElements.push(row);
+        }
+        while (this._rowElements.length > rows) {
+            this._rowContainer.removeChild(this._rowElements.pop());
+        }
+    };
+    DomRenderer.prototype.onResize = function (cols, rows) {
+        this._refreshRowElements(cols, rows);
+        this._updateDimensions();
+    };
+    DomRenderer.prototype.onCharSizeChanged = function () {
+        this._updateDimensions();
+    };
+    DomRenderer.prototype.onBlur = function () {
+        this._rowContainer.classList.remove(FOCUS_CLASS);
+    };
+    DomRenderer.prototype.onFocus = function () {
+        this._rowContainer.classList.add(FOCUS_CLASS);
+    };
+    DomRenderer.prototype.onSelectionChanged = function (start, end, columnSelectMode) {
+        while (this._selectionContainer.children.length) {
+            this._selectionContainer.removeChild(this._selectionContainer.children[0]);
+        }
+        if (!start || !end) {
+            return;
+        }
+        var viewportStartRow = start[1] - this._terminal.buffer.ydisp;
+        var viewportEndRow = end[1] - this._terminal.buffer.ydisp;
+        var viewportCappedStartRow = Math.max(viewportStartRow, 0);
+        var viewportCappedEndRow = Math.min(viewportEndRow, this._terminal.rows - 1);
+        if (viewportCappedStartRow >= this._terminal.rows || viewportCappedEndRow < 0) {
+            return;
+        }
+        var documentFragment = document.createDocumentFragment();
+        var startCol = viewportStartRow === viewportCappedStartRow ? start[0] : 0;
+        if (columnSelectMode) {
+            documentFragment.appendChild(this._createSelectionElement(viewportCappedStartRow, startCol, end[0], viewportCappedEndRow - viewportStartRow + 1));
+        }
+        else {
+            var endCol = viewportCappedStartRow === viewportCappedEndRow ? end[0] : this._terminal.cols;
+            documentFragment.appendChild(this._createSelectionElement(viewportCappedStartRow, startCol, endCol));
+            var middleRowsCount = viewportCappedEndRow - viewportCappedStartRow - 1;
+            documentFragment.appendChild(this._createSelectionElement(viewportCappedStartRow + 1, 0, this._terminal.cols, middleRowsCount));
+            if (viewportCappedStartRow !== viewportCappedEndRow) {
+                var endCol_1 = viewportEndRow === viewportCappedEndRow ? end[0] : this._terminal.cols;
+                documentFragment.appendChild(this._createSelectionElement(viewportCappedEndRow, 0, endCol_1));
+            }
+        }
+        this._selectionContainer.appendChild(documentFragment);
+    };
+    DomRenderer.prototype._createSelectionElement = function (row, colStart, colEnd, rowCount) {
+        if (rowCount === void 0) { rowCount = 1; }
+        var element = document.createElement('div');
+        element.style.height = rowCount * this._terminal.charMeasure.height + "px";
+        element.style.top = row * this._terminal.charMeasure.height + "px";
+        element.style.left = colStart * this._terminal.charMeasure.width + "px";
+        element.style.width = this._terminal.charMeasure.width * (colEnd - colStart) + "px";
+        return element;
+    };
+    DomRenderer.prototype.onCursorMove = function () {
+    };
+    DomRenderer.prototype.onOptionsChanged = function () {
+        this._updateDimensions();
+        this.setTheme(undefined);
+        this._terminal.refresh(0, this._terminal.rows - 1);
+    };
+    DomRenderer.prototype.clear = function () {
+        this._rowElements.forEach(function (e) { return e.innerHTML = ''; });
+    };
+    DomRenderer.prototype.refreshRows = function (start, end) {
+        this._renderDebouncer.refresh(start, end);
+    };
+    DomRenderer.prototype._renderRows = function (start, end) {
+        var terminal = this._terminal;
+        var cursorAbsoluteY = terminal.buffer.ybase + terminal.buffer.y;
+        var cursorX = this._terminal.buffer.x;
+        for (var y = start; y <= end; y++) {
+            var rowElement = this._rowElements[y];
+            rowElement.innerHTML = '';
+            var row = y + terminal.buffer.ydisp;
+            var lineData = terminal.buffer.lines.get(row);
+            rowElement.appendChild(this._rowFactory.createRow(lineData, row === cursorAbsoluteY, cursorX, terminal.charMeasure.width, terminal.cols));
+        }
+        this._terminal.emit('refresh', { start: start, end: end });
+    };
+    Object.defineProperty(DomRenderer.prototype, "_terminalSelector", {
+        get: function () {
+            return "." + TERMINAL_CLASS_PREFIX + this._terminalClass;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    return DomRenderer;
+}(EventEmitter_1.EventEmitter));
+exports.DomRenderer = DomRenderer;
 
+},{"../../EventEmitter":7,"../../ui/RenderDebouncer":48,"../ColorManager":25,"./DomRendererRowFactory":41}],41:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var Buffer_1 = require("../../Buffer");
+exports.BOLD_CLASS = 'xterm-bold';
+exports.ITALIC_CLASS = 'xterm-italic';
+exports.CURSOR_CLASS = 'xterm-cursor';
+var DomRendererRowFactory = (function () {
+    function DomRendererRowFactory(_document) {
+        this._document = _document;
+    }
+    DomRendererRowFactory.prototype.createRow = function (lineData, isCursorRow, cursorX, cellWidth, cols) {
+        var fragment = this._document.createDocumentFragment();
+        var colCount = 0;
+        for (var x = 0; x < lineData.length; x++) {
+            if (colCount >= cols) {
+                continue;
+            }
+            var charData = lineData[x];
+            var char = charData[Buffer_1.CHAR_DATA_CHAR_INDEX];
+            var attr = charData[Buffer_1.CHAR_DATA_ATTR_INDEX];
+            var width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
+            if (width === 0) {
+                continue;
+            }
+            var charElement = this._document.createElement('span');
+            if (width > 1) {
+                charElement.style.width = cellWidth * width + "px";
+            }
+            var flags = attr >> 18;
+            var bg = attr & 0x1ff;
+            var fg = (attr >> 9) & 0x1ff;
+            if (isCursorRow && x === cursorX) {
+                charElement.classList.add(exports.CURSOR_CLASS);
+            }
+            if (flags & 8) {
+                var temp = bg;
+                bg = fg;
+                fg = temp;
+                if (fg === 256) {
+                    fg = 0;
+                }
+                if (bg === 257) {
+                    bg = 15;
+                }
+            }
+            if (flags & 1) {
+                if (fg < 8) {
+                    fg += 8;
+                }
+                charElement.classList.add(exports.BOLD_CLASS);
+            }
+            if (flags & 64) {
+                charElement.classList.add(exports.ITALIC_CLASS);
+            }
+            charElement.textContent = char;
+            if (fg !== 257) {
+                charElement.classList.add("xterm-fg-" + fg);
+            }
+            if (bg !== 256) {
+                charElement.classList.add("xterm-bg-" + bg);
+            }
+            fragment.appendChild(charElement);
+            colCount += width;
+        }
+        return fragment;
+    };
+    return DomRendererRowFactory;
+}());
+exports.DomRendererRowFactory = DomRendererRowFactory;
 
-},{}],37:[function(require,module,exports){
+},{"../../Buffer":2}],42:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./Types");
@@ -6983,7 +7794,7 @@ function generateStaticCharAtlasTexture(context, canvasFactory, config) {
         }
     }
     ctx.restore();
-    if (!('createImageBitmap' in context) || Browser_1.isFirefox) {
+    if (!('createImageBitmap' in context) || Browser_1.isFirefox || Browser_1.isSafari) {
         if (canvas instanceof HTMLCanvasElement) {
             return canvas;
         }
@@ -7016,22 +7827,19 @@ function getFont(fontWeight, config) {
     return fontWeight + " " + config.fontSize * config.devicePixelRatio + "px " + config.fontFamily;
 }
 
-
-
-},{"../utils/Browser":39,"./Types":38}],38:[function(require,module,exports){
+},{"../utils/Browser":44,"./Types":43}],43:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHAR_ATLAS_CELL_SPACING = 1;
 
-
-
-},{}],39:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var isNode = (typeof navigator === 'undefined') ? true : false;
 var userAgent = (isNode) ? 'node' : navigator.userAgent;
 var platform = (isNode) ? 'node' : navigator.platform;
 exports.isFirefox = !!~userAgent.indexOf('Firefox');
+exports.isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
 exports.isMSIE = !!~userAgent.indexOf('MSIE') || !!~userAgent.indexOf('Trident');
 exports.isMac = contains(['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'], platform);
 exports.isIpad = platform === 'iPad';
@@ -7042,9 +7850,7 @@ function contains(arr, el) {
     return arr.indexOf(el) >= 0;
 }
 
-
-
-},{}],40:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7102,9 +7908,25 @@ var CharMeasure = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.CharMeasure = CharMeasure;
 
+},{"../EventEmitter":7}],46:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+function addDisposableDomListener(node, type, handler, useCapture) {
+    node.addEventListener(type, handler, useCapture);
+    return {
+        dispose: function () {
+            if (!handler) {
+                return;
+            }
+            node.removeEventListener(type, handler, useCapture);
+            node = null;
+            handler = null;
+        }
+    };
+}
+exports.addDisposableDomListener = addDisposableDomListener;
 
-
-},{"../EventEmitter":8}],41:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7117,150 +7939,264 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter_1 = require("../EventEmitter");
-var CircularList = (function (_super) {
-    __extends(CircularList, _super);
-    function CircularList(_maxLength) {
+var Lifecycle_1 = require("../common/Lifecycle");
+var Lifecycle_2 = require("./Lifecycle");
+var HOVER_DURATION = 500;
+var MouseZoneManager = (function (_super) {
+    __extends(MouseZoneManager, _super);
+    function MouseZoneManager(_terminal) {
         var _this = _super.call(this) || this;
-        _this._maxLength = _maxLength;
-        _this._array = new Array(_this._maxLength);
-        _this._startIndex = 0;
-        _this._length = 0;
+        _this._terminal = _terminal;
+        _this._zones = [];
+        _this._areZonesActive = false;
+        _this._tooltipTimeout = null;
+        _this._currentZone = null;
+        _this._lastHoverCoords = [null, null];
+        _this.register(Lifecycle_2.addDisposableDomListener(_this._terminal.element, 'mousedown', function (e) { return _this._onMouseDown(e); }));
+        _this._mouseMoveListener = function (e) { return _this._onMouseMove(e); };
+        _this._clickListener = function (e) { return _this._onClick(e); };
         return _this;
     }
-    Object.defineProperty(CircularList.prototype, "maxLength", {
-        get: function () {
-            return this._maxLength;
-        },
-        set: function (newMaxLength) {
-            if (this._maxLength === newMaxLength) {
-                return;
-            }
-            var newArray = new Array(newMaxLength);
-            for (var i = 0; i < Math.min(newMaxLength, this.length); i++) {
-                newArray[i] = this._array[this._getCyclicIndex(i)];
-            }
-            this._array = newArray;
-            this._maxLength = newMaxLength;
-            this._startIndex = 0;
-        },
-        enumerable: true,
-        configurable: true
-    });
-    Object.defineProperty(CircularList.prototype, "length", {
-        get: function () {
-            return this._length;
-        },
-        set: function (newLength) {
-            if (newLength > this._length) {
-                for (var i = this._length; i < newLength; i++) {
-                    this._array[i] = undefined;
-                }
-            }
-            this._length = newLength;
-        },
-        enumerable: true,
-        configurable: true
-    });
-    CircularList.prototype.get = function (index) {
-        return this._array[this._getCyclicIndex(index)];
+    MouseZoneManager.prototype.dispose = function () {
+        _super.prototype.dispose.call(this);
+        this._deactivate();
     };
-    CircularList.prototype.set = function (index, value) {
-        this._array[this._getCyclicIndex(index)] = value;
-    };
-    CircularList.prototype.push = function (value) {
-        this._array[this._getCyclicIndex(this._length)] = value;
-        if (this._length === this._maxLength) {
-            this._startIndex++;
-            if (this._startIndex === this._maxLength) {
-                this._startIndex = 0;
-            }
-            this.emit('trim', 1);
-        }
-        else {
-            this._length++;
+    MouseZoneManager.prototype.add = function (zone) {
+        this._zones.push(zone);
+        if (this._zones.length === 1) {
+            this._activate();
         }
     };
-    CircularList.prototype.pop = function () {
-        return this._array[this._getCyclicIndex(this._length-- - 1)];
-    };
-    CircularList.prototype.splice = function (start, deleteCount) {
-        var items = [];
-        for (var _i = 2; _i < arguments.length; _i++) {
-            items[_i - 2] = arguments[_i];
-        }
-        if (deleteCount) {
-            for (var i = start; i < this._length - deleteCount; i++) {
-                this._array[this._getCyclicIndex(i)] = this._array[this._getCyclicIndex(i + deleteCount)];
-            }
-            this._length -= deleteCount;
-        }
-        if (items && items.length) {
-            for (var i = this._length - 1; i >= start; i--) {
-                this._array[this._getCyclicIndex(i + items.length)] = this._array[this._getCyclicIndex(i)];
-            }
-            for (var i = 0; i < items.length; i++) {
-                this._array[this._getCyclicIndex(start + i)] = items[i];
-            }
-            if (this._length + items.length > this.maxLength) {
-                var countToTrim = (this._length + items.length) - this.maxLength;
-                this._startIndex += countToTrim;
-                this._length = this.maxLength;
-                this.emit('trim', countToTrim);
-            }
-            else {
-                this._length += items.length;
-            }
-        }
-    };
-    CircularList.prototype.trimStart = function (count) {
-        if (count > this._length) {
-            count = this._length;
-        }
-        this._startIndex += count;
-        this._length -= count;
-        this.emit('trim', count);
-    };
-    CircularList.prototype.shiftElements = function (start, count, offset) {
-        if (count <= 0) {
+    MouseZoneManager.prototype.clearAll = function (start, end) {
+        if (this._zones.length === 0) {
             return;
         }
-        if (start < 0 || start >= this._length) {
-            throw new Error('start argument out of range');
-        }
-        if (start + offset < 0) {
-            throw new Error('Cannot shift elements in list beyond index 0');
-        }
-        if (offset > 0) {
-            for (var i = count - 1; i >= 0; i--) {
-                this.set(start + i + offset, this.get(start + i));
+        if (!end) {
+            start = 0;
+            end = this._terminal.rows - 1;
             }
-            var expandListBy = (start + count + offset) - this._length;
-            if (expandListBy > 0) {
-                this._length += expandListBy;
-                while (this._length > this.maxLength) {
-                    this._length--;
-                    this._startIndex++;
-                    this.emit('trim', 1);
-                }
-            }
+        for (var i = 0; i < this._zones.length; i++) {
+            var zone = this._zones[i];
+            if ((zone.y1 > start && zone.y1 <= end + 1) ||
+                (zone.y2 > start && zone.y2 <= end + 1) ||
+                (zone.y1 < start && zone.y2 > end + 1)) {
+                if (this._currentZone && this._currentZone === zone) {
+                    this._currentZone.leaveCallback();
+                    this._currentZone = null;
         }
-        else {
-            for (var i = 0; i < count; i++) {
-                this.set(start + i + offset, this.get(start + i));
+                this._zones.splice(i--, 1);
             }
+            }
+        if (this._zones.length === 0) {
+            this._deactivate();
+            }
+    };
+    MouseZoneManager.prototype._activate = function () {
+        if (!this._areZonesActive) {
+            this._areZonesActive = true;
+            this._terminal.element.addEventListener('mousemove', this._mouseMoveListener);
+            this._terminal.element.addEventListener('click', this._clickListener);
+            }
+    };
+    MouseZoneManager.prototype._deactivate = function () {
+        if (this._areZonesActive) {
+            this._areZonesActive = false;
+            this._terminal.element.removeEventListener('mousemove', this._mouseMoveListener);
+            this._terminal.element.removeEventListener('click', this._clickListener);
         }
     };
-    CircularList.prototype._getCyclicIndex = function (index) {
-        return (this._startIndex + index) % this.maxLength;
+    MouseZoneManager.prototype._onMouseMove = function (e) {
+        if (this._lastHoverCoords[0] !== e.pageX || this._lastHoverCoords[1] !== e.pageY) {
+            this._onHover(e);
+            this._lastHoverCoords = [e.pageX, e.pageY];
+        }
     };
-    return CircularList;
-}(EventEmitter_1.EventEmitter));
-exports.CircularList = CircularList;
+    MouseZoneManager.prototype._onHover = function (e) {
+        var _this = this;
+        var zone = this._findZoneEventAt(e);
+        if (zone === this._currentZone) {
+            return;
+        }
+        if (this._currentZone) {
+            this._currentZone.leaveCallback();
+            this._currentZone = null;
+            if (this._tooltipTimeout) {
+                clearTimeout(this._tooltipTimeout);
+            }
+        }
+        if (!zone) {
+            return;
+            }
+        this._currentZone = zone;
+        if (zone.hoverCallback) {
+            zone.hoverCallback(e);
+        }
+        this._tooltipTimeout = setTimeout(function () { return _this._onTooltip(e); }, HOVER_DURATION);
+    };
+    MouseZoneManager.prototype._onTooltip = function (e) {
+        this._tooltipTimeout = null;
+        var zone = this._findZoneEventAt(e);
+        if (zone && zone.tooltipCallback) {
+            zone.tooltipCallback(e);
+        }
+    };
+    MouseZoneManager.prototype._onMouseDown = function (e) {
+        if (!this._areZonesActive) {
+            return;
+    }
+        var zone = this._findZoneEventAt(e);
+        if (zone) {
+            if (zone.willLinkActivate(e)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+    }
+    }
+};
+    MouseZoneManager.prototype._onClick = function (e) {
+        var zone = this._findZoneEventAt(e);
+        if (zone) {
+            zone.clickCallback(e);
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    };
+    MouseZoneManager.prototype._findZoneEventAt = function (e) {
+        var coords = this._terminal.mouseHelper.getCoords(e, this._terminal.screenElement, this._terminal.charMeasure, this._terminal.options.lineHeight, this._terminal.cols, this._terminal.rows);
+        if (!coords) {
+            return null;
+}
+        var x = coords[0];
+        var y = coords[1];
+        for (var i = 0; i < this._zones.length; i++) {
+            var zone = this._zones[i];
+            if (zone.y1 === zone.y2) {
+                if (y === zone.y1 && x >= zone.x1 && x < zone.x2) {
+                    return zone;
+    }
+        }
+            else {
+                if ((y === zone.y1 && x >= zone.x1) ||
+                    (y === zone.y2 && x < zone.x2) ||
+                    (y > zone.y1 && y < zone.y2)) {
+                    return zone;
+        }
+        }
+        }
+            return null;
+    };
+    return MouseZoneManager;
+}(Lifecycle_1.Disposable));
+exports.MouseZoneManager = MouseZoneManager;
+var MouseZone = (function () {
+    function MouseZone(x1, y1, x2, y2, clickCallback, hoverCallback, tooltipCallback, leaveCallback, willLinkActivate) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.clickCallback = clickCallback;
+        this.hoverCallback = hoverCallback;
+        this.tooltipCallback = tooltipCallback;
+        this.leaveCallback = leaveCallback;
+        this.willLinkActivate = willLinkActivate;
+        }
+    return MouseZone;
+}());
+exports.MouseZone = MouseZone;
 
+},{"../common/Lifecycle":17,"./Lifecycle":46}],48:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var RenderDebouncer = (function () {
+    function RenderDebouncer(_terminal, _callback) {
+        this._terminal = _terminal;
+        this._callback = _callback;
+        this._animationFrame = null;
+    }
+    RenderDebouncer.prototype.dispose = function () {
+        if (this._animationFrame) {
+            window.cancelAnimationFrame(this._animationFrame);
+            this._animationFrame = null;
+        }
+    };
+    RenderDebouncer.prototype.refresh = function (rowStart, rowEnd) {
+        var _this = this;
+        rowStart = rowStart || 0;
+        rowEnd = rowEnd || this._terminal.rows - 1;
+        this._rowStart = this._rowStart !== undefined ? Math.min(this._rowStart, rowStart) : rowStart;
+        this._rowEnd = this._rowEnd !== undefined ? Math.max(this._rowEnd, rowEnd) : rowEnd;
+        if (this._animationFrame) {
+            return;
+        }
+        this._animationFrame = window.requestAnimationFrame(function () { return _this._innerRefresh(); });
+    };
+    RenderDebouncer.prototype._innerRefresh = function () {
+        this._rowStart = Math.max(this._rowStart, 0);
+        this._rowEnd = Math.min(this._rowEnd, this._terminal.rows - 1);
+        this._callback(this._rowStart, this._rowEnd);
+        this._rowStart = null;
+        this._rowEnd = null;
+        this._animationFrame = null;
+    };
+    return RenderDebouncer;
+}());
+exports.RenderDebouncer = RenderDebouncer;
 
+},{}],49:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var Lifecycle_1 = require("../common/Lifecycle");
+var ScreenDprMonitor = (function (_super) {
+    __extends(ScreenDprMonitor, _super);
+    function ScreenDprMonitor() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    ScreenDprMonitor.prototype.setListener = function (listener) {
+        var _this = this;
+        if (this._listener) {
+            this.clearListener();
+        }
+        this._listener = listener;
+        this._outerListener = function () {
+            _this._listener(window.devicePixelRatio, _this._currentDevicePixelRatio);
+            _this._updateDpr();
+        };
+        this._updateDpr();
+    };
+    ScreenDprMonitor.prototype.dispose = function () {
+        _super.prototype.dispose.call(this);
+        this.clearListener();
+    };
+    ScreenDprMonitor.prototype._updateDpr = function () {
+        if (this._resolutionMediaMatchList) {
+            this._resolutionMediaMatchList.removeListener(this._outerListener);
+        }
+        this._currentDevicePixelRatio = window.devicePixelRatio;
+        this._resolutionMediaMatchList = window.matchMedia("screen and (resolution: " + window.devicePixelRatio + "dppx)");
+        this._resolutionMediaMatchList.addListener(this._outerListener);
+    };
+    ScreenDprMonitor.prototype.clearListener = function () {
+        if (!this._listener) {
+            return;
+        }
+        this._resolutionMediaMatchList.removeListener(this._outerListener);
+        this._listener = null;
+        this._outerListener = null;
+    };
+    return ScreenDprMonitor;
+}(Lifecycle_1.Disposable));
+exports.ScreenDprMonitor = ScreenDprMonitor;
 
-},{"../EventEmitter":8}],42:[function(require,module,exports){
+},{"../common/Lifecycle":17}],50:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clone = function (val, depth) {
@@ -7278,29 +8214,7 @@ exports.clone = function (val, depth) {
     return clonedObject;
 };
 
-
-
-},{}],43:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-function addDisposableListener(node, type, handler, useCapture) {
-    node.addEventListener(type, handler, useCapture);
-    return {
-        dispose: function () {
-            if (!handler) {
-                return;
-            }
-            node.removeEventListener(type, handler, useCapture);
-            node = null;
-            handler = null;
-        }
-    };
-}
-exports.addDisposableListener = addDisposableListener;
-
-
-
-},{}],44:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var MouseHelper = (function () {
@@ -7353,96 +8267,12 @@ var MouseHelper = (function () {
 }());
 exports.MouseHelper = MouseHelper;
 
-
-
-},{}],45:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var RenderDebouncer = (function () {
-    function RenderDebouncer(_terminal, _callback) {
-        this._terminal = _terminal;
-        this._callback = _callback;
-        this._animationFrame = null;
-    }
-    RenderDebouncer.prototype.dispose = function () {
-        if (this._animationFrame) {
-            window.cancelAnimationFrame(this._animationFrame);
-            this._animationFrame = null;
-        }
-    };
-    RenderDebouncer.prototype.refresh = function (rowStart, rowEnd) {
-        var _this = this;
-        rowStart = rowStart || 0;
-        rowEnd = rowEnd || this._terminal.rows - 1;
-        this._rowStart = this._rowStart !== undefined ? Math.min(this._rowStart, rowStart) : rowStart;
-        this._rowEnd = this._rowEnd !== undefined ? Math.max(this._rowEnd, rowEnd) : rowEnd;
-        if (this._animationFrame) {
-            return;
-        }
-        this._animationFrame = window.requestAnimationFrame(function () { return _this._innerRefresh(); });
-    };
-    RenderDebouncer.prototype._innerRefresh = function () {
-        this._rowStart = Math.max(this._rowStart, 0);
-        this._rowEnd = Math.min(this._rowEnd, this._terminal.rows - 1);
-        this._callback(this._rowStart, this._rowEnd);
-        this._rowStart = null;
-        this._rowEnd = null;
-        this._animationFrame = null;
-    };
-    return RenderDebouncer;
-}());
-exports.RenderDebouncer = RenderDebouncer;
-
-
-
-},{}],46:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var ScreenDprMonitor = (function () {
-    function ScreenDprMonitor() {
-    }
-    ScreenDprMonitor.prototype.setListener = function (listener) {
-        var _this = this;
-        if (this._listener) {
-            this.clearListener();
-        }
-        this._listener = listener;
-        this._outerListener = function () {
-            _this._listener(window.devicePixelRatio, _this._currentDevicePixelRatio);
-            _this._updateDpr();
-        };
-        this._updateDpr();
-    };
-    ScreenDprMonitor.prototype._updateDpr = function () {
-        if (this._resolutionMediaMatchList) {
-            this._resolutionMediaMatchList.removeListener(this._outerListener);
-        }
-        this._currentDevicePixelRatio = window.devicePixelRatio;
-        this._resolutionMediaMatchList = window.matchMedia("screen and (resolution: " + window.devicePixelRatio + "dppx)");
-        this._resolutionMediaMatchList.addListener(this._outerListener);
-    };
-    ScreenDprMonitor.prototype.clearListener = function () {
-        if (!this._listener) {
-            return;
-        }
-        this._resolutionMediaMatchList.removeListener(this._outerListener);
-        this._listener = null;
-        this._outerListener = null;
-    };
-    return ScreenDprMonitor;
-}());
-exports.ScreenDprMonitor = ScreenDprMonitor;
-
-
-
-},{}],47:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var Terminal_1 = require("./Terminal");
+var Terminal_1 = require("./public/Terminal");
 module.exports = Terminal_1.Terminal;
 
-
-
-},{"./Terminal":16}]},{},[47])(47)
+},{"./public/Terminal":23}]},{},[52])(52)
 });
 //# sourceMappingURL=xterm.js.map
