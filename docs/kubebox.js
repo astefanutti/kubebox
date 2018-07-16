@@ -2268,6 +2268,12 @@ Carousel.prototype.start = function () {
       if (key.name == 'home') self.home();
       if (key.name == 'end') self.end();
     });
+    this.screen.on('key S-left', function (ch, key) {
+      self.prev();
+    });
+    this.screen.on('key S-right', function (ch, key) {
+        self.next();
+    });
   }
 };
 
@@ -3181,17 +3187,20 @@ class Exec extends Duplex {
       border     : 'line',
       debug      : debug,
     });
+
     terminal.on('click', terminal.focus.bind(terminal));
-    terminal.on('keypress', (_, key) => {
-      switch(key.full) {
-        // FIXME: we should not capture the ESC key has this can be used, e.g. vi
-        case 'escape':
-        self.blur();
-        break;
-        default:
-        return;
-      }
+
+    terminal.on('key S-left', function (ch, key) {
+      self.blur();
+      // Let's re-emit the event
+      screen.emit('key S-left', ch, key);
     });
+    terminal.on('key S-right', function (ch, key) {
+      self.blur();
+      // Let's re-emit the event
+      screen.emit('key S-right', ch, key);
+    });
+
     term = terminal.term;
     term.on('resize', self.sendResize.bind(self));
 

@@ -157,8 +157,8 @@ You can find more information in {uri-service-account}[Configure Service Account
 |kbd:[l], kbd:[CTRL+l]
 |Login
 
-|kbd:[←], kbd:[→]
-|Navigate screens
+|(kbd:[SHIFT]) kbd:[←], kbd:[→]
+|Navigate screens (use kbd:[SHIFT] inside exec terminal)
 
 |kbd:[↑], kbd:[↓]
 |Navigate list / form / log
