@@ -3190,6 +3190,12 @@ class Exec extends Duplex {
 
     terminal.on('click', terminal.focus.bind(terminal));
 
+    terminal.on('keypress', (ch, key) => {
+      if (key.meta && /^[0-9]$/.test(key.name)) {
+        self.blur();
+        screen.emit('keypress', ch, key);
+      }
+    });
     terminal.on('key S-left', function (ch, key) {
       self.blur();
       // Let's re-emit the event
@@ -3747,7 +3753,6 @@ class NavBar {
       height : 1,
       mouse  : true,
       keys   : true,
-      autoCommandKeys : true,
       style : {
         bg     : 'white',
         prefix : {
@@ -3766,6 +3771,16 @@ class NavBar {
           fg : 'white',
           bg : 'grey',
         }
+      },
+      autoCommandKeys : false,
+    });
+    // Overwrite default autoCommandKeys behavior to be able to select tab by index
+    // even while the meta key is pressed, for example within a remote exec terminal
+    tabs.onScreenEvent('keypress', function (_, key) {
+      if (/^[0-9]$/.test(key.name)) {
+        let i = +key.name - 1;
+        if (!~i) i = 9;
+        tabs.selectTab(i);
       }
     });
 

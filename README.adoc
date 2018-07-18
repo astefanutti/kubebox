@@ -154,11 +154,13 @@ You can find more information in {uri-service-account}[Configure Service Account
 
 2+^.e|General
 
-|kbd:[l], kbd:[CTRL+l]
+|kbd:[l], kbd:[Ctrl+l]
 |Login
 
-|(kbd:[SHIFT]) kbd:[←], kbd:[→]
-|Navigate screens (use kbd:[SHIFT] inside exec terminal)
+|[kbd:[⇧]\+]kbd:[←], kbd:[→] +
+[kbd:[Alt]+]kbd:[1], ..., kbd:[9]
+|Navigate screens +
+(use kbd:[⇧] or kbd:[Alt] inside exec terminal)
 
 |kbd:[↑], kbd:[↓]
 |Navigate list / form / log
@@ -166,10 +168,10 @@ You can find more information in {uri-service-account}[Configure Service Account
 |kbd:[Enter]
 |Select item / submit form
 
-|kbd:[ESC]
+|kbd:[Esc]
 |Close modal window / cancel form / rewind focus
 
-|kbd:[q], kbd:[CTRL+c]
+|kbd:[q], kbd:[Ctrl+c]
 |Exit footnoteref:[online keys, Not available in Web versions.]
 
 2+^.e|Login
@@ -196,10 +198,10 @@ You can find more information in {uri-service-account}[Configure Service Account
 
 2+^.e|Log
 
-|kbd:[g], kbd:[SHIFT+g]
+|kbd:[g], kbd:[⇧+g]
 |Move to top / bottom
 
-|kbd:[CTRL+u], kbd:[CTRL+d]
+|kbd:[Ctrl+u], kbd:[Ctrl+d]
 |Move one page up / down
 
 |===
