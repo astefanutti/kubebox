@@ -786,24 +786,12 @@ class XTerm extends blessed.Box {
         this.scrolling = false;
 
         /*  perform internal bootstrapping  */
-        this.on('keypress', function fn(ch, key) {
-            /*  only in case we are focused  */
-            if (this.screen.focused !== this)
-                return
-
-            if (key.name === 'c' && key.ctrl) {
-                let text = this.getSelectedText();
-                this.fallbackCopyTextToClipboard(text);
-                this.skipInputDataOnce = true;
-            }
-        });
         var self = this;
         this.refreshIntervalId = setInterval(function () {
             self.blinking = !self.blinking;
             self.screen.render();
         }, 500);
         this.on('mouse', function (data) {
-
             /*  only in case we are focused  */
             if (this.screen.focused !== this)
                 return
@@ -3138,7 +3126,7 @@ class Exec extends Duplex {
 
   constructor({ screen, status, namespace, pod, container, debug }) {
     super();
-    let terminal, term, self = this;
+    let ignoreLocked, terminal, term, self = this;
 
     this._read = function (_) {
       self.resume();
@@ -3161,6 +3149,7 @@ class Exec extends Duplex {
 
     this.kill = function () {
       screen.grabKeys = false;
+      screen.ignoreLocked = ignoreLocked;
       terminal.kill();
     };
 
@@ -3192,8 +3181,17 @@ class Exec extends Duplex {
 
     terminal.on('keypress', (ch, key) => {
       if (key.meta && /^[0-9]$/.test(key.name)) {
+        // Navigate to pages by id
         self.blur();
+        // Let's re-emit the event
         screen.emit('keypress', ch, key);
+      } else if (key.name === 'c' && key.ctrl) {
+        // Copy to clipboard
+        const text = terminal.getSelectedText();
+        if (text.length) {
+          terminal.fallbackCopyTextToClipboard(text);
+          terminal.skipInputDataOnce = true;
+        }
       }
     });
     terminal.on('key S-left', function (ch, key) {
@@ -3216,6 +3214,7 @@ class Exec extends Duplex {
 
     this.blur = function () {
       screen.grabKeys = false;
+      screen.ignoreLocked = ignoreLocked;
       terminal.skipInputDataOnce = true;
       terminal.enableInput(false);
     };
@@ -3223,6 +3222,8 @@ class Exec extends Duplex {
     this.focus = function () {
       terminal.focus();
       screen.grabKeys = true;
+      ignoreLocked = screen.ignoreLocked;
+      screen.ignoreLocked = [];
       terminal.enableInput(true);
     };
 
