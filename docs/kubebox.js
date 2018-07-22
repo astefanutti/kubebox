@@ -3142,8 +3142,11 @@ class Exec extends Duplex {
     });
 
     terminal.on('click', terminal.focus.bind(terminal));
-
-    terminal.on('keypress', (ch, key) => {
+    terminal.on('blur', function () {
+      // Make sure key grabbing is released
+      self.blur();
+    });
+    terminal.on('keypress', function (ch, key) {
       if (key.meta && /^[0-9]$/.test(key.name)) {
         // Navigate to pages by id
         self.blur();
