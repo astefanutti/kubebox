@@ -3777,9 +3777,10 @@ class NavBar {
     });
     // Overwrite default autoCommandKeys behavior to be able to select tab by index
     // even while the meta key is pressed, for example within a remote exec terminal
-    tabs.onScreenEvent('keypress', function (_, key) {
-      if (/^[0-9]$/.test(key.name)) {
-        let i = +key.name - 1;
+    tabs.onScreenEvent('keypress', function (ch, key) {
+      const k = key.name || ch;
+      if (/^[0-9]$/.test(k)) {
+        let i = +k - 1;
         if (!~i) i = 9;
         tabs.selectTab(i);
       }
