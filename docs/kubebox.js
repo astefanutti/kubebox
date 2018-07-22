@@ -753,7 +753,6 @@ class XTerm extends blessed.Box {
         setOption(this.options, "cwd", process.cwd())
         setOption(this.options, "cursorType", "block")
         setOption(this.options, "scrollback", 1000)
-        setOption(this.options, "ignoreKeys", [])
         setOption(this.options, "mousePassthrough", false)
 
         /*  ensure style is available  */
@@ -924,16 +923,6 @@ class XTerm extends blessed.Box {
 
         /*  capture cooked keyboard input from Blessed (locally)  */
         this.on("keypress", this._onWidgetEventKeypress = (ch, key) => {
-            /*  only in case we are focused  */
-            if (this.screen.focused !== this)
-                return
-
-            /*  handle ignored keys  */
-            if (this.options.ignoreKeys.indexOf(key.full) >= 0) {
-                this.skipInputDataOnce = true
-                return
-            }
-
             /*  handle scrolling keys  */
             if (!this.scrolling
                 && this.options.controKey !== "none"
@@ -950,13 +939,6 @@ class XTerm extends blessed.Box {
                 else if (key.full === "pageup") this.scroll(-(this.height - 2))
                 else if (key.full === "pagedown") this.scroll(+(this.height - 2))
             }
-        })
-
-        /*  capture cooked keyboard input from Blessed (globally)  */
-        this.onScreenEvent("keypress", this._onScreenEventKeypress = (ch, key) => {
-            /*  handle ignored keys  */
-            if (this.options.ignoreKeys.indexOf(key.full) >= 0)
-                this.skipInputDataOnce = true
         })
 
         /*  pass mouse input from Blessed to XTerm  */
@@ -1032,8 +1014,6 @@ class XTerm extends blessed.Box {
                 this.screen.program.input.removeListener("data", this._onScreenEventInputData)
             if (this._onWidgetEventKeypress)
                 this.off("keypress", this._onWidgetEventKeypress)
-            if (this._onScreenEventKeypress)
-                this.removeScreenEvent("keypress", this._onScreenEventKeypress)
             if (this._onScreenEventMouse)
                 this.removeScreenEvent("mouse", this._onScreenEventMouse)
             this.kill()
@@ -3126,17 +3106,18 @@ class Exec extends Duplex {
 
   constructor({ screen, status, namespace, pod, container, debug }) {
     super();
-    let ignoreLocked, terminal, term, self = this;
+    const self = this;
+    let ignoreLocked;
 
     this._read = function (_) {
       self.resume();
     };
 
-    let handler = function (data) {
+    const handler = function (data) {
       const buffer = Buffer.allocUnsafe(data.length + 1);
       // send to STDIN
       buffer.writeUInt8(0, 0);
-      if(typeof data === 'string') {
+      if (typeof data === 'string') {
         // browser
         buffer.write(data, 1, 'binary');
       } else {
@@ -3147,24 +3128,7 @@ class Exec extends Duplex {
       }
     };
 
-    this.kill = function () {
-      screen.grabKeys = false;
-      screen.ignoreLocked = ignoreLocked;
-      terminal.kill();
-    };
-
-    this.sendResize = function () {
-      const adjust = `{"Width":${term.cols},"Height":${term.rows}}`;
-      const length = Buffer.byteLength(adjust);
-      const buffer = Buffer.allocUnsafe(length + 1);
-      buffer.writeUInt8(4, 0);
-      buffer.write(adjust, 1, 'binary');
-      if (!self.push(buffer)) {
-        self.pause();
-      }
-    };
-
-    terminal = new XTerm({
+    const terminal = new XTerm({
       parent     : screen,
       handler    : handler,
       screenKeys : true,
@@ -3205,8 +3169,19 @@ class Exec extends Duplex {
       screen.emit('key S-right', ch, key);
     });
 
-    term = terminal.term;
-    term.on('resize', self.sendResize.bind(self));
+    const term = terminal.term;
+
+    const sendResize = function () {
+      const adjust = `{"Width":${term.cols},"Height":${term.rows}}`;
+      const length = Buffer.byteLength(adjust);
+      const buffer = Buffer.allocUnsafe(length + 1);
+      buffer.writeUInt8(4, 0);
+      buffer.write(adjust, 1, 'binary');
+      if (!self.push(buffer)) {
+        self.pause();
+      }
+    };
+    term.on('resize', sendResize);
 
     this.termName = function () {
       return term.getOption('termName');
@@ -3228,13 +3203,12 @@ class Exec extends Duplex {
     };
 
     this.render = function () {
-      screen.grabKeys = true;
       screen.append(terminal);
       screen.append(status);
       self.focus();
       terminal.once('render', function () {
         terminal.term.resize(terminal.width - terminal.iwidth, terminal.height - terminal.iheight);
-        self.sendResize();
+        sendResize();
       });
     };
 
@@ -3260,6 +3234,12 @@ class Exec extends Duplex {
         console.log(e);
       }
       this.emit('exit');
+    };
+
+    this.kill = function () {
+      screen.grabKeys = false;
+      screen.ignoreLocked = ignoreLocked;
+      terminal.kill();
     };
   }
 }
