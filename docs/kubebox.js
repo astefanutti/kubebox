@@ -2683,12 +2683,12 @@ class Dashboard {
       // FIXME: select which container in pod
       const container = pod.spec.containers[0].name;
       
-      const id = namespace + name + container;
+      const id = `${namespace}-${name}-${container}`;
       const byId = page => page.id === id;
       // check if connection already exists
       if (navbar.select(byId)) return;
 
-      const exec = new Exec({ screen, status, namespace, pod: name, container, debug });
+      const exec = new Exec({ screen, status, debug });
       const { promise, cancellation } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: () => exec.print(), readable: exec });
 
       exec.on('exit', () => {
@@ -2697,8 +2697,10 @@ class Dashboard {
         navbar.remove(byId);
       });
 
-      promise
+      until(promise)
+        .spin(s => exec.setLabel(`${s} ${namespace}/${name}/${container}`))
         .then(() => debug.log(`{grey-fg}Remote shell into '${namespace}/${name}/${container}'{/grey-fg}`))
+        .then(() => exec.setLabel(`${namespace}/${name}/${container}`))
         .then(() => {
           navbar.add({
             id     : id,
@@ -3104,7 +3106,7 @@ const { Duplex } = require('stream'),
 
 class Exec extends Duplex {
 
-  constructor({ screen, status, namespace, pod, container, debug }) {
+  constructor({ screen, status, debug }) {
     super();
     const self = this;
     let ignoreLocked;
@@ -3132,7 +3134,6 @@ class Exec extends Duplex {
       parent     : screen,
       handler    : handler,
       screenKeys : true,
-      label      : `${namespace}/${pod}/${container}`,
       left       : 0,
       top        : 1,
       width      : '100%',
@@ -3189,6 +3190,10 @@ class Exec extends Duplex {
     this.termName = function () {
       return term.getOption('termName');
     };
+
+    this.setLabel = function (label) {
+      terminal.setLabel(label);
+    }
 
     this.blur = function () {
       screen.grabKeys = false;
