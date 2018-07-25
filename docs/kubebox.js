@@ -786,10 +786,6 @@ class XTerm extends blessed.Box {
 
         /*  perform internal bootstrapping  */
         var self = this;
-        this.refreshIntervalId = setInterval(function () {
-            self.blinking = !self.blinking;
-            self.screen.render();
-        }, 500);
         this.on('mouse', function (data) {
             /*  only in case we are focused  */
             if (this.screen.focused !== this)
@@ -821,6 +817,13 @@ class XTerm extends blessed.Box {
         });
         this._bootstrap();
         this.handler = options.handler;
+    }
+
+    start() {
+        this.refreshIntervalId = setInterval(() => {
+            this.blinking = !this.blinking;
+            this.screen.render();
+        }, 500);
     }
 
     fallbackCopyTextToClipboard(text) {
@@ -2689,19 +2692,20 @@ class Dashboard {
       const exec = new Exec({ screen, status, debug });
       const { promise, cancellation } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: () => exec.print(), readable: exec });
 
+      navbar.add({
+        id     : id,
+        name   : container,
+        render : screen => exec.render(),
+      }, { select: true });
+
       exec.on('exit', () => navbar.remove(byId));
 
       until(promise)
         .spin(s => exec.setLabel(`${s} ${namespace}/${name}/${container}`))
         .then(() => debug.log(`{grey-fg}Remote shell into '${namespace}/${name}/${container}'{/grey-fg}`))
         .then(() => exec.setLabel(`${namespace}/${name}/${container}`))
-        .then(() => {
-          navbar.add({
-            id     : id,
-            name   : container,
-            render : screen => exec.render(),
-          }, { select: true });
-        })
+        .then(() => exec.start())
+        // TODO: display error details in terminal
         .catch(error => console.error(error.stack));
     });
 
@@ -3215,6 +3219,10 @@ class Exec extends Duplex {
       screen.ignoreLocked = [];
       terminal.enableInput(true);
     };
+
+    this.start = function () {
+      terminal.start();
+    }
 
     this.render = function () {
       screen.append(terminal);
