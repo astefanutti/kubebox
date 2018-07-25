@@ -1007,17 +1007,7 @@ class XTerm extends blessed.Box {
             this.term.resize(width, height)
         })
 
-        /*  on Blessed widget destruction, tear down everything  */
-        this.on("destroy", () => {
-            clearInterval(this.refreshIntervalId);
-            if (this._onScreenEventInput)
-                this.screen.program.input.removeListener("data", this._onScreenEventInputData)
-            if (this._onWidgetEventKeypress)
-                this.off("keypress", this._onWidgetEventKeypress)
-            if (this._onScreenEventMouse)
-                this.removeScreenEvent("mouse", this._onScreenEventMouse)
-            this.kill()
-        })
+        this.on("destroy", () => this.dispose());
     }
 
     /*  process input data  */
@@ -1249,12 +1239,20 @@ class XTerm extends blessed.Box {
             this._scrollingEnd()
     }
 
-    kill() {
-        this.term.dispose()
+    dispose() {
+        clearInterval(this.refreshIntervalId);
+        if (this._onScreenEventInput)
+            this.screen.program.input.removeListener('data', this._onScreenEventInputData);
+        if (this._onWidgetEventKeypress)
+            this.off('keypress', this._onWidgetEventKeypress);
+        if (this._onScreenEventMouse)
+            this.removeScreenEvent('mouse', this._onScreenEventMouse);
+
+        this.term.dispose();
     }
 }
 
-module.exports = XTerm
+module.exports = XTerm;
 
 }).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"../../../node_modules/browserify/node_modules/is-buffer/index.js":184,"_process":213,"blessed":"blessed","os":189,"xterm":undefined}],10:[function(require,module,exports){
@@ -2691,11 +2689,7 @@ class Dashboard {
       const exec = new Exec({ screen, status, debug });
       const { promise, cancellation } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: () => exec.print(), readable: exec });
 
-      exec.on('exit', () => {
-        cancellation();
-        exec.kill();
-        navbar.remove(byId);
-      });
+      exec.on('exit', () => navbar.remove(byId));
 
       until(promise)
         .spin(s => exec.setLabel(`${s} ${namespace}/${name}/${container}`))
@@ -3173,10 +3167,8 @@ class Exec extends Duplex {
       screen.emit('key S-right', ch, key);
     });
 
-    const term = terminal.term;
-
     const sendResize = function () {
-      const adjust = `{"Width":${term.cols},"Height":${term.rows}}`;
+      const adjust = `{"Width":${terminal.term.cols},"Height":${terminal.term.rows}}`;
       const length = Buffer.byteLength(adjust);
       const buffer = Buffer.allocUnsafe(length + 1);
       buffer.writeUInt8(4, 0);
@@ -3185,10 +3177,24 @@ class Exec extends Duplex {
         self.pause();
       }
     };
-    term.on('resize', sendResize);
+    terminal.term.on('resize', sendResize);
+
+    // Keep terminal connection alive
+    const alive = setInterval(function () {
+      const buffer = Buffer.allocUnsafe(1);
+      buffer.writeUInt8(0, 0);
+      if (!self.push(buffer)) {
+        self.pause();
+      }
+    }, 30 * 1000);
+
+    const dispose = function () {
+      // Work around Xterm.js async write
+      setTimeout(() => terminal.dispose(), 0);
+    };
 
     this.termName = function () {
-      return term.getOption('termName');
+      return terminal.term.getOption('termName');
     };
 
     this.setLabel = function (label) {
@@ -3221,7 +3227,7 @@ class Exec extends Duplex {
     };
 
     this.print = function* () {
-      let message;
+      let message, error, last;
       while (message = yield) {
         const channel = message[0].toString();
         message = message.slice(1).toString();
@@ -3229,31 +3235,35 @@ class Exec extends Duplex {
           case '1':
             // An initial ping frame with 0-length data is being sent
             if (message.length === 0) continue;
-            term.write(message);
+            terminal.write(message);
+            last = message;
+            screen.render();
+            break;
+          case '2':
+          case '3':
+            terminal.write(`\x1b[31m${message}\x1b[m\r\n`);
+            error = message;
             screen.render();
             break;
           default:
-            term.write('error: ' + message);
+            throw Error('Unsupported message!');
         }
       }
       // Connection closes
-      this.emit('exit');
-    };
-
-    // Keep terminal connection alive
-    const alive = setInterval(function () {
-      const buffer = Buffer.allocUnsafe(1);
-      buffer.writeUInt8(0, 0);
-      if (!self.push(buffer)) {
-        self.pause();
-      }
-    }, 30 * 1000);
-
-    this.kill = function () {
       clearInterval(alive);
-      screen.grabKeys = false;
-      screen.ignoreLocked = ignoreLocked;
-      terminal.kill();
+      if (error && last !== '\r\nexit\r\n') {
+        terminal.write('\x1b[31mDisconnected\x1b[m\r\n');
+        terminal.write('Type Ctrl-C to close\r\n');
+        terminal.once('key C-c', function () {
+          dispose();
+          self.emit('exit');
+        });
+      } else {
+        terminal.write('Disconnected\r\n');
+        dispose();
+        this.emit('exit');
+      }
+      screen.render();
     };
   }
 }
