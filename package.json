@@ -11,9 +11,9 @@
   },
   "scripts": {
     "start": "node index.js",
-    "browserify": "browserify -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -u pty.js -u xterm -u term.js -o docs/kubebox.js",
-    "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
-    "bundle": "browserify index.js -o bundle.js -u pty.js -u term.js --bare",
+    "browserify": "browserify -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js -o docs/kubebox.js",
+    "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
+    "bundle": "browserify index.js -o bundle.js -u pty.js -u term.js -u spawn-sync --node",
     "executable": "nexe package.json",
     "server": "node ./docs/server.js"
   },
@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "blessed": "~0.1.81",
+    "clipboardy": "~1.2.3",
     "xterm": "~3.5.1",
     "drawille-canvas-blessed-contrib": "^0.1.3",
     "js-yaml": "~3.7.0",
@@ -52,7 +53,8 @@
       "requires": [],
       "excludes": [
         "pty.js",
-        "term.js"
+        "term.js",
+        "spawn-sync"
       ],
       "paths": []
     },

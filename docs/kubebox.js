@@ -3099,7 +3099,9 @@ module.exports = screen => {
 (function (Buffer){
 'use strict';
 
-const { Duplex } = require('stream'),
+const clipboardy = require('clipboardy'),
+      { Duplex } = require('stream'),
+      os         = require('os'),
       XTerm      = require('./blessed-xterm/blessed-xterm');
 
 class Exec extends Duplex {
@@ -3140,33 +3142,50 @@ class Exec extends Duplex {
       debug      : debug,
     });
 
-    terminal.on('click', terminal.focus.bind(terminal));
-    terminal.on('blur', function () {
-      // Make sure key grabbing is released
-      self.blur();
-    });
+    const blur = function () {
+      screen.grabKeys = false;
+      screen.ignoreLocked = ignoreLocked;
+      terminal.skipInputDataOnce = true;
+      terminal.enableInput(false);
+    };
+
+    const focus = function () {
+      screen.grabKeys = true;
+      ignoreLocked = screen.ignoreLocked;
+      screen.ignoreLocked = [];
+      terminal.enableInput(true);
+    };
+
+    // Make sure keys are grabbed / released
+    terminal.on('blur', blur);
+    terminal.on('focus', focus);
+
     terminal.on('keypress', function (ch, key) {
       if (key.meta && /^[0-9]$/.test(key.name)) {
         // Navigate to pages by id
-        self.blur();
+        blur();
         // Let's re-emit the event
         screen.emit('keypress', ch, key);
       } else if (key.name === 'c' && key.ctrl) {
         // Copy to clipboard
         const text = terminal.getSelectedText();
         if (text.length) {
+          if (os.platform() === 'browser') {
           terminal.fallbackCopyTextToClipboard(text);
+          } else {
+            clipboardy.writeSync(text);
+          }
           terminal.skipInputDataOnce = true;
         }
       }
     });
     terminal.on('key S-left', function (ch, key) {
-      self.blur();
+      blur();
       // Let's re-emit the event
       screen.emit('key S-left', ch, key);
     });
     terminal.on('key S-right', function (ch, key) {
-      self.blur();
+      blur();
       // Let's re-emit the event
       screen.emit('key S-right', ch, key);
     });
@@ -3205,21 +3224,6 @@ class Exec extends Duplex {
       terminal.setLabel(label);
     }
 
-    this.blur = function () {
-      screen.grabKeys = false;
-      screen.ignoreLocked = ignoreLocked;
-      terminal.skipInputDataOnce = true;
-      terminal.enableInput(false);
-    };
-
-    this.focus = function () {
-      terminal.focus();
-      screen.grabKeys = true;
-      ignoreLocked = screen.ignoreLocked;
-      screen.ignoreLocked = [];
-      terminal.enableInput(true);
-    };
-
     this.start = function () {
       terminal.start();
     }
@@ -3227,7 +3231,7 @@ class Exec extends Duplex {
     this.render = function () {
       screen.append(terminal);
       screen.append(status);
-      self.focus();
+      terminal.focus();
       terminal.once('render', function () {
         terminal.term.resize(terminal.width - terminal.iwidth, terminal.height - terminal.iheight);
         sendResize();
@@ -3278,7 +3282,7 @@ class Exec extends Duplex {
 
 module.exports = Exec;
 }).call(this,require("buffer").Buffer)
-},{"./blessed-xterm/blessed-xterm":9,"buffer":127,"stream":248}],25:[function(require,module,exports){
+},{"./blessed-xterm/blessed-xterm":9,"buffer":127,"clipboardy":77,"os":189,"stream":248}],25:[function(require,module,exports){
 (function (process){
 'use strict';
 
