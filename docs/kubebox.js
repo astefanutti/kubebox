@@ -3145,15 +3145,14 @@ class Exec extends Duplex {
     const blur = function () {
       screen.grabKeys = false;
       screen.ignoreLocked = ignoreLocked;
-      terminal.skipInputDataOnce = true;
-      terminal.enableInput(false);
     };
 
     const focus = function () {
       screen.grabKeys = true;
       ignoreLocked = screen.ignoreLocked;
       screen.ignoreLocked = [];
-      terminal.enableInput(true);
+      // Skip keypress data emitted while navigating to the terminal
+      terminal.skipInputDataOnce = true;
     };
 
     // Make sure keys are grabbed / released
@@ -3239,6 +3238,8 @@ class Exec extends Duplex {
     };
 
     this.print = function* () {
+      // Connection opens
+      terminal.enableInput(true);
       let message, error, last;
       while (message = yield) {
         const channel = message[0].toString();
