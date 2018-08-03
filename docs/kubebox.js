@@ -3134,14 +3134,14 @@ class Exec extends Duplex {
       screen.grabKeys = true;
       ignoreLocked = screen.ignoreLocked;
       screen.ignoreLocked = [];
-      // Skip keypress data emitted while navigating to the terminal
-      terminal.skipInputDataOnce = true;
       if (os.platform() === 'browser') {
         document.addEventListener('copy', browserCopyToClipboard);
       }
     };
 
     const blur = function () {
+      // Skip keypress data emitted while navigating away from the terminal
+      terminal.skipInputDataOnce = true;
       screen.grabKeys = false;
       screen.ignoreLocked = ignoreLocked;
       if (os.platform() === 'browser') {
