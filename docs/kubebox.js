@@ -785,7 +785,6 @@ class XTerm extends blessed.Box {
         this.scrolling = false;
 
         /*  perform internal bootstrapping  */
-        var self = this;
         this.on('mouse', function (data) {
             /*  only in case we are focused  */
             if (this.screen.focused !== this)
@@ -824,23 +823,6 @@ class XTerm extends blessed.Box {
             this.blinking = !this.blinking;
             this.screen.render();
         }, 500);
-    }
-
-    fallbackCopyTextToClipboard(text) {
-        var textArea = document.createElement("textarea");
-        textArea.value = text;
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            var successful = document.execCommand('copy');
-            if (!successful) {
-                this.options.debug.log('Unable to copy, copying text command was ' + msg);
-            }
-        } catch (err) {
-            this.options.debug.log('Unable to copy', err);
-        }
-        document.body.removeChild(textArea);
     }
 
     /*  identify us to Blessed  */
@@ -3138,12 +3120,14 @@ class Exec extends Duplex {
       width      : '100%',
       bottom     : 1,
       border     : 'line',
-      debug      : debug,
     });
 
-    const blur = function () {
-      screen.grabKeys = false;
-      screen.ignoreLocked = ignoreLocked;
+    const browserCopyToClipboard = function (event) {
+      const text = terminal.getSelectedText();
+        if (text.length) {
+          event.clipboardData.setData('text/plain', text);
+          event.preventDefault();
+        }
     };
 
     const focus = function () {
@@ -3152,6 +3136,17 @@ class Exec extends Duplex {
       screen.ignoreLocked = [];
       // Skip keypress data emitted while navigating to the terminal
       terminal.skipInputDataOnce = true;
+      if (os.platform() === 'browser') {
+        document.addEventListener('copy', browserCopyToClipboard);
+      }
+    };
+
+    const blur = function () {
+      screen.grabKeys = false;
+      screen.ignoreLocked = ignoreLocked;
+      if (os.platform() === 'browser') {
+        document.removeEventListener('copy', browserCopyToClipboard);
+      }
     };
 
     // Make sure keys are grabbed / released
@@ -3169,7 +3164,7 @@ class Exec extends Duplex {
         const text = terminal.getSelectedText();
         if (text.length) {
           if (os.platform() === 'browser') {
-          terminal.fallbackCopyTextToClipboard(text);
+            document.execCommand('copy');
           } else {
             clipboardy.writeSync(text);
           }
