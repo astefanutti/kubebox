@@ -77596,7 +77596,11 @@ function getWebSocketStream(options, { generator, readable, async = true }) {
     }
     const socket = new WebSocket(url.toString(), options.headers['Sec-WebSocket-Protocol']);
     socket.binaryType = 'arraybuffer';
-    if (readable) readable.on('data', data => socket.send(data));
+    if (readable) readable.on('data', data => {
+      if (socket.readyState === 1) {
+        socket.send(data);
+      }
+    });
 
     let clientAbort, abortState;
     cancellation = () => {
