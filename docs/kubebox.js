@@ -3106,7 +3106,7 @@ const clipboardy = require('clipboardy'),
 class Exec extends Duplex {
 
   constructor({ screen, status, debug }) {
-    super();
+    super({ allowHalfOpen: false });
     const self = this;
     let ignoreLocked;
 
