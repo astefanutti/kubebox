@@ -2704,7 +2704,6 @@ class Dashboard {
         .spin(s => exec.setLabel(`${s} ${namespace}/${name}/${container}`))
         .then(() => debug.log(`{grey-fg}Remote shell into '${namespace}/${name}/${container}'{/grey-fg}`))
         .then(() => exec.setLabel(`${namespace}/${name}/${container}`))
-        .then(() => exec.start())
         // TODO: display error details in terminal
         .catch(error => console.error(error.stack));
     });
@@ -3189,6 +3188,20 @@ class Exec extends Duplex {
       screen.emit('key S-right', ch, key);
     });
 
+    this.termName = function () {
+      return terminal.term.getOption('termName');
+    };
+
+    this.setLabel = function (label) {
+      terminal.setLabel(label);
+    }
+
+    this.render = function () {
+      screen.append(terminal);
+      screen.append(status);
+      terminal.focus();
+    };
+
     const sendResize = function () {
       const adjust = `{"Width":${terminal.term.cols},"Height":${terminal.term.rows}}`;
       const length = Buffer.byteLength(adjust);
@@ -3199,47 +3212,34 @@ class Exec extends Duplex {
         self.pause();
       }
     };
-    terminal.term.on('resize', sendResize);
 
     // Keep terminal connection alive
-    const alive = setInterval(function () {
-      const buffer = Buffer.allocUnsafe(1);
-      buffer.writeUInt8(0, 0);
-      if (!self.push(buffer)) {
-        self.pause();
-      }
-    }, 30 * 1000);
+    const keepAlive = function () {
+      return setInterval(function () {
+        const buffer = Buffer.allocUnsafe(1);
+        buffer.writeUInt8(0, 0);
+        if (!self.push(buffer)) {
+          self.pause();
+        }
+      }, 30 * 1000);
+    }
 
     const dispose = function () {
       // Work around Xterm.js async write
       setTimeout(() => terminal.dispose(), 0);
     };
 
-    this.termName = function () {
-      return terminal.term.getOption('termName');
-    };
-
-    this.setLabel = function (label) {
-      terminal.setLabel(label);
-    }
-
-    this.start = function () {
-      terminal.start();
-    }
-
-    this.render = function () {
-      screen.append(terminal);
-      screen.append(status);
-      terminal.focus();
+    this.print = function* () {
+      // Connection opens
+      terminal.term.on('resize', sendResize);
       terminal.once('render', function () {
+        // In case the terminal was resized while the connection was opening
         terminal.term.resize(terminal.width - terminal.iwidth, terminal.height - terminal.iheight);
         sendResize();
       });
-    };
-
-    this.print = function* () {
-      // Connection opens
       terminal.enableInput(true);
+      terminal.start();
+      const alive = keepAlive();
       let message, error, last;
       while (message = yield) {
         const channel = message[0].toString();
