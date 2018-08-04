@@ -3159,15 +3159,18 @@ class Exec extends Duplex {
         blur();
         // Let's re-emit the event
         screen.emit('keypress', ch, key);
-      } else if (key.name === 'c' && key.ctrl) {
-        // Copy to clipboard
-        const text = terminal.getSelectedText();
-        if (text.length) {
-          if (os.platform() === 'browser') {
-            document.execCommand('copy');
-          } else {
+      } else if (os.platform() !== 'browser' && key.ctrl) {
+        // We rely on the clipboard event API in Web browsers
+        if (key.name === 'c') {
+          // Copy to clipboard
+          const text = terminal.getSelectedText();
+          if (text.length) {
             clipboardy.writeSync(text);
+            terminal.skipInputDataOnce = true;
           }
+        } else if (key.name === 'v') {
+          // Paste from clipboard
+          terminal.write(clipboardy.readSync());
           terminal.skipInputDataOnce = true;
         }
       }
