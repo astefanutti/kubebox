@@ -718,7 +718,6 @@ exports.Cancellations = Cancellations;
 **  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/*  external requirements  */
 const blessed = require('blessed');
 const os      = require('os');
 
@@ -729,17 +728,12 @@ if (os.platform() === 'browser') {
     var { Terminal } = require('xterm');
 }
 
-/*  the API class  */
-class XTerm extends blessed.Box {
-    /*  construct the API class  */
+class XTerm extends blessed.ScrollableBox {
+
     constructor(options = {}) {
-
-        /*  disable the special "scrollable" feature of Blessed's Element
-            which would use a ScrolledBox instead of a Box under the surface  */
-        options.scrollable = false
-
-        /*  pass-through options to underlying Blessed Box element  */
-        super(options)
+        super(options);
+        // required so that scrollbar positions correctly without childOffset
+        this.alwaysScroll = true;
 
         /*  helper function for setting options  */
         const setOption = (cfg, name, def) => {
@@ -760,45 +754,22 @@ class XTerm extends blessed.Box {
         setOption(this.options.style, "bg", "default")
         setOption(this.options.style, "fg", "default")
 
-        /*  determine border colors  */
-        if (this.options.style
-            && this.options.style.focus
-            && this.options.style.focus.border
-            && this.options.style.focus.border.fg)
-            this.borderFocus = this.options.style.focus.border.fg
-        else if (
-            this.options.style
-            && this.options.style.border
-            && this.options.style.border.fg)
-            this.borderFocus = this.options.style.border.fg
-        else
-            this.borderFocus = this.options.style.fg || "default"
-        if (this.options.style
-            && this.options.style.scrolling
-            && this.options.style.scrolling.border
-            && this.options.style.scrolling.border.fg)
-            this.borderScrolling = this.options.style.scrolling.border.fg
-        else
-            this.borderScrolling = "red"
-
-        /*  initialize scrolling mode  */
-        this.scrolling = false;
-
-        /*  perform internal bootstrapping  */
         this.on('mouse', function (data) {
-            /*  only in case we are focused  */
-            if (this.screen.focused !== this)
-                return
+            // scrollbar is being dragged
+            if (this._scrollingBar) return;
+
             let oldmouse = this.mousedown;
             if (data.action === 'mouseup') {
                 // hold selection
-                this.mousedown = false;;
+                this.mousedown = false;
             }
             else if (data.action === 'mousedown' && this.mousedown) {
                 this.x2 = data.x;
                 this.y2 = data.y;
             }
             else if (data.action === 'mousedown' && data.button === 'left') {
+                // scrollbar
+                if (data.x >= this.aleft - this.ileft + this.width - 1) return;
                 this.mousedown = true;
                 this.x1 = data.x;
                 this.y1 = data.y;
@@ -834,10 +805,11 @@ class XTerm extends blessed.Box {
     _bootstrap() {
         // This code executes in the jsdom global scope
         this.term = new Terminal({
-            cols: this.width - this.iwidth,
-            rows: this.height - this.iheight,
-            scrollback: this.options.scrollback !== "none" ?
-                this.options.scrollback : this.height - this.iheight,
+            cols       : this.width - this.iwidth - 1,
+            rows       : this.height - this.iheight,
+            scrollback : this.options.scrollback !== "none"
+                ? this.options.scrollback
+                : this.height - this.iheight,
         });
         this.term._core.cursorState = 1;
 
@@ -846,9 +818,11 @@ class XTerm extends blessed.Box {
             The alternative would be to listen on the XTerm "refresh" event,
             but this way XTerm would uselessly render the DOM elements.  */
         this.term._core.refresh = (start, end) => {
-            /*  enforce a new screen rendering,
-                which in turn will call our render() method, too  */
-            this.screen.render()
+            this.screen.render();
+            // repositions the label given scrolling
+            if (this._label) {
+                this._label.rtop = (this.childBase || 0) - this.itop;
+            }
         }
 
         this.term._core.viewport = {
@@ -893,8 +867,7 @@ class XTerm extends blessed.Box {
         this.skipInputDataOnce = false;
         this.skipInputDataAlways = false;
         this.screen.program.input.on("data", this._onScreenEventInputData = (data) => {
-            /*  only in case we are focused and not in scrolling mode  */
-            if (this.screen.focused !== this || this.scrolling)
+            if (this.screen.focused !== this)
                 return;
             if (this.skipInputDataAlways)
                 return;
@@ -904,26 +877,6 @@ class XTerm extends blessed.Box {
             }
             if (!_isMouse(data))
                 this.handler(data);
-        })
-
-        /*  capture cooked keyboard input from Blessed (locally)  */
-        this.on("keypress", this._onWidgetEventKeypress = (ch, key) => {
-            /*  handle scrolling keys  */
-            if (!this.scrolling
-                && this.options.controKey !== "none"
-                && key.full === this.options.controlKey)
-                this._scrollingStart()
-            else if (this.scrolling) {
-                if (key.full === this.options.controlKey
-                    || key.full.match(/^(?:escape|return|space)$/)) {
-                    this._scrollingEnd()
-                    this.skipInputDataOnce = true
-                }
-                else if (key.full === "up") this.scroll(-1)
-                else if (key.full === "down") this.scroll(+1)
-                else if (key.full === "pageup") this.scroll(-(this.height - 2))
-                else if (key.full === "pagedown") this.scroll(+(this.height - 2))
-            }
         })
 
         /*  pass mouse input from Blessed to XTerm  */
@@ -976,20 +929,18 @@ class XTerm extends blessed.Box {
         this.on("resize", () => {
             const nextTick = global.setImmediate || process.nextTick.bind(process)
             nextTick(() => {
-                /*  determine new width/height  */
-                let width = this.width - this.iwidth
-                let height = this.height - this.iheight
-
-                /*  pass-through to XTerm  */
+                // TODO: we may want to dynamically adjust the width depending on the scrollbar
+                const width = this.width - this.iwidth - 1;
+                const height = this.height - this.iheight;
                 this.term.resize(width, height);
             })
         })
 
         /*  perform an initial resizing once  */
         this.once("render", () => {
-            let width = this.width - this.iwidth
-            let height = this.height - this.iheight
-            this.term.resize(width, height)
+            const width = this.width - this.iwidth - 1;
+            const height = this.height - this.iheight;
+            this.term.resize(width, height);
         })
 
         this.on("destroy", () => this.dispose());
@@ -1069,7 +1020,7 @@ class XTerm extends blessed.Box {
 
         /*  determine position  */
         let xi = ret.xi + this.ileft
-        let xl = ret.xl - this.iright
+        let xl = ret.xl - this.iright - 1; // scrollbar
         let yi = ret.yi + this.itop
         let yl = ret.yl - this.ibottom
 
@@ -1103,8 +1054,7 @@ class XTerm extends blessed.Box {
             if (y === yi + this.term._core.buffer.y
                 && this.term._core.cursorState
                 && this.screen.focused === this
-                // FIXME : hasSelection -> select mode correct mapping?
-                && (this.term._core.buffer.ydisp === this.term._core.buffer.ybase || this.term._core.selectionManager.hasSelection)
+                && (this.term._core.buffer.ydisp === this.term._core.buffer.ybase)
                 && !this.term._core.cursorHidden)
                 cursor = xi + this.term._core.buffer.x
             else
@@ -1133,7 +1083,7 @@ class XTerm extends blessed.Box {
                     }
                 }
 
-                // inverse x0 if selected 
+                // inverse x0 if selected
                 let inverse = false;
                 if (y1 <= y && y2 >= y && !(y1 == y2 && X1 == x2)) {
                     if (y1 == y2) {
@@ -1174,62 +1124,42 @@ class XTerm extends blessed.Box {
         return ret
     }
 
-    /*  support scrolling similar to Blessed ScrolledBox  */
-    _scrollingStart() {
-        this.scrolling = true
-        this.style.focus.border.fg = this.borderScrolling
-        this.focus()
-        this.screen.render()
-        this.emit("scrolling-start")
+    // called prior to the element scrollbar rendering
+    _scrollBottom() {
+        if (!this.term) return super._scrollBottom();
+        // requires alwaysScroll = true for it to position the scrollbar correctly
+        this.childBase = this.term._core.buffer.ydisp;
+        return this.term._core.buffer.scrollBottom + this.term._core.buffer.ybase + 1;
     }
-    _scrollingEnd() {
-        this.term.scrollToBottom()
-        this.style.focus.border.fg = this.borderFocus
-        this.focus()
-        this.screen.render()
-        this.scrolling = false
-        this.emit("scrolling-end")
-    }
-    getScroll() {
-        return this.term._core.buffer.ydisp
-    }
-    getScrollHeight() {
-        return this.term.rows - 1
-    }
+
     getScrollPerc() {
-        return (this.term._core.buffer.ybase > 0 ? ((this.term._core.buffer.ydisp / this.term._core.buffer.ybase) * 100) : 100)
+        return this.term._core.buffer.ybase > 0
+            ? this.term._core.buffer.ydisp / this.term._core.buffer.ybase * 100
+            : 100;
     }
+
     setScrollPerc(i) {
-        return this.setScroll(Math.floor((i / 100) * this.term._core.buffer.ybase))
+        return this.scrollTo(Math.floor(i / 100 * this.term._core.buffer.ybase));
     }
+
     setScroll(offset) {
-        return this.scrollTo(offset)
+        return this.scrollTo(offset);
     }
+
     scrollTo(offset) {
-        if (!this.scrolling)
-            this._scrollingStart()
-        this.term.scrollLines(offset - this.term._core.buffer.ydisp)
-        this.screen.render()
-        this.emit("scroll")
+        this.term.scrollLines(offset - this.term._core.buffer.ydisp);
+        this.emit('scroll');
     }
+
     scroll(offset) {
-        if (!this.scrolling)
-            this._scrollingStart()
-        this.term.scrollLines(offset)
-        this.screen.render()
-        this.emit("scroll")
-    }
-    resetScroll() {
-        if (this.scrolling)
-            this._scrollingEnd()
+        this.term.scrollLines(offset);
+        this.emit('scroll');
     }
 
     dispose() {
         clearInterval(this.refreshIntervalId);
         if (this._onScreenEventInput)
             this.screen.program.input.removeListener('data', this._onScreenEventInputData);
-        if (this._onWidgetEventKeypress)
-            this.off('keypress', this._onWidgetEventKeypress);
         if (this._onScreenEventMouse)
             this.removeScreenEvent('mouse', this._onScreenEventMouse);
 
@@ -3120,6 +3050,14 @@ class Exec extends Duplex {
       width      : '100%',
       bottom     : 1,
       border     : 'line',
+      mouse      : 'true',
+      scrollbar  : {
+        ch    : ' ',
+        style : { bg: 'white' },
+        track : {
+          style : { bg: 'grey' },
+        }
+      },
     });
 
     const browserCopyToClipboard = function (event) {
@@ -3185,6 +3123,11 @@ class Exec extends Duplex {
       // Let's re-emit the event
       screen.emit('key S-right', ch, key);
     });
+    // ScrollableBox doesn't have an option to tune scrolling gain
+    terminal.removeAllListeners('wheeldown');
+    terminal.removeAllListeners('wheelup');
+    terminal.on('wheeldown', _ => terminal.scroll(1));
+    terminal.on('wheelup', _ => terminal.scroll(-1));
 
     this.termName = function () {
       return terminal.term.getOption('termName');
@@ -3232,7 +3175,7 @@ class Exec extends Duplex {
       terminal.term.on('resize', sendResize);
       terminal.once('render', function () {
         // In case the terminal was resized while the connection was opening
-        terminal.term.resize(terminal.width - terminal.iwidth, terminal.height - terminal.iheight);
+        terminal.term.resize(terminal.width - terminal.iwidth - 1, terminal.height - terminal.iheight);
         sendResize();
       });
       terminal.enableInput(true);
@@ -3248,13 +3191,11 @@ class Exec extends Duplex {
             if (message.length === 0) continue;
             terminal.write(message);
             last = message;
-            screen.render();
             break;
           case '2':
           case '3':
             terminal.write(`\x1b[31m${message}\x1b[m\r\n`);
             error = message;
-            screen.render();
             break;
           default:
             throw Error('Unsupported message!');
