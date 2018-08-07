@@ -2636,7 +2636,7 @@ class Dashboard {
       if (navbar.select(byId)) return;
 
       const exec = new Exec({ screen, status, debug });
-      const { promise, cancellation } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: () => exec.print(), readable: exec });
+      const { promise, cancellation } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: exec.output, readable: exec });
 
       navbar.add({
         id     : id,
@@ -3060,12 +3060,11 @@ class Exec extends Duplex {
       self.resume();
     };
 
-    const handler = function (data) {
+    const input = function (data) {
       const buffer = Buffer.allocUnsafe(data.length + 1);
       // Send to STDIN channel
       buffer.writeUInt8(0, 0);
       if (typeof data === 'string') {
-        // Web browser
         buffer.write(data, 1, 'binary');
       } else {
         data.copy(buffer, 1);
@@ -3077,7 +3076,7 @@ class Exec extends Duplex {
 
     const terminal = new XTerm({
       parent     : screen,
-      handler    : handler,
+      handler    : input,
       screenKeys : true,
       left       : 0,
       top        : 1,
@@ -3140,7 +3139,7 @@ class Exec extends Duplex {
           }
         } else if (key.name === 'v') {
           // Paste from clipboard
-          terminal.write(clipboardy.readSync());
+          input(clipboardy.readSync());
           terminal.skipInputDataOnce = true;
         }
       }
@@ -3202,7 +3201,7 @@ class Exec extends Duplex {
       setTimeout(() => terminal.dispose(), 0);
     };
 
-    this.print = function* () {
+    this.output = function* () {
       // Connection opens
       terminal.term.on('resize', sendResize);
       terminal.once('render', function () {
@@ -3245,7 +3244,7 @@ class Exec extends Duplex {
       } else {
         terminal.write('Disconnected\r\n');
         dispose();
-        this.emit('exit');
+        self.emit('exit');
       }
       screen.render();
     };
