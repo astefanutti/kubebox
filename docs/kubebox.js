@@ -970,23 +970,16 @@ class XTerm extends blessed.ScrollableBox {
 
     getSelectedText() {
         if (!this._selection) return;
-        // let's not render twice
-        /*  call the underlying Element's rendering function  */
-        let ret = this._render()
-        if (!ret)
-            return
 
-        let xi = ret.xi + this.ileft
-        let xl = ret.xl - this.iright
-        let yi = ret.yi + this.itop
-        let yl = ret.yl - this.ibottom
-        let result = [];
+        const xi = this.aleft + this.ileft;
+        const yi = this.atop + this.itop;
         let { x1, x2, y1, y2 } = this._selection || {};
         if (y1 > y2 || (y1 == y2 && x1 > x2)) {
             [x1, x2] = [x2, x1];
             [y1, y2] = [y2, y1];
         }
 
+        const result = [];
         const endRow = y1 == y2 ? x2 : null;
         // Get first row
         result.push(this.term._core.buffer.translateBufferLineToString(this.term._core.buffer.ydisp + y1 - yi, true, x1 - xi, endRow));
