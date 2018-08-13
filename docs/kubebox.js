@@ -950,12 +950,13 @@ class XTerm extends blessed.ScrollableBox {
 
         const NON_BREAKING_SPACE_CHAR = String.fromCharCode(160);
         const ALL_NON_BREAKING_SPACE_REGEX = new RegExp(NON_BREAKING_SPACE_CHAR, 'g');
+        const CRLF_OR_LF = os.platform() === 'browser' && window.navigator.platform === 'Win32' || os.platform() === 'win32' ? '\r\n' : '\n';
 
         // Format string by replacing non-breaking space chars with regular spaces
         // and joining the array into a multi-line string.
         const formattedResult = result.map(line => {
             return line.replace(ALL_NON_BREAKING_SPACE_REGEX, ' ');
-        }).join('\n');
+        }).join(CRLF_OR_LF);
         return formattedResult;
     }
 
