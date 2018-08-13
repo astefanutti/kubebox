@@ -748,7 +748,6 @@ class XTerm extends blessed.ScrollableBox {
         setOption(this.options, "cwd", process.cwd())
         setOption(this.options, "cursorType", "block")
         setOption(this.options, "scrollback", 1000)
-        setOption(this.options, "mousePassthrough", false)
 
         /*  ensure style is available  */
         setOption(this.options, "style", {})
@@ -794,7 +793,6 @@ class XTerm extends blessed.ScrollableBox {
             });
         });
         this._bootstrap();
-        this.handler = options.handler;
     }
 
     start() {
@@ -848,91 +846,6 @@ class XTerm extends blessed.ScrollableBox {
             this.emit("title", title)
         })
 
-        /*  helper function to determine mouse inputs  */
-        const _isMouse = (buf) => {
-            /*  mouse event determination:
-                borrowed from original Blessed Terminal widget
-                Copyright (c) 2013-2015 Christopher Jeffrey et al.  */
-            let s = buf
-            if (Buffer.isBuffer(s)) {
-                if (s[0] > 127 && s[1] === undefined) {
-                    s[0] -= 128
-                    s = "\x1b" + s.toString("utf-8")
-                }
-                else
-                    s = s.toString("utf-8")
-            }
-            return (buf[0] === 0x1b && buf[1] === 0x5b && buf[2] === 0x4d)
-                || /^\x1b\[M([\x00\u0020-\uffff]{3})/.test(s)
-                || /^\x1b\[(\d+;\d+;\d+)M/.test(s)
-                || /^\x1b\[<(\d+;\d+;\d+)([mM])/.test(s)
-                || /^\x1b\[<(\d+;\d+;\d+;\d+)&w/.test(s)
-                || /^\x1b\[24([0135])~\[(\d+),(\d+)\]\r/.test(s)
-                || /^\x1b\[(O|I)/.test(s)
-        }
-
-        /*  pass raw keyboard input from Blessed to XTerm  */
-        this.skipInputDataOnce = false;
-        this.skipInputDataAlways = false;
-        this.screen.program.input.on("data", this._onScreenEventInputData = (data) => {
-            if (this.screen.focused !== this)
-                return;
-            if (this.skipInputDataAlways)
-                return;
-            if (this.skipInputDataOnce) {
-                this.skipInputDataOnce = false;
-                return;
-            }
-            if (!_isMouse(data))
-                this.handler(data);
-        })
-
-        /*  pass mouse input from Blessed to XTerm  */
-        if (this.options.mousePassthrough) {
-            this.onScreenEvent("mouse", this._onScreenEventMouse = (ev) => {
-                /*  only in case we are focused  */
-                if (this.screen.focused !== this)
-                    return
-
-                /*  only in case we are touched  */
-                if ((ev.x < this.aleft + this.ileft)
-                    || (ev.y < this.atop + this.itop)
-                    || (ev.x > this.aleft - this.ileft + this.width)
-                    || (ev.y > this.atop - this.itop + this.height))
-                    return
-
-                /*  generate canonical mouse input sequence,
-                    borrowed from original Blessed Terminal widget
-                    Copyright (c) 2013-2015 Christopher Jeffrey et al.  */
-                let b = ev.raw[0]
-                let x = ev.x - this.aleft
-                let y = ev.y - this.atop
-                let s
-                if (this.term._core.urxvtMouse) {
-                    if (this.screen.program.sgrMouse)
-                        b += 32
-                    s = "\x1b[" + b + ";" + (x + 32) + ";" + (y + 32) + "M"
-                }
-                else if (this.term._core.sgrMouse) {
-                    if (!this.screen.program.sgrMouse)
-                        b -= 32
-                    s = "\x1b[<" + b + ";" + x + ";" + y +
-                        (ev.action === "mousedown" ? "M" : "m")
-                }
-                else {
-                    if (this.screen.program.sgrMouse)
-                        b += 32
-                    s = "\x1b[M" +
-                        String.fromCharCode(b) +
-                        String.fromCharCode(x + 32) +
-                        String.fromCharCode(y + 32)
-                }
-
-                /*  pass-through mouse event sequence  */
-                this.handler(s)
-            })
-        }
-
         /*  pass-through Blessed resize events to XTerm/Pty  */
         this.on("resize", () => {
             const nextTick = global.setImmediate || process.nextTick.bind(process)
@@ -954,9 +867,27 @@ class XTerm extends blessed.ScrollableBox {
         this.on("destroy", () => this.dispose());
     }
 
-    /*  process input data  */
-    enableInput(process) {
-        this.skipInputDataAlways = !process;
+    /*  helper function to determine mouse inputs  */
+    static isMouse(buf) {
+        /*  mouse event determination:
+            borrowed from original Blessed Terminal widget
+            Copyright (c) 2013-2015 Christopher Jeffrey et al.  */
+        let s = buf
+        if (Buffer.isBuffer(s)) {
+            if (s[0] > 127 && s[1] === undefined) {
+                s[0] -= 128
+                s = "\x1b" + s.toString("utf-8")
+            }
+            else
+                s = s.toString("utf-8")
+        }
+        return (buf[0] === 0x1b && buf[1] === 0x5b && buf[2] === 0x4d)
+            || /^\x1b\[M([\x00\u0020-\uffff]{3})/.test(s)
+            || /^\x1b\[(\d+;\d+;\d+)M/.test(s)
+            || /^\x1b\[<(\d+;\d+;\d+)([mM])/.test(s)
+            || /^\x1b\[<(\d+;\d+;\d+;\d+)&w/.test(s)
+            || /^\x1b\[24([0135])~\[(\d+),(\d+)\]\r/.test(s)
+            || /^\x1b\[(O|I)/.test(s)
     }
 
     /*  write data to the terminal  */
@@ -1162,11 +1093,6 @@ class XTerm extends blessed.ScrollableBox {
 
     dispose() {
         clearInterval(this.refreshIntervalId);
-        if (this._onScreenEventInput)
-            this.screen.program.input.removeListener('data', this._onScreenEventInputData);
-        if (this._onScreenEventMouse)
-            this.removeScreenEvent('mouse', this._onScreenEventMouse);
-
         this.term.dispose();
     }
 }
@@ -3054,7 +2980,7 @@ class Exec extends Duplex {
   constructor({ screen, status, debug }) {
     super({ allowHalfOpen: false });
     const self = this;
-    let ignoreLocked;
+    let ignoreLocked, skipInputDataOnce;
 
     this._read = function (_) {
       self.resume();
@@ -3076,7 +3002,6 @@ class Exec extends Duplex {
 
     const terminal = new XTerm({
       parent     : screen,
-      handler    : input,
       screenKeys : true,
       left       : 0,
       top        : 1,
@@ -3111,7 +3036,7 @@ class Exec extends Duplex {
 
     const blur = function () {
       // Skip keypress data emitted while navigating away from the terminal
-      terminal.skipInputDataOnce = true;
+      skipInputDataOnce = true;
       screen.grabKeys = false;
       screen.ignoreLocked = ignoreLocked;
       if (os.platform() === 'browser') {
@@ -3135,12 +3060,12 @@ class Exec extends Duplex {
           // Copy to clipboard
           if (terminal.hasSelection()) {
             clipboardy.writeSync(terminal.getSelectedText());
-            terminal.skipInputDataOnce = true;
+            skipInputDataOnce = true;
           }
         } else if (key.name === 'v') {
           // Paste from clipboard
           input(clipboardy.readSync());
-          terminal.skipInputDataOnce = true;
+          skipInputDataOnce = true;
         }
       }
     });
@@ -3196,11 +3121,6 @@ class Exec extends Duplex {
       }, 30 * 1000);
     }
 
-    const dispose = function () {
-      // Work around Xterm.js async write
-      setTimeout(() => terminal.dispose(), 0);
-    };
-
     this.output = function* () {
       // Connection opens
       terminal.term.on('resize', sendResize);
@@ -3209,7 +3129,28 @@ class Exec extends Duplex {
         terminal.term.resize(terminal.width - terminal.iwidth - 1, terminal.height - terminal.iheight);
         sendResize();
       });
-      terminal.enableInput(true);
+
+      const onScreenInput = function (data) {
+        if (screen.focused !== terminal) return;
+
+        if (skipInputDataOnce) {
+          skipInputDataOnce = false;
+          return;
+        }
+        if (!XTerm.isMouse(data)) {
+          input(data);
+        }
+      };
+      screen.program.input.on('data', onScreenInput);
+
+      const dispose = function () {
+        screen.program.input.removeListener('data', onScreenInput);
+        // work around Xterm.js async write
+        setTimeout(() => terminal.dispose(), 0);
+        // notifies parent element
+        self.emit('exit');
+      };
+
       terminal.start();
       const alive = keepAlive();
       let message, error, last;
@@ -3237,14 +3178,10 @@ class Exec extends Duplex {
       if (error && last !== '\r\nexit\r\n') {
         terminal.write('\x1b[31mDisconnected\x1b[m\r\n');
         terminal.write('Type Ctrl-C to close\r\n');
-        terminal.once('key C-c', function () {
-          dispose();
-          self.emit('exit');
-        });
+        terminal.once('key C-c', dispose);
       } else {
         terminal.write('Disconnected\r\n');
         dispose();
-        self.emit('exit');
       }
       screen.render();
     };

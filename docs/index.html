@@ -124,6 +124,10 @@
   Terminal.prototype.emit = function () {
     this._core.emit.apply(this._core, arguments);
   };
+  // removeListener -> off alias
+  Terminal.prototype.removeListener = function () {
+    this._core.off.apply(this._core, arguments);
+  };
   // Should ideally be inherited from require('events').EventEmitter
   Terminal.prototype.listenerCount = function (type) {
     return this._core.listeners(type).length;
