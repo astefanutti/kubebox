@@ -916,26 +916,36 @@ class XTerm extends blessed.ScrollableBox {
             [x1, x2] = [x2, x1];
             [y1, y2] = [y2, y1];
         }
-        // back to screen coordinates
-        const ydisp = this.term._core.buffer.ydisp;
-        y1 -= ydisp;
-        y2 -= ydisp;
+        // convert to buffer coordinates
+        x1 -= xi;
+        x2 -= xi;
+        y1 -= yi;
+        y2 -= yi;
 
         const result = [];
-        const endRow = y1 == y2 ? x2 : null;
         // Get first row
-        result.push(this.term._core.buffer.translateBufferLineToString(ydisp + y1 - yi, true, x1 - xi, endRow));
+        result.push(this.term._core.buffer.translateBufferLineToString(y1, true, x1, y1 == y2 ? x2 + 1 : null));
 
         // Get middle rows
         for (let i = y1 + 1; i <= y2 - 1; i++) {
-            const lineText = this.term._core.buffer.translateBufferLineToString(ydisp + i - yi, true);
-            result.push(lineText);
+            const bufferLine = this.term._core.buffer.lines.get(i);
+            const lineText = this.term._core.buffer.translateBufferLineToString(i, true);
+            if (bufferLine.isWrapped) {
+                result[result.length - 1] += lineText;
+            } else {
+                result.push(lineText);
+            }
         }
 
         // Get last row
         if (y1 != y2) {
-            const lineText = this.term._core.buffer.translateBufferLineToString(ydisp + y2 - yi, true, 0, x2);
-            result.push(lineText);
+            const bufferLine = this.term._core.buffer.lines.get(y2);
+            const lineText = this.term._core.buffer.translateBufferLineToString(y2, true, 0, x2 + 1);
+            if (bufferLine.isWrapped) {
+                result[result.length - 1] += lineText;
+            } else {
+                result.push(lineText);
+            }
         }
 
         const NON_BREAKING_SPACE_CHAR = String.fromCharCode(160);
