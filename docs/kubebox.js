@@ -899,6 +899,10 @@ class XTerm extends blessed.ScrollableBox {
         return !!this._selection;
     }
 
+    clearSelection() {
+        delete this._selection;
+    }
+
     getSelectedText() {
         if (!this._selection) return;
 
@@ -3065,6 +3069,7 @@ class Exec extends Duplex {
         } else if (key.name === 'v') {
           // Paste from clipboard
           input(clipboardy.readSync());
+          terminal.clearSelection();
           skipInputDataOnce = true;
         }
       }
@@ -3139,6 +3144,7 @@ class Exec extends Duplex {
         }
         if (!XTerm.isMouse(data)) {
           input(data);
+          terminal.clearSelection();
           // scrolls to bottom
           terminal.setScrollPerc(100);
         }
