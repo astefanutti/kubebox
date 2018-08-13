@@ -3139,6 +3139,8 @@ class Exec extends Duplex {
         }
         if (!XTerm.isMouse(data)) {
           input(data);
+          // scrolls to bottom
+          terminal.setScrollPerc(100);
         }
       };
       screen.program.input.on('data', onScreenInput);
