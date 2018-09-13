@@ -24341,7 +24341,7 @@ function Terminal(options) {
   }
 
   options = options || {};
-  options.scrollable = false;
+  options.scrollable = true;
 
   Box.call(this, options);
 
