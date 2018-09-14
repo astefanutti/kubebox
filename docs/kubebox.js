@@ -789,7 +789,11 @@ class XTerm extends blessed.ScrollableBox {
         y1: data.y + this.term._core.buffer.ydisp,
       }
       let smd, smu, click = hrtime();
-      this.onScreenEvent('mousedown', smd = data => {
+      this.onScreenEvent('mouse', smd = data => {
+        // VTE seems to be sending mousemove while XTERM mousedown, let's handle both
+        if (data.action !== "mousemove" && data.action !== "mousedown") {
+          return;
+        }
         Object.assign(this._selection, {
           x2: data.x,
           // in absolute coordinates
@@ -802,7 +806,7 @@ class XTerm extends blessed.ScrollableBox {
         const elapsed = hrtime(click);
         this.mousedown = false;
         this._scrollingBar = false;
-        this.removeScreenEvent('mousedown', smd);
+        this.removeScreenEvent('mouse', smd);
         this.removeScreenEvent('mouseup', smu);
         const { x1, y1, x2, y2 } = this._selection;
         if (x1 === x2 && y1 === y2 && elapsed[0] === 0 && elapsed[1] * 1e-6 < 100) {
@@ -2998,7 +3002,7 @@ class Exec extends Duplex {
       }
     };
 
-    const blur = function (old) {
+    const blur = function () {
       // Skip keypress data emitted while navigating away from the terminal
       skipInputDataOnce = true;
       screen.grabKeys = false;
@@ -24341,7 +24345,7 @@ function Terminal(options) {
   }
 
   options = options || {};
-  options.scrollable = true;
+  options.scrollable = false;
 
   Box.call(this, options);
 
