@@ -11,7 +11,7 @@ const screen = blessed.screen({
   ignoreLocked: ['C-c']
 });
 
-screen.key(['q', 'C-c'], (ch, key) => process.exit(0));
+screen.key(['q'], (ch, key) => process.exit(0));
 
 let server;
 

@@ -171,7 +171,7 @@ You can find more information in {uri-service-account}[Configure Service Account
 |kbd:[Esc]
 |Close modal window / cancel form / rewind focus
 
-|kbd:[q], kbd:[Ctrl+c]
+|kbd:[q]
 |Exit footnoteref:[online keys, Not available in Web versions.]
 
 2+^.e|Login
