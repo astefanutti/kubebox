@@ -701,6 +701,8 @@ const Terminal = os.platform() === 'browser'
   : require('xterm').Terminal;
 
 const NON_BREAKING_SPACE_CHAR = String.fromCharCode(160);
+const SPACE_CHAR = String.fromCharCode(32);
+const ALL_SPACE_REGEX = new RegExp(SPACE_CHAR, 'g');
 const ALL_NON_BREAKING_SPACE_REGEX = new RegExp(NON_BREAKING_SPACE_CHAR, 'g');
 const CRLF_OR_LF = os.platform() === 'browser' && window.navigator.platform === 'Win32' || os.platform() === 'win32' ? '\r\n' : '\n';
 
@@ -833,6 +835,12 @@ class XTerm extends blessed.ScrollableBox {
   }
 
   write(data) {
+    // replace regular spaces with no-break spaces
+    // this will serve as a marker to differentiate what was written to the terminal buffer
+    // and what wasn't (the buffer is initially filled with spaces). This is useful for copy pasting.
+    if (data.indexOf(SPACE_CHAR) !== -1) {
+      data = data.replace(ALL_SPACE_REGEX, NON_BREAKING_SPACE_CHAR);
+    }
     this.term.write(data);
   }
 
@@ -989,7 +997,7 @@ class XTerm extends blessed.ScrollableBox {
             inverse = true;
           }
         }
-        if (inverse) {
+        if (inverse && tline[x - xi][3] != 32) {
           x0 = x0 | (8 << 18);
         }
 
