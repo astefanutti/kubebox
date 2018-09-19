@@ -801,8 +801,7 @@ class XTerm extends blessed.ScrollableBox {
           // in absolute coordinates
           y2: data.y + this.term._core.buffer.ydisp,
         });
-        // no need for a full screen rendering
-        this.render();
+        this.screen.render();
       });
       this.onScreenEvent('mouseup', smu = () => {
         const elapsed = hrtime(click);
@@ -814,8 +813,7 @@ class XTerm extends blessed.ScrollableBox {
         if (x1 === x2 && y1 === y2 && elapsed[0] === 0 && elapsed[1] * 1e-6 < 100) {
           // emulate clicking instead of selecting
           delete this._selection;
-          // no need for a full screen rendering
-          this.render();
+          this.screen.render();
         }
       });
     });
@@ -835,7 +833,7 @@ class XTerm extends blessed.ScrollableBox {
   }
 
   write(data) {
-    // replace regular spaces with no-break spaces
+    // replace regular spaces with non-breaking spaces
     // this will serve as a marker to differentiate what was written to the terminal buffer
     // and what wasn't (the buffer is initially filled with spaces). This is useful for copy pasting.
     if (data.indexOf(SPACE_CHAR) !== -1) {
