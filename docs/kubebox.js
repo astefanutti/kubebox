@@ -190,12 +190,10 @@ class Client {
   // However, the Metrics API is still limited and requires the Metrics server to be deployed
   // (default for clusters created by the kube-up.sh script).
   //
-  // Design documentation can be found at the following locations:
+  // Design documentation can be found at the following location:
   // https://github.com/kubernetes/community/tree/master/contributors/design-proposals/instrumentation
   //
-  // In the meantime, metrics are either retrieved from the Kubelet /stats endpoint
-  // or directly from the cAdvisor port. Another source to consider is the
-  // /metrics/cadvisor endpoint on the secure handler of the kubelet.
+  // In the meantime, metrics are retrieved from the Kubelet /stats endpoint.
 
   // Gets the stats from the Summary API exposed by Kubelet on the specified node
   summary_stats(node) {
@@ -205,21 +203,14 @@ class Client {
     }, this.master_api);
   }
 
-  // Gets the cAdvisor data collected by Kubelet and exposed on the /stats endpoint
-  // This does not work on Kubernetes 1.8.0, see https://github.com/kubernetes/kubernetes/issues/56297
+  // Gets the cAdvisor data collected by Kubelet and exposed on the /stats endpoint.
+  // It may be broken in previous k8s versions, see:
+  // https://github.com/kubernetes/kubernetes/issues/56297
+  // This cAdvisor endpoint will eventually be removed, see:
+  // https://github.com/kubernetes/kubernetes/issues/68522
   container_stats(node, namespace, pod, uid, container) {
     return merge({
       path   : `/api/v1/nodes/${node}/proxy/stats/${namespace}/${pod}/${uid}/${container}`,
-      method : 'GET',
-    }, this.master_api);
-  }
-
-  // Gets the Docker container data via cAdvisor proxy
-  // cAdvisor port is not accessible in OpenShift, see https://github.com/openshift/origin/issues/4143,
-  // And may eventually be removed from Kubernetes, see https://github.com/kubernetes/kubernetes/issues/53615.
-  cadvisor_container_stats(node, id) {
-    return merge({
-      path   : `/api/v1/nodes/${node}:4194/proxy/api/v1.2/docker/${id}`,
       method : 'GET',
     }, this.master_api);
   }
@@ -691,6 +682,403 @@ class Cancellations {
 exports.Cancellations = Cancellations;
 
 },{}],9:[function(require,module,exports){
+const blessed = require('blessed'),
+      Node = blessed.Node,
+      Box = blessed.Box,
+      InnerCanvas = require('drawille-canvas-blessed-contrib').Canvas;
+
+function Canvas(options, canvasType) {
+  const self = this;
+
+  if (!(this instanceof Node)) {
+    return new Canvas(options);
+  }
+
+  options = options || {};
+  this.options = options
+  Box.call(this, options);
+
+  this.on('attach', function () {
+    self.calcSize();
+
+    self._canvas = new InnerCanvas(this.canvasSize.width, this.canvasSize.height, canvasType);
+    self.ctx = self._canvas.getContext();
+
+    if (self.options.data) {
+      self.setData(self.options.data);
+    }
+  })
+}
+
+Canvas.prototype.__proto__ = Box.prototype;
+
+Canvas.prototype.type = 'canvas';
+
+Canvas.prototype.calcSize = function () {
+  this.canvasSize = { width: this.width * 2 - 12, height: this.height * 4 };
+}
+
+Canvas.prototype.clear = function () {
+  this.ctx.clearRect(0, 0, this.canvasSize.width, this.canvasSize.height);
+}
+
+Canvas.prototype.render = function () {
+  this.clearPos(true);
+  this.setContent(this.ctx._canvas.frame());
+  return this._render();
+};
+
+module.exports = Canvas;
+},{"blessed":"blessed","drawille-canvas-blessed-contrib":265}],10:[function(require,module,exports){
+function Carousel(pages, options) {
+  this.currPage = 0;
+  this.pages = pages;
+  this.options = options;
+  this.screen = this.options.screen;
+}
+
+Carousel.prototype.move = function () {
+  // PATCH BEGIN
+  if (!this.pages.length > 0) return;
+  // PATCH END
+
+  var i = this.screen.children.length;
+  while (i--) this.screen.children[i].detach();
+
+  this.pages[this.currPage](this.screen, this.currPage);
+  this.screen.render();
+};
+
+Carousel.prototype.next = function () {
+  this.currPage++;
+  if (this.currPage == this.pages.length) {
+    if (!this.options.rotate) {
+      this.currPage--;
+      return;
+    } else {
+      this.currPage = 0;
+    }
+  }
+  this.move();
+};
+
+Carousel.prototype.prev = function () {
+  this.currPage--;
+  if (this.currPage < 0) {
+    if (!this.options.rotate) {
+      this.currPage++;
+      return;
+    } else {
+      this.currPage = this.pages.length - 1;
+    }
+  }
+  this.move();
+};
+
+Carousel.prototype.home = function () {
+  this.currPage = 0;
+  this.move();
+};
+
+Carousel.prototype.end = function () {
+  this.currPage = this.pages.length - 1;
+  this.move();
+};
+
+Carousel.prototype.start = function () {
+  var self = this;
+
+  this.move();
+
+  if (this.options.interval) {
+    setInterval(this.next.bind(this), this.options.interval);
+  }
+
+  if (this.options.controlKeys) {
+    this.screen.key(['right', 'left', 'home', 'end'], function (_, key) {
+      if (key.name == 'right') self.next();
+      if (key.name == 'left') self.prev();
+      if (key.name == 'home') self.home();
+      if (key.name == 'end') self.end();
+    });
+    this.screen.on('key S-left', function (ch, key) {
+      self.prev();
+    });
+    this.screen.on('key S-right', function (ch, key) {
+      self.next();
+    });
+  }
+};
+
+module.exports = Carousel;
+
+},{}],11:[function(require,module,exports){
+const blessed = require('blessed'),
+      Node = blessed.Node,
+      Canvas = require('./canvas'),
+      { arrayMax, getColorCode } = require('./utils'),
+      InnerCanvas = require('drawille-canvas-blessed-contrib').Canvas;
+
+function Line(options) {
+  if (!(this instanceof Node)) {
+    return new Line(options);
+  }
+
+  options.showNthLabel = options.showNthLabel || 1;
+  options.style = options.style || {};
+  options.style.line = options.style.line || 'yellow';
+  options.style.text = options.style.text || 'green';
+  options.style.baseline = options.style.baseline || 'black';
+  options.xLabelPadding = options.xLabelPadding || 5;
+  options.xPadding = options.xPadding || 10;
+  options.numYLabels = options.numYLabels || 5;
+  options.legend = options.legend || {};
+  options.wholeNumbersOnly = options.wholeNumbersOnly || false;
+  options.minY = options.minY || 0;
+
+  Canvas.call(this, options);
+}
+
+Line.prototype.calcSize = function () {
+ this.canvasSize = { width: this.width * 2, height: this.height * 4 };
+}
+
+Line.prototype.__proto__ = Canvas.prototype;
+
+Line.prototype.type = 'line';
+
+Line.prototype.resize = function (data) {
+  this.calcSize();
+  this._canvas = new InnerCanvas(this.canvasSize.width, this.canvasSize.height);
+  this.ctx = this._canvas.getContext();
+}
+
+Line.prototype.setData = function (data) {
+  if (!this.ctx) {
+    throw 'error: canvas context does not exist. setData() for line charts must be called after the chart has been added to the screen via screen.append()';
+  }
+
+  // compatability with older API
+  if (!Array.isArray(data)) data = [data];
+
+  var self = this;
+  var xLabelPadding = this.options.xLabelPadding;
+  var yLabelPadding = 6;
+  var xPadding = this.options.xPadding;
+  var yPadding = 8;
+  var c = this.ctx;
+  var labels = data[0].x;
+
+  function addLegend() {
+    if (!self.options.showLegend) return;
+    if (self.legend) self.remove(self.legend);
+    var legendWidth = self.options.legend.width || 15;
+    self.legend = blessed.box({
+      height: data.length + 2,
+      top: 1,
+      width: legendWidth,
+      left: self.width - legendWidth,
+      content: '',
+      fg: "green",
+      tags: true,
+      border: {
+        type: 'line',
+        fg: 'black'
+      },
+      style: {
+        fg: 'blue',
+      },
+      screen: self.screen,
+    });
+
+    var legandText = '';
+    var maxChars = legendWidth - 2;
+    for (var i = 0; i < data.length; i++) {
+      var style = data[i].style || {};
+      var color = getColorCode(style.line || self.options.style.line);
+      legandText += '{' + color + '-fg}' + data[i].title.substring(0, maxChars) + '{/' + color + '-fg}\r\n';
+    }
+    self.legend.setContent(legandText);
+    self.append(self.legend);
+  }
+
+  function getMax(v, i) {
+    return parseFloat(v);
+  }
+  //for some reason this loop does not properly get the maxY if there are multiple datasets (was doing 4 datasets that differred wildly)
+  function getMaxY() {
+    var max = 0;
+    var setMax = [];
+
+    for (var i = 0; i < data.length; i++) {
+      if (data[i].y.length)
+        setMax[i] = arrayMax(data[i].y, getMax);
+
+      for (var j = 0; j < data[i].y.length; j++) {
+        if (data[i].y[j] > max) {
+          max = data[i].y[j];
+        }
+      }
+    }
+
+    var m = arrayMax(setMax, getMax);
+    max = m * 1.2;
+    max *= 1.2
+    if (self.options.maxY) {
+      return Math.max(max, self.options.maxY);
+    }
+    return max;
+  }
+
+  function formatYLabel(value, max, min, numLabels, wholeNumbersOnly, abbreviate) {
+    var fixed = (max/numLabels<1 && value!=0 && !wholeNumbersOnly) ? 2 : 0;
+    var res = value.toFixed(fixed);
+    if (typeof abbreviate === 'function') {;
+      return abbreviate(res);
+    } else {
+      return res;
+    }
+  }
+
+  function getMaxXLabelPadding(numLabels, wholeNumbersOnly, abbreviate, min) {
+    var max = getMaxY();
+    return (formatYLabel(max, max, min, numLabels, wholeNumbersOnly, abbreviate).length + 1) * 2;
+  }
+
+  var maxPadding = getMaxXLabelPadding(this.options.numYLabels, this.options.wholeNumbersOnly, this.options.abbreviate, this.options.minY);
+  if (xLabelPadding < maxPadding) {
+    xLabelPadding = maxPadding;
+  };
+
+  if ((xPadding - xLabelPadding) < 0) {
+    xPadding = xLabelPadding;
+  }
+
+  function getMaxX() {
+    var maxLength = 0;
+
+    for (var i = 0; i < labels.length; i++) {
+      if (labels[i] === undefined) {
+        console.log('label[' + i + '] is undefined');
+      } else if (labels[i].length > maxLength) {
+        maxLength = labels[i].length;
+      }
+    }
+
+    return maxLength;
+  }
+
+  function getXPixel(val) {
+    return ((self.canvasSize.width - xPadding) / labels.length) * val + (xPadding * 1.0) + 2;
+  }
+
+  function getYPixel(val, minY) {
+    var res = self.canvasSize.height - yPadding - (((self.canvasSize.height - yPadding) / (getMaxY()-minY)) * (val-minY));
+    res -= 2; //to separate the baseline and the data line to separate chars so canvas will show separate colors
+    return res;
+  }
+
+  // Draw the line graph
+  function drawLine(values, style, minY) {
+    style = style || {};
+    var color = self.options.style.line;
+    c.strokeStyle = style.line || color;
+
+    c.moveTo(0, 0);
+    c.beginPath();
+    c.lineTo(getXPixel(0), getYPixel(values[0], minY));
+
+    for (var k = 1; k < values.length; k++) {
+      c.lineTo(getXPixel(k), getYPixel(values[k], minY));
+    }
+
+    c.stroke();
+  }
+
+  addLegend();
+
+  c.fillStyle = this.options.style.text;
+
+  c.clearRect(0, 0, this.canvasSize.width, this.canvasSize.height);
+
+  var yLabelIncrement = (getMaxY()-this.options.minY)/this.options.numYLabels;
+  if (this.options.wholeNumbersOnly) yLabelIncrement = Math.floor(yLabelIncrement);
+  //if (getMaxY()>=10) {
+  //  yLabelIncrement = yLabelIncrement + (10 - yLabelIncrement % 10);
+  //}
+
+  //yLabelIncrement = Math.max(yLabelIncrement, 1); // should not be zero
+
+  if (yLabelIncrement == 0) yLabelIncrement = 1;
+
+  // Draw the Y value texts
+  var maxY = getMaxY();
+  for (var i = this.options.minY; i < maxY; i += yLabelIncrement) {
+    c.fillText(formatYLabel(i, maxY, this.options.minY, this.options.numYLabels, this.options.wholeNumbersOnly, this.options.abbreviate), xPadding - xLabelPadding, getYPixel(i, this.options.minY));
+  }
+
+  for (var h = 0; h < data.length; h++) {
+    drawLine(data[h].y, data[h].style, this.options.minY);
+  }
+
+  c.strokeStyle = this.options.style.baseline;
+
+  // Draw the axises
+  c.beginPath();
+
+  c.lineTo(xPadding, 0);
+  c.lineTo(xPadding, this.canvasSize.height - yPadding);
+  c.lineTo(this.canvasSize.width, this.canvasSize.height - yPadding);
+
+  c.stroke();
+
+  // Draw the X value texts
+  var charsAvailable = (this.canvasSize.width - xPadding) / 2;
+  var maxLabelsPossible = charsAvailable / (getMaxX() + 2);
+  var pointsPerMaxLabel = Math.ceil(data[0].y.length / maxLabelsPossible);
+  var showNthLabel = this.options.showNthLabel;
+  if (showNthLabel < pointsPerMaxLabel) {
+    showNthLabel = pointsPerMaxLabel;
+  }
+
+  for (var i = 0; i < labels.length; i += showNthLabel) {
+    if ((getXPixel(i) + (labels[i].length * 2)) <= this.canvasSize.width) {
+      c.fillText(labels[i], getXPixel(i), this.canvasSize.height - yPadding + yLabelPadding);
+    }
+  }
+}
+
+module.exports = Line;
+
+},{"./canvas":9,"./utils":12,"blessed":"blessed","drawille-canvas-blessed-contrib":265}],12:[function(require,module,exports){
+const x256 = require('x256');
+
+exports.getColorCode = function (color) {
+  if (Array.isArray(color) && color.length == 3) {
+    return x256(color[0], color[1], color[2]);
+  } else {
+    return color;
+  }
+}
+
+exports.arrayMax = function (array, iteratee) {
+  let index = -1;
+  let length = array.length;
+
+  let computed, result;
+  while (++index < length) {
+    let value = array[index];
+    let current = iteratee(value);
+
+    if (current != null && (computed === undefined ? current === current : current > computed)) {
+      computed = current,
+      result = value;
+    }
+  }
+  return result;
+}
+
+},{"x256":311}],13:[function(require,module,exports){
 (function (Buffer,process,global){
 const blessed = require('blessed'),
       hrtime  = require('./hrtime'),
@@ -1082,7 +1470,7 @@ class XTerm extends blessed.ScrollableBox {
 module.exports = XTerm;
 
 }).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":185,"./hrtime":10,"_process":214,"blessed":"blessed","os":190,"xterm":undefined}],10:[function(require,module,exports){
+},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":185,"./hrtime":14,"_process":214,"blessed":"blessed","os":190,"xterm":undefined}],14:[function(require,module,exports){
 (function (process,global){
 // Polyfill for window.performance.now
 const performance = global.performance || {}
@@ -1112,7 +1500,7 @@ function hrtime(previousTimestamp) {
 
 module.exports = process.hrtime || hrtime;
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":214}],11:[function(require,module,exports){
+},{"_process":214}],15:[function(require,module,exports){
 (function (process,global){
 const blessed = require('blessed');
 
@@ -1274,7 +1662,7 @@ blessed.Element.prototype.setLine = function(i, line) {
 // PATCH END
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":214,"blessed":"blessed"}],12:[function(require,module,exports){
+},{"_process":214,"blessed":"blessed"}],16:[function(require,module,exports){
 const blessed = require('blessed');
 
 blessed.listbar.prototype.add =
@@ -1406,7 +1794,7 @@ blessed.listbar.prototype.appendItem = function (item, callback) {
   this.emit('add item');
 };
 
-},{"blessed":"blessed"}],13:[function(require,module,exports){
+},{"blessed":"blessed"}],17:[function(require,module,exports){
 const blessed = require('blessed');
 
 blessed.log.prototype.init = function () {
@@ -1621,7 +2009,7 @@ blessed.log = function (options) {
   return log;
 }
 
-},{"blessed":"blessed"}],14:[function(require,module,exports){
+},{"blessed":"blessed"}],18:[function(require,module,exports){
 const blessed = require('blessed');
 
 blessed.Node.prototype.insert = function (element, i) {
@@ -1699,7 +2087,7 @@ blessed.Node.prototype.remove = function (element) {
   }
 };
 
-},{"blessed":"blessed"}],15:[function(require,module,exports){
+},{"blessed":"blessed"}],19:[function(require,module,exports){
 require('./element');
 require('./listbar');
 require('./log');
@@ -1707,7 +2095,7 @@ require('./node');
 require('./screen');
 require('./table');
 
-},{"./element":11,"./listbar":12,"./log":13,"./node":14,"./screen":16,"./table":17}],16:[function(require,module,exports){
+},{"./element":15,"./listbar":16,"./log":17,"./node":18,"./screen":20,"./table":21}],20:[function(require,module,exports){
 const blessed = require('blessed');
 
 blessed.Screen.prototype._listenMouse = function (el) {
@@ -1819,7 +2207,7 @@ blessed.Screen.prototype._listenMouse = function (el) {
   });
 };
 
-},{"blessed":"blessed"}],17:[function(require,module,exports){
+},{"blessed":"blessed"}],21:[function(require,module,exports){
 const blessed = require('blessed');
 
 // See https://github.com/chjj/blessed/pull/292
@@ -1878,11 +2266,11 @@ blessed.ListTable.prototype._calculateMaxes = function () {
   return (this._maxes = maxes);
 };
 
-},{"blessed":"blessed"}],18:[function(require,module,exports){
+},{"blessed":"blessed"}],22:[function(require,module,exports){
 'use strict';
 
 const blessed = require('blessed'),
-      line    = require('./contrib/line');
+      line    = require('./blessed-contrib/line');
 
 class Chart {
 
@@ -1900,11 +2288,8 @@ class Chart {
         text     : 'white',
         baseline : [80, 80, 80],
       },
-      xLabelPadding : 1,
-      xPadding      : 1,
-      yPadding      : 1,
-      showLegend    : true,
-      numYLabels    : 5,
+      showLegend : true,
+      numYLabels : 5,
     }, options));
 
     graph.on('attach', function () {
@@ -1925,7 +2310,7 @@ class Chart {
     };
 
     Object.defineProperty(this, 'visible', {
-      get: function() {
+      get: function () {
         return graph.visible;
       }
     });
@@ -1964,404 +2349,7 @@ class Chart {
 
 module.exports = Chart;
 
-},{"./contrib/line":21,"blessed":"blessed"}],19:[function(require,module,exports){
-const blessed = require('blessed'),
-      Node = blessed.Node,
-      Box = blessed.Box,
-      InnerCanvas = require('drawille-canvas-blessed-contrib').Canvas;
-
-function Canvas(options, canvasType) {
-  const self = this;
-
-  if (!(this instanceof Node)) {
-    return new Canvas(options);
-  }
-
-  options = options || {};
-  this.options = options
-  Box.call(this, options);
-
-  this.on('attach', function () {
-    self.calcSize();
-
-    self._canvas = new InnerCanvas(this.canvasSize.width, this.canvasSize.height, canvasType);
-    self.ctx = self._canvas.getContext();
-
-    if (self.options.data) {
-      self.setData(self.options.data);
-    }
-  })
-}
-
-Canvas.prototype.__proto__ = Box.prototype;
-
-Canvas.prototype.type = 'canvas';
-
-Canvas.prototype.calcSize = function () {
-  this.canvasSize = { width: this.width * 2 - 12, height: this.height * 4 };
-}
-
-Canvas.prototype.clear = function () {
-  this.ctx.clearRect(0, 0, this.canvasSize.width, this.canvasSize.height);
-}
-
-Canvas.prototype.render = function () {
-  this.clearPos(true);
-  this.setContent(this.ctx._canvas.frame());
-  return this._render();
-};
-
-module.exports = Canvas;
-},{"blessed":"blessed","drawille-canvas-blessed-contrib":265}],20:[function(require,module,exports){
-function Carousel(pages, options) {
-  this.currPage = 0;
-  this.pages = pages;
-  this.options = options;
-  this.screen = this.options.screen;
-}
-
-Carousel.prototype.move = function () {
-  // PATCH BEGIN
-  if (!this.pages.length > 0) return;
-  // PATCH END
-
-  var i = this.screen.children.length;
-  while (i--) this.screen.children[i].detach();
-
-  this.pages[this.currPage](this.screen, this.currPage);
-  this.screen.render();
-};
-
-Carousel.prototype.next = function () {
-  this.currPage++;
-  if (this.currPage == this.pages.length) {
-    if (!this.options.rotate) {
-      this.currPage--;
-      return;
-    } else {
-      this.currPage = 0;
-    }
-  }
-  this.move();
-};
-
-Carousel.prototype.prev = function () {
-  this.currPage--;
-  if (this.currPage < 0) {
-    if (!this.options.rotate) {
-      this.currPage++;
-      return;
-    } else {
-      this.currPage = this.pages.length - 1;
-    }
-  }
-  this.move();
-};
-
-Carousel.prototype.home = function () {
-  this.currPage = 0;
-  this.move();
-};
-
-Carousel.prototype.end = function () {
-  this.currPage = this.pages.length - 1;
-  this.move();
-};
-
-Carousel.prototype.start = function () {
-  var self = this;
-
-  this.move();
-
-  if (this.options.interval) {
-    setInterval(this.next.bind(this), this.options.interval);
-  }
-
-  if (this.options.controlKeys) {
-    this.screen.key(['right', 'left', 'home', 'end'], function (_, key) {
-      if (key.name == 'right') self.next();
-      if (key.name == 'left') self.prev();
-      if (key.name == 'home') self.home();
-      if (key.name == 'end') self.end();
-    });
-    this.screen.on('key S-left', function (ch, key) {
-      self.prev();
-    });
-    this.screen.on('key S-right', function (ch, key) {
-      self.next();
-    });
-  }
-};
-
-module.exports = Carousel;
-
-},{}],21:[function(require,module,exports){
-const blessed = require('blessed'),
-      Node = blessed.Node,
-      Canvas = require('./canvas'),
-      { arrayMax, getColorCode } = require('./utils'),
-      InnerCanvas = require('drawille-canvas-blessed-contrib').Canvas;
-
-function Line(options) {
-  if (!(this instanceof Node)) {
-    return new Line(options);
-  }
-
-  options.showNthLabel = options.showNthLabel || 1;
-  options.style = options.style || {};
-  options.style.line = options.style.line || 'yellow';
-  options.style.text = options.style.text || 'green';
-  options.style.baseline = options.style.baseline || 'black';
-  options.xLabelPadding = options.xLabelPadding || 5;
-  options.xPadding = options.xPadding || 10;
-  options.numYLabels = options.numYLabels || 5;
-  options.legend = options.legend || {};
-  options.wholeNumbersOnly = options.wholeNumbersOnly || false;
-  options.minY = options.minY || 0;
-
-  Canvas.call(this, options);
-}
-
-Line.prototype.calcSize = function () {
- this.canvasSize = { width: this.width * 2, height: this.height * 4 };
-}
-
-Line.prototype.__proto__ = Canvas.prototype;
-
-Line.prototype.type = 'line';
-
-Line.prototype.resize = function (data) {
-  this.calcSize();
-  this._canvas = new InnerCanvas(this.canvasSize.width, this.canvasSize.height);
-  this.ctx = this._canvas.getContext();
-}
-
-Line.prototype.setData = function (data) {
-  if (!this.ctx) {
-    throw 'error: canvas context does not exist. setData() for line charts must be called after the chart has been added to the screen via screen.append()';
-  }
-
-  // compatability with older API
-  if (!Array.isArray(data)) data = [data];
-
-  var self = this;
-  var xLabelPadding = this.options.xLabelPadding;
-  var yLabelPadding = 6;
-  var xPadding = this.options.xPadding;
-  var yPadding = 8;
-  var c = this.ctx;
-  var labels = data[0].x;
-
-  function addLegend() {
-    if (!self.options.showLegend) return;
-    if (self.legend) self.remove(self.legend);
-    var legendWidth = self.options.legend.width || 15;
-    self.legend = blessed.box({
-      height: data.length + 2,
-      top: 1,
-      width: legendWidth,
-      left: self.width - legendWidth,
-      content: '',
-      fg: "green",
-      tags: true,
-      border: {
-        type: 'line',
-        fg: 'black'
-      },
-      style: {
-        fg: 'blue',
-      },
-      screen: self.screen,
-    });
-
-    var legandText = '';
-    var maxChars = legendWidth - 2;
-    for (var i = 0; i < data.length; i++) {
-      var style = data[i].style || {};
-      var color = getColorCode(style.line || self.options.style.line);
-      legandText += '{' + color + '-fg}' + data[i].title.substring(0, maxChars) + '{/' + color + '-fg}\r\n';
-    }
-    self.legend.setContent(legandText);
-    self.append(self.legend);
-  }
-
-  function getMax(v, i) {
-    return parseFloat(v);
-  }
-  //for some reason this loop does not properly get the maxY if there are multiple datasets (was doing 4 datasets that differred wildly)
-  function getMaxY() {
-    var max = 0;
-    var setMax = [];
-
-    for (var i = 0; i < data.length; i++) {
-      if (data[i].y.length)
-        setMax[i] = arrayMax(data[i].y, getMax);
-
-      for (var j = 0; j < data[i].y.length; j++) {
-        if (data[i].y[j] > max) {
-          max = data[i].y[j];
-        }
-      }
-    }
-
-    var m = arrayMax(setMax, getMax);
-    max = m * 1.2;
-    max *= 1.2
-    if (self.options.maxY) {
-      return Math.max(max, self.options.maxY);
-    }
-    return max;
-  }
-
-  function formatYLabel(value, max, min, numLabels, wholeNumbersOnly, abbreviate) {
-    var fixed = (max/numLabels<1 && value!=0 && !wholeNumbersOnly) ? 2 : 0;
-    var res = value.toFixed(fixed);
-    if (typeof abbreviate === 'function') {;
-      return abbreviate(res);
-    } else {
-      return res;
-    }
-  }
-
-  function getMaxXLabelPadding(numLabels, wholeNumbersOnly, abbreviate, min) {
-    var max = getMaxY();
-    return formatYLabel(max, max, min, numLabels, wholeNumbersOnly, abbreviate).length * 2;
-  }
-
-  var maxPadding = getMaxXLabelPadding(this.options.numYLabels, this.options.wholeNumbersOnly, this.options.abbreviate, this.options.minY);
-  if (xLabelPadding < maxPadding) {
-    xLabelPadding = maxPadding;
-  };
-
-  if ((xPadding - xLabelPadding) < 0) {
-    xPadding = xLabelPadding;
-  }
-
-  function getMaxX() {
-    var maxLength = 0;
-
-    for (var i = 0; i < labels.length; i++) {
-      if (labels[i] === undefined) {
-        console.log('label[' + i + '] is undefined');
-      } else if (labels[i].length > maxLength) {
-        maxLength = labels[i].length;
-      }
-    }
-
-    return maxLength;
-  }
-
-  function getXPixel(val) {
-    return ((self.canvasSize.width - xPadding) / labels.length) * val + (xPadding * 1.0) + 2;
-  }
-
-  function getYPixel(val, minY) {
-    var res = self.canvasSize.height - yPadding - (((self.canvasSize.height - yPadding) / (getMaxY()-minY)) * (val-minY));
-    res -= 2; //to separate the baseline and the data line to separate chars so canvas will show separate colors
-    return res;
-  }
-
-  // Draw the line graph
-  function drawLine(values, style, minY) {
-    style = style || {};
-    var color = self.options.style.line;
-    c.strokeStyle = style.line || color;
-
-    c.moveTo(0, 0);
-    c.beginPath();
-    c.lineTo(getXPixel(0), getYPixel(values[0], minY));
-
-    for (var k = 1; k < values.length; k++) {
-      c.lineTo(getXPixel(k), getYPixel(values[k], minY));
-    }
-
-    c.stroke();
-  }
-
-  addLegend();
-
-  c.fillStyle = this.options.style.text;
-
-  c.clearRect(0, 0, this.canvasSize.width, this.canvasSize.height);
-
-  var yLabelIncrement = (getMaxY()-this.options.minY)/this.options.numYLabels;
-  if (this.options.wholeNumbersOnly) yLabelIncrement = Math.floor(yLabelIncrement);
-  //if (getMaxY()>=10) {
-  //  yLabelIncrement = yLabelIncrement + (10 - yLabelIncrement % 10);
-  //}
-
-  //yLabelIncrement = Math.max(yLabelIncrement, 1); // should not be zero
-
-  if (yLabelIncrement == 0) yLabelIncrement = 1;
-
-  // Draw the Y value texts
-  var maxY = getMaxY();
-  for (var i = this.options.minY; i < maxY; i += yLabelIncrement) {
-    c.fillText(formatYLabel(i, maxY, this.options.minY, this.options.numYLabels, this.options.wholeNumbersOnly, this.options.abbreviate), xPadding - xLabelPadding, getYPixel(i, this.options.minY));
-  }
-
-  for (var h = 0; h < data.length; h++) {
-    drawLine(data[h].y, data[h].style, this.options.minY);
-  }
-
-  c.strokeStyle = this.options.style.baseline;
-
-  // Draw the axises
-  c.beginPath();
-
-  c.lineTo(xPadding, 0);
-  c.lineTo(xPadding, this.canvasSize.height - yPadding);
-  c.lineTo(this.canvasSize.width, this.canvasSize.height - yPadding);
-
-  c.stroke();
-
-  // Draw the X value texts
-  var charsAvailable = (this.canvasSize.width - xPadding) / 2;
-  var maxLabelsPossible = charsAvailable / (getMaxX() + 2);
-  var pointsPerMaxLabel = Math.ceil(data[0].y.length / maxLabelsPossible);
-  var showNthLabel = this.options.showNthLabel;
-  if (showNthLabel < pointsPerMaxLabel) {
-    showNthLabel = pointsPerMaxLabel;
-  }
-
-  for (var i = 0; i < labels.length; i += showNthLabel) {
-    if ((getXPixel(i) + (labels[i].length * 2)) <= this.canvasSize.width) {
-      c.fillText(labels[i], getXPixel(i), this.canvasSize.height - yPadding + yLabelPadding);
-    }
-  }
-}
-
-module.exports = Line;
-
-},{"./canvas":19,"./utils":22,"blessed":"blessed","drawille-canvas-blessed-contrib":265}],22:[function(require,module,exports){
-const x256 = require('x256');
-
-exports.getColorCode = function (color) {
-  if (Array.isArray(color) && color.length == 3) {
-    return x256(color[0], color[1], color[2]);
-  } else {
-    return color;
-  }
-}
-
-exports.arrayMax = function (array, iteratee) {
-  let index = -1;
-  let length = array.length;
-
-  let computed, result;
-  while (++index < length) {
-    let value = array[index];
-    let current = iteratee(value);
-
-    if (current != null && (computed === undefined ? current === current : current > computed)) {
-      computed = current,
-      result = value;
-    }
-  }
-  return result;
-}
-
-},{"x256":311}],23:[function(require,module,exports){
+},{"./blessed-contrib/line":11,"blessed":"blessed"}],23:[function(require,module,exports){
 'use strict';
 
 const blessed  = require('blessed'),
@@ -2375,7 +2363,7 @@ const blessed  = require('blessed'),
       task     = require('../task'),
       util     = require('../util');
 
-const { isNotEmpty, humanBytes } = util;
+const { isNotEmpty, humanBytes, humanCores } = util;
 
 const { delay } = require('../promise');
 
@@ -2479,7 +2467,7 @@ class Dashboard {
     });
 
     const memory_graph = new chart(resources, { top: 1, abbreviate: humanBytes });
-    const cpu_graph = new chart(resources, { top: 1 });
+    const cpu_graph = new chart(resources, { top: 1, abbreviate: humanCores });
     const net_graph = new chart(resources, { top: 1 });
     const graphs = [memory_graph, cpu_graph, net_graph];
     graphs.slice(1).forEach(g => g.toggle());
@@ -2514,7 +2502,7 @@ class Dashboard {
       this.clear();
     }
 
-    pods_table.key(['r'], (_) => {
+    pods_table.key(['r'], () => {
       // no selection
       if (!pods_table.selected) return;
       const pod = pods_list.items[pods_table.selected - 1];
@@ -2529,12 +2517,12 @@ class Dashboard {
       if (navbar.select(byId)) return;
 
       const exec = new Exec({ screen, status, debug });
-      const { promise, cancellation } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: exec.output, readable: exec });
+      const { promise, _ } = get(client.exec(namespace, name, { container, command: ['/bin/sh', '-c', `TERM=${exec.termName()} sh`] }), { generator: exec.output, readable: exec });
 
       navbar.add({
         id     : id,
         name   : container,
-        render : screen => exec.render(),
+        render : _ => exec.render(),
       }, { select: true });
 
       exec.on('exit', () => navbar.remove(byId));
@@ -2557,12 +2545,12 @@ class Dashboard {
       const containers = pod.spec.containers;
       let container;
       if (containers.length === 1) {
-          if (name === pod_selected) {
-            return;
-          } else {
-            container = containers[0];
-            container_selected = container.name;
-          }
+        if (name === pod_selected) {
+          return;
+        } else {
+          container = containers[0];
+          container_selected = container.name;
+        }
       } else {
         const i = containers.findIndex(c => c.name === container_selected);
         container = containers[(i + 1) % containers.length];
@@ -2634,8 +2622,9 @@ class Dashboard {
           })
           .catch(error => {
             // the pod might have already been deleted?
-            if (!error.response || error.response.statusCode !== 404)
+            if (!error.response || error.response.statusCode !== 404) {
               console.error(error.stack);
+            }
           });
       };
 
@@ -2706,17 +2695,9 @@ class Dashboard {
 
     function updateStatsFromCAdvisor(pod, container) {
       let promise, request;
-      if (client.openshift) {
-        request = get(client.container_stats(pod.spec.nodeName, pod.metadata.namespace, pod.metadata.name, pod.metadata.uid, container.name), { cancellable: true });
-        promise = request.promise
-          .then(response => response.body.toString('utf8'))
-      } else {
-        request = get(client.cadvisor_container_stats(pod.spec.nodeName, pod.status.containerStatuses.find(c => c.name === container.name).containerID.slice(9)), { cancellable: true });
-        promise = request.promise
-          .then(response => response.body.toString('utf8'))
-          .then(response => response.slice(response.indexOf(':') + 1, -1))
-      }
-      promise = promise
+      request = get(client.container_stats(pod.spec.nodeName, pod.metadata.namespace, pod.metadata.name, pod.metadata.uid, container.name), { cancellable: true });
+      promise = request.promise
+        .then(response => response.body.toString('utf8'))
         .then(response => JSON.parse(response))
         .then(response => {
           const timestamps = response.stats.map(s => moment(s.timestamp).format('HH:mm:ss'));
@@ -2749,13 +2730,13 @@ class Dashboard {
           const cpu_user = {
             title : 'User',
             x     : timestamps.slice(1),
-            y     : response.stats.map(s => s.cpu.usage.user).delta().map((d, i) => d / 1000000000 / periods[i]),
+            y     : response.stats.map(s => s.cpu.usage.user).delta().map((d, i) => d / 1e+6 / periods[i]),
             style : { line: 'cyan' },
           };
           const cpu_total = {
             title : 'Total',
             x     : timestamps.slice(1),
-            y     : response.stats.map(s => s.cpu.usage.total).delta().map((d, i) => d / 1000000000 / periods[i]),
+            y     : response.stats.map(s => s.cpu.usage.total).delta().map((d, i) => d / 1e+6 / periods[i]),
             style : { line: 'blue' },
           };
           const cpu_stats = [cpu_user, cpu_total];
@@ -2891,7 +2872,7 @@ class Dashboard {
 
 module.exports = Dashboard;
 
-},{"../http-then":"http-then","../promise":7,"../task":8,"../util":31,"./chart":18,"./exec":25,"./spinner":29,"blessed":"blessed","lodash.debounce":297,"moment":303,"moment-duration-format":302}],24:[function(require,module,exports){
+},{"../http-then":"http-then","../promise":7,"../task":8,"../util":31,"./chart":22,"./exec":25,"./spinner":29,"blessed":"blessed","lodash.debounce":297,"moment":303,"moment-duration-format":302}],24:[function(require,module,exports){
 'use strict';
 
 const blessed = require('blessed');
@@ -3177,7 +3158,7 @@ class Exec extends Duplex {
 
 module.exports = Exec;
 }).call(this,require("buffer").Buffer)
-},{"./blessed-xterm/blessed-xterm":9,"buffer":128,"clipboardy":78,"os":190,"stream":249}],26:[function(require,module,exports){
+},{"./blessed-xterm/blessed-xterm":13,"buffer":128,"clipboardy":78,"os":190,"stream":249}],26:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -3633,7 +3614,7 @@ module.exports.prompt = prompt;
 }).call(this,require('_process'))
 },{"../http-then":"http-then","./spinner":29,"_process":214,"blessed":"blessed","os":190}],28:[function(require,module,exports){
 const blessed  = require('blessed'),
-      Carousel = require('./contrib/carousel');
+      Carousel = require('./blessed-contrib/carousel');
 
 class NavBar {
 
@@ -3775,7 +3756,7 @@ class NavBar {
 
 module.exports = NavBar;
 
-},{"./contrib/carousel":20,"blessed":"blessed"}],29:[function(require,module,exports){
+},{"./blessed-contrib/carousel":10,"blessed":"blessed"}],29:[function(require,module,exports){
 class Spinner {
 
   constructor() {
@@ -3942,6 +3923,11 @@ module.exports.humanBytes = function (bytes, SI = false) {
   } while (Math.abs(bytes) >= threshold && u < units.length - 1);
   return `${bytes.toFixed(1)} ${units[u]}`;
 };
+
+module.exports.humanCores = function (cores) {
+  const c = parseFloat(cores, 10);
+  return c < 1000 ? `${c} m` : `${c / 1000}`;
+}
 
 module.exports.isLocalStorageAvailable = function () {
   if (os.platform() !== 'browser') {
@@ -43136,7 +43122,7 @@ module.exports={
   "_args": [
     [
       "elliptic@6.4.0",
-      "/home/jpoth/dev/git/kubik"
+      "/Users/astefanu/Development/kubebox"
     ]
   ],
   "_development": true,
@@ -43162,7 +43148,7 @@ module.exports={
   ],
   "_resolved": "https://registry.npmjs.org/elliptic/-/elliptic-6.4.0.tgz",
   "_spec": "6.4.0",
-  "_where": "/home/jpoth/dev/git/kubik",
+  "_where": "/Users/astefanu/Development/kubebox",
   "author": {
     "name": "Fedor Indutny",
     "email": "fedor@indutny.com"
@@ -78052,7 +78038,7 @@ class Kubebox extends EventEmitter {
 
 module.exports = Kubebox;
 
-},{"./client":1,"./config/config":3,"./http-then":"http-then","./promise":7,"./task":8,"./ui/blessed/patches":15,"./ui/debug":24,"./ui/ui":30,"./util":31,"blessed":"blessed","events":165,"os":190,"urijs":"urijs"}],"urijs":[function(require,module,exports){
+},{"./client":1,"./config/config":3,"./http-then":"http-then","./promise":7,"./task":8,"./ui/blessed/patches":19,"./ui/debug":24,"./ui/ui":30,"./util":31,"blessed":"blessed","events":165,"os":190,"urijs":"urijs"}],"urijs":[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  *
