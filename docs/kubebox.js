@@ -2967,17 +2967,17 @@ class Exec extends Duplex {
     });
 
     const browserCopyToClipboard = function (event) {
-        if (terminal.hasSelection()) {
-          event.clipboardData.setData('text/plain', terminal.getSelectedText());
-          event.preventDefault();
-        }
+      if (terminal.hasSelection()) {
+        event.clipboardData.setData('text/plain', terminal.getSelectedText());
+        event.preventDefault();
+      }
     };
 
     const browserPasteFromClipboard = function (event) {
       input(event.clipboardData.getData('text/plain'));
       terminal.clearSelection();
       event.preventDefault();
-  };
+    };
 
     const focus = function () {
       screen.grabKeys = true;
@@ -3121,7 +3121,7 @@ class Exec extends Duplex {
 
       terminal.start();
       const alive = keepAlive();
-      let message, error, last;
+      let message, error;
       while (message = yield) {
         const channel = message[0].toString();
         message = message.slice(1).toString();
@@ -3130,7 +3130,6 @@ class Exec extends Duplex {
             // An initial ping frame with 0-length data is being sent
             if (message.length === 0) continue;
             terminal.write(message);
-            last = message;
             break;
           case '2':
           case '3':
@@ -3143,7 +3142,11 @@ class Exec extends Duplex {
       }
       // Connection closes
       clearInterval(alive);
-      if (error && last !== '\r\nexit\r\n') {
+      // Ctrl-C throws a SIGINT signal and aborts the current interactive command entry,
+      // which is a non-normal state for the command entry. In that case, we still want
+      // to dispose the terminal.
+      // See: http://tldp.org/LDP/abs/html/exitcodes.html#EXITCODESREF
+      if (error && !error.endsWith('Error executing in Docker Container: 130')) {
         terminal.write('\x1b[31mDisconnected\x1b[m\r\n');
         terminal.write('Type Ctrl-C to close\r\n');
         terminal.once('key C-c', dispose);
