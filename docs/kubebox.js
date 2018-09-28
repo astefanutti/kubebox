@@ -1181,10 +1181,10 @@ class XTerm extends blessed.ScrollableBox {
       let smd, smu, click = hrtime();
       this.onScreenEvent('mouse', smd = data => {
         // VTE seems to be sending mousemove while XTERM mousedown, let's handle both
-        if (data.action !== "mousemove" && data.action !== "mousedown") {
+        if (data.action !== 'mousemove' && data.action !== 'mousedown') {
           return;
         }
-        Object.assign(this._selection, {
+        Object.assign(this._selection || {}, {
           x2: data.x,
           // in absolute coordinates
           y2: data.y + this.term._core.buffer.ydisp,
@@ -1197,7 +1197,7 @@ class XTerm extends blessed.ScrollableBox {
         this._scrollingBar = false;
         this.removeScreenEvent('mouse', smd);
         this.removeScreenEvent('mouseup', smu);
-        const { x1, y1, x2, y2 } = this._selection;
+        const { x1, y1, x2, y2 } = this._selection || {};
         if (x1 === x2 && y1 === y2 && elapsed[0] === 0 && elapsed[1] * 1e-6 < 100) {
           // emulate clicking instead of selecting
           delete this._selection;
