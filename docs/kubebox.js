@@ -3187,6 +3187,8 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     shrink    : false,
     border    : { type : 'line' },
   });
+  // retain key grabbing as text areas reset it after input reading / blurring
+  form.on('focus', () => form.screen.grabKeys = true);
 
   form.on('element keypress', (el, ch, key) => {
     // submit the form on enter for textboxes
@@ -3247,8 +3249,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     bottom       : 6,
     value        : kube_config ? kube_config.current_context.cluster.server : '',
   });
-  // retain key grabbing as text areas reset it after input reading
-  url.on('blur', () => form.screen.grabKeys = true);
 
   blessed.text({
     parent  : form,
@@ -3270,8 +3270,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     bottom       : 4,
     value        : kube_config ? kube_config.current_context.user.username : '',
   });
-  // retain key grabbing as text areas reset it after input reading
-  username.on('blur', () => form.screen.grabKeys = true);
 
   blessed.text({
     parent  : form,
@@ -3294,8 +3292,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     bottom       : 3,
     value        : kube_config ? kube_config.current_context.user.password : '',
   });
-  // retain key grabbing as text areas reset it after input reading
-  password.on('blur', () => form.screen.grabKeys = true);
 
   blessed.text({
     parent  : form,
@@ -3317,8 +3313,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     bottom       : 2,
     value        : kube_config ? kube_config.current_context.user.token : '',
   });
-  // retain key grabbing as text areas reset it after input reading
-  token.on('blur', () => form.screen.grabKeys = true);
 
   if (os.platform() === 'browser' && kube_config) {
     const config = blessed.button({
