@@ -11,8 +11,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "browserify": "browserify -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js -o docs/kubebox.js",
-    "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
+    "browserify": "browserify -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js -o docs/kubebox.js",
+    "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
     "bundle": "browserify index.js -o bundle.js -u pty.js -u term.js -u spawn-sync --node",
     "executable": "nexe package.json",
     "server": "node ./docs/server.js"

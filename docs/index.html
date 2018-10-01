@@ -109,11 +109,16 @@
   </div>
 
   <script>
-  var blessed = require('blessed');
-  var Context = require('context');
-  var get     = require('http-then').get;
-  var Kubebox = require('kubebox');
-  var URI     = require('urijs');
+  var blessed       = require('blessed');
+  var cancellations = require('task');
+  var Context       = require('context');
+  var get           = require('http-then').get;
+  var Kubebox       = require('kubebox');
+  var URI           = require('urijs');
+
+  window.addEventListener('beforeunload', function (event) {
+    cancellations.runAll();
+  });
 
   // Patch Xterm.js / Blessed integration
   Object.defineProperty(Terminal.prototype, 'columns', {

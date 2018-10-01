@@ -2,16 +2,20 @@
 
 'use strict';
 
-const blessed = require('blessed'),
-      Context = require('./lib/config/context'),
-      fs      = require('fs'),
-      Kubebox = require('./lib/kubebox');
+const blessed       = require('blessed'),
+      cancellations = require('./lib/task'),
+      Context       = require('./lib/config/context'),
+      fs            = require('fs'),
+      Kubebox       = require('./lib/kubebox');
 
 const screen = blessed.screen({
   ignoreLocked: ['C-c']
 });
 
-screen.key(['q'], (ch, key) => process.exit(0));
+screen.key(['q'], (ch, key) => {
+  cancellations.runAll();
+  process.exit(0);
+});
 
 let server;
 
