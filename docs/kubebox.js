@@ -3459,7 +3459,35 @@ function prompt(screen, kube_config, kubebox, { closable, message }) {
       if (!closed) close_login_form();
     };
 
-    form.on('submit', data => {
+    let text;
+    function display_message(message) {
+      let dy = 0;
+      if (text) {
+        dy = text.lpos.yl - text.lpos.yi + 1;
+        text.setContent(message);
+      } else {
+        text = blessed.text({
+          parent  : form,
+          tags    : true,
+          left    : 1,
+          right   : 1,
+          top     : 0,
+          align   : 'left',
+          height  : 'shrink',
+          content : message,
+        });
+      }
+      text.render();
+      form.height += text.lpos.yl - text.lpos.yi + 1 - dy;
+      screen.render();
+    }
+
+    form.on('submit', _ => {
+      // we may want to provide URL validation
+      if (!url()) {
+        display_message('{red-fg}URL is not valid!{/red-fg}');
+        return;
+      }
       close_login_form();
       fulfill({
         url      : url(),
@@ -3477,19 +3505,7 @@ function prompt(screen, kube_config, kubebox, { closable, message }) {
     screen.render();
 
     if (message) {
-      const text = blessed.text({
-        parent  : form,
-        tags    : true,
-        left    : 1,
-        right   : 1,
-        top     : 0,
-        align   : 'left',
-        height  : 'shrink',
-        content : message,
-      });
-      text.render();
-      form.height += text.lpos.yl - text.lpos.yi + 1;
-      screen.render();
+      display_message(message);
     }
   });
   return { promise, cancellation: () => cancellation() };
