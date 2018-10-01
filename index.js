@@ -9,10 +9,10 @@ const blessed       = require('blessed'),
       Kubebox       = require('./lib/kubebox');
 
 const screen = blessed.screen({
-  ignoreLocked: ['C-c']
+  ignoreLocked: ['C-q'],
 });
 
-screen.key(['q'], (ch, key) => {
+screen.key(['q', 'C-q'], (ch, key) => {
   cancellations.runAll();
   process.exit(0);
 });
