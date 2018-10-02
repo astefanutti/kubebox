@@ -140,6 +140,14 @@ class Client {
     }, this.master_api);
   }
 
+  watch_pod(namespace, name, resourceVersion) {
+    const request = this.watch_pods(namespace, resourceVersion);
+    request.path = URI(request.path)
+      .addQuery('fieldSelector', `metadata.name=${name}`)
+      .toString();
+    return request;
+  }
+
   follow_log(namespace, name, { sinceTime, container } = {}) {
     // TODO: limit the amount of data with the limitBytes parameter
     const path = URI(`/api/v1/namespaces/${namespace}/pods/${name}/log?follow=true&tailLines=10000&timestamps=true`);
@@ -2476,12 +2484,39 @@ class Dashboard {
         render : _ => exec.render(),
       }, { select: true });
 
-      exec.on('exit', () => navbar.remove(byId));
+      const watch = `terminal.${id}`;
+      exec.on('exit', () => {
+        cancellations.run(watch);
+        navbar.remove(byId);
+      });
 
       until(promise)
         .spin(s => exec.setLabel(`${s} ${namespace}/${name}/${container}`))
         .then(() => debug.log(`{grey-fg}Remote shell into '${namespace}/${name}/${container}'{/grey-fg}`))
         .then(() => exec.setLabel(`${namespace}/${name}/${container}`))
+        .then(() => {
+          const { promise, cancellation } = get(client.watch_pod(namespace, name, pod.metadata.resourceVersion), { generator: function* () {
+            let change;
+            while (change = yield) {
+              change = JSON.parse(change);
+              const pod = change.object;
+              switch (change.type) {
+                case 'MODIFIED':
+                  if (pod.metadata.deletionTimestamp) {
+                    exec.setLabel(`${namespace}/${name}/${container} {red-fg}TERMINATING{/red-fg}`);
+                    screen.render();
+                  }
+                  break;
+                case 'DELETED':
+                  exec.setLabel(`${namespace}/${name}/${container} {red-fg}DELETED{/red-fg}`);
+                  screen.render();
+                  break;
+              }
+            }
+          }});
+          cancellations.add(watch, cancellation);
+          return promise;
+        })
         // TODO: display error details in terminal
         .catch(error => console.error(error.stack));
     });
@@ -2901,15 +2936,14 @@ class Exec extends Duplex {
     };
 
     const terminal = new XTerm({
-      parent     : screen,
-      screenKeys : true,
-      left       : 0,
-      top        : 1,
-      width      : '100%',
-      bottom     : 1,
-      border     : 'line',
-      mouse      : 'true',
-      scrollbar  : {
+      parent    : screen,
+      left      : 0,
+      top       : 1,
+      width     : '100%',
+      bottom    : 1,
+      border    : 'line',
+      mouse     : 'true',
+      scrollbar : {
         ch    : ' ',
         style : { bg: 'white' },
         track : {
@@ -3085,7 +3119,7 @@ class Exec extends Duplex {
             break;
           case '2':
           case '3':
-            terminal.write(`\x1b[31m${message}\x1b[m\r\n`);
+            terminal.write(`\r\n\x1b[31m${message}\x1b[m\r\n`);
             error = message;
             break;
           default:
