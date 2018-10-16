@@ -2531,7 +2531,7 @@ class Dashboard {
       const containers = pod.spec.containers;
       let container;
       if (containers.length === 1) {
-        if (name === pod_selected) {
+        if (pod.metadata.uid === pod_selected) {
           return;
         } else {
           container = containers[0];
@@ -2542,7 +2542,7 @@ class Dashboard {
         container = containers[(i + 1) % containers.length];
         container_selected = container.name;
       }
-      pod_selected = name;
+      pod_selected = pod.metadata.uid;
       cancellations.run('dashboard.pod');
       // just to update the table with the new selection
       updatePodsTable(pods_list);
@@ -2585,6 +2585,7 @@ class Dashboard {
           .then(() => get(client.get_pod(namespace, name)))
           .then(response => JSON.parse(response.body.toString('utf8')))
           .then(pod => {
+            if (pod.metadata.uid !== pod_selected) return;
             // TODO: checks should be done at the level of the container (like CrashLoopBackOff)
             // check if the pod is not terminated (otherwise the connection closes)
             if (pod.status.phase !== 'Running') return;
@@ -2603,7 +2604,7 @@ class Dashboard {
                 }
                 : logger });
               cancellations.add('dashboard.pod.logs', cancellation);
-              return promise.then(() => debug.log(`{grey-fg}Following log for ${pod_selected}/${container_selected} ...{/grey-fg}`));
+              return promise.then(() => debug.log(`{grey-fg}Following log for ${name}/${container_selected} ...{/grey-fg}`));
             }
           })
           .catch(error => {
@@ -2619,7 +2620,7 @@ class Dashboard {
       until(logs.promise)
         .spin(s => pod_log.setLabel(`${s} Logs {grey-fg}[${container_selected}]{/grey-fg}`))
         .cancel(c => cancellations.add('dashboard.pod.logs', c))
-        .then(() => debug.log(`{grey-fg}Following log for ${pod_selected}/${container_selected} ...{/grey-fg}`))
+        .then(() => debug.log(`{grey-fg}Following log for ${name}/${container_selected} ...{/grey-fg}`))
         .then(() => pod_log.setLabel(`Logs {grey-fg}[${container_selected}]{/grey-fg}`))
         .then(() => screen.render())
         .catch(error => console.error(error.stack));
@@ -2665,9 +2666,9 @@ class Dashboard {
     function updatePodsTable(pods) {
       const selected = pods_table.selected;
       pods_table.setData(pods.items.reduce((data, pod) => {
-        const name = pod.metadata.name;
+        const uid = pod.metadata.uid;
         data.push([
-          name === pod_selected ? `{blue-fg}${name}{/blue-fg}` : name,
+          uid === pod_selected ? `{blue-fg}${pod.metadata.name}{/blue-fg}` : pod.metadata.name,
           // TODO: be more fine grained for the status
           // TODO: add a visual hint depending on the status
           pod.status.phase,
@@ -2825,7 +2826,7 @@ class Dashboard {
             case 'DELETED':
               pods_list.items.splice(index(change.object), 1);
               // check if that's the selected pod and clean up
-              if (change.object.metadata.name === pod_selected) {
+              if (change.object.metadata.uid === pod_selected) {
                 cancellations.run('dashboard.pod');
                 resources.setLabel(`Resources {grey-fg}[${container_selected}]{/grey-fg} {red-fg}DELETED{/red-fg}`);
                 pod_log.setLabel(`Logs {grey-fg}[${container_selected}]{/grey-fg} {red-fg}DELETED{/red-fg}`);
