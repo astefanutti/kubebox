@@ -67,7 +67,7 @@ $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 You can run Kubebox as an _in-cluster_ client with `kubectl`, e.g.:
 
 ```sh
-$ kubectl run kubebox -it --rm --image=astefanutti/kubebox --restart=Never
+$ kubectl run kubebox -it --rm --env="TERM=xterm" --image=astefanutti/kubebox --restart=Never
 ```
 
 See the <<RBAC, RBAC>> section for more information about RBAC authorization.
