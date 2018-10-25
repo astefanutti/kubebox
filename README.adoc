@@ -25,10 +25,12 @@ endif::[]
 
 {description}
 
-//image::https://astefanutti.github.io/kubebox/kubebox.png[align="center"]
+//image::https://astefanutti.github.io/kubebox/kubebox.svg[align="center"]
 ++++
 <p align="center">
-  <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.png">
+  <a href="https://astefanutti.github.io/kubebox/kubebox.svg">
+    <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.svg">
+  </a>
 </p>
 ++++
 
