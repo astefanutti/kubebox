@@ -1,7 +1,7 @@
 = Kubebox [small]#^⎈❏^#
 Antonin Stefanutti <https://github.com/astefanutti[@astefanutti]>
 // Meta
-:description: Terminal console for Kubernetes clusters
+:description: Terminal and Web console for Kubernetes
 // Settings
 :idprefix:
 :idseparator: -
@@ -45,6 +45,8 @@ endif::[]
 * [x] Container remote exec terminal
 * [ ] Object configuration editor and CRUD operations
 * [ ] Cluster and nodes views / monitoring
+* [ ] Port proxying and interactive HTTP client
+* [ ] ...
 
 == Run
 
