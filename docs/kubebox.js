@@ -1386,12 +1386,12 @@ class XTerm extends blessed.ScrollableBox {
 
       // iterate over all columns
       for (let x = Math.max(xi, 0); x < xl; x++) {
-        if (!sline[x] || !tline[x - xi])
+        if (!sline[x] || !tline.get(x - xi))
           break;
 
         // read terminal attribute and character
-        let x0 = tline[x - xi][0];
-        let x1 = tline[x - xi][1];
+        let x0 = tline.get(x - xi)[0];
+        let x1 = tline.get(x - xi)[1];
 
         // handle cursor
         if (x === cursor) {
@@ -1422,7 +1422,7 @@ class XTerm extends blessed.ScrollableBox {
             inverse = true;
           }
         }
-        if (inverse && tline[x - xi][3] != 32) {
+        if (inverse && tline.get(x - xi)[3] != 32) {
           x0 = x0 | (8 << 18);
         }
 
