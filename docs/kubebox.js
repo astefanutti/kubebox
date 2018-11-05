@@ -9,7 +9,7 @@ class Client {
   constructor(master_api) {
     // should ideally be a defensive copy
     this.master_api = master_api;
-    this.apis = [];
+    this.paths = [];
   }
 
   get master_api() {
@@ -17,7 +17,7 @@ class Client {
   }
 
   set master_api(master_api) {
-    this.apis = [];
+    this.paths = [];
     this._master_api = master_api;
   }
 
@@ -34,28 +34,28 @@ class Client {
   }
 
   get openshift() {
-    return this.apis.some(path => path === '/oapi' || path === '/oapi/v1');
+    return this.paths.some(path => path === '/oapi' || path === '/oapi/v1');
   }
 
   get_api() {
-    const apis = merge({
+    const request = merge({
       path   : '/api',
       method : 'GET',
     },
     this.master_api);
-    return apis;
+    return request;
   }
 
-  get_apis({ authorization } = { authorization: true }) {
-    const apis = merge({
+  get_paths({ authorization } = { authorization: true }) {
+    const request = merge({
       path   : '/',
       method : 'GET',
     },
     this.master_api);
     if (!authorization) {
-      delete apis.headers['Authorization'];
+      delete request.headers['Authorization'];
     }
-    return apis;
+    return request;
   }
 
   // https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html
@@ -78033,12 +78033,15 @@ class Kubebox extends EventEmitter {
         if (cancellation()) debug.log(`{grey-fg}Cancelled connection to ${client.url}{/grey-fg}`);
       });
       return until(promise
-        // We may want to update the master URL based on federation information
-        // by selecting the server whose client CIDR matches the client IP (serverAddressByClientCIDRs)
+        // we may want to update the master URL based on federation information by selecting the server whose client CIDR matches the client IP (serverAddressByClientCIDRs)
         .then(() => login ? log(`{green-fg}Connected to {bold}${client.url}{/bold}{/green-fg}`) : '')
-        // Work-around CORS issue where authorization header triggers a pre-flight check that returns 302 which is not allowed
-        .then(() => get(client.get_apis({ authorization: !CORS })))
-        .then(response => client.apis = JSON.parse(response.body.toString('utf8')).paths)
+        // work-around CORS issue where authorization header triggers a pre-flight check that returns 302 which is not allowed
+        .then(() => get(client.get_paths({ authorization: !CORS }))
+          // try getting master API paths
+          .then(response => client.paths = JSON.parse(response.body.toString('utf8')).paths)
+          .catch(error => error.response && [401, 403].includes(error.response.statusCode)
+            ? Promise.resolve()
+            : Promise.reject(error)))
         .then(() => current_namespace
           ? Promise.resolve(current_namespace)
           : namespaces.prompt(screen, client, { promptAfterRequest : true })
@@ -78070,7 +78073,7 @@ class Kubebox extends EventEmitter {
                 // throttle reconnection
                 .then(wait(100))
                 .then(() => logging(Object.assign({}, options, { message: os.platform() === 'browser'
-                  // Fetch and XHR API do not expose connection network error details :(
+                  // fetch and XHR API do not expose connection network error details :(
                   ? `{red-fg}Connection failed to ${client.url}{/red-fg}`
                   : `{red-fg}${error.message}{/red-fg}` })))
             : Promise.reject(error));
