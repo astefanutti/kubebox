@@ -3561,7 +3561,7 @@ function prompt(screen, kube_config, kubebox, { closable, message }) {
 
     form.on('submit', _ => {
       // we may want to provide URL validation
-      if (!url()) {
+      if (kube_config && !url()) {
         display_message('{red-fg}URL is not valid!{/red-fg}');
         return;
       }
