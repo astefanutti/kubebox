@@ -2,6 +2,12 @@
 
 'use strict';
 
+const terminal = process.env.TERM || (process.platform === 'win32' ? 'windows-ansi' : 'xterm');
+// theming, it has to be the first to hack into blessed Node module
+if (!['xterm-color', 'xterm-16color', 'xterm-256color'].includes(terminal)) {
+  require('./lib/ui/theme');
+}
+
 const blessed       = require('blessed'),
       cancellations = require('./lib/task'),
       Context       = require('./lib/config/context'),

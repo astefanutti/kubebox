@@ -734,7 +734,6 @@ function Canvas(options, canvasType) {
   }
 
   options = options || {};
-  this.options = options
   Box.call(this, options);
 
   this.on('attach', function () {
@@ -1748,7 +1747,9 @@ blessed.listbar.prototype.appendItem = function (item, callback) {
     cmd.prefix = cmd.keys[0];
   }
 
-  var t = blessed.helpers.generateTags(this.style.prefix || { fg: 'lightblack' });
+  // PATCH BEGIN
+  var t = blessed.helpers.generateTags(this.style.prefix /* || { fg: 'lightblack' } */);
+  // PATCH END
 
   title = (cmd.prefix != null ? t.open + cmd.prefix + t.close + ':' : '') + cmd.text;
 
@@ -1776,7 +1777,7 @@ blessed.listbar.prototype.appendItem = function (item, callback) {
 
   ['bg', 'fg', 'bold', 'underline', 'blink', 'inverse', 'invisible'].forEach(
     function(name) {
-      options.style[name] = function() {
+      options.style[name] = function () {
         var attr =
           self.items[self.selected] === el
             ? self.style.selected[name]
@@ -2992,8 +2993,8 @@ module.exports = screen => {
   const d = debug(screen);
   return {
     debug : d,
-    log   : message => new Promise(resolve => {
-      d.log(message);
+    log : (...args) => new Promise(resolve => {
+      d.log(args);
       resolve();
     }),
   }
@@ -3617,14 +3618,14 @@ function namespaces_list(screen) {
       ch      : ' ',
       style   : { bg: 'white' },
       track   : {
-        style : { bg: 'grey' }
+        style : { bg: 'grey' },
       }
     },
     style : {
       fg       : 'white',
       label    : { bold: true },
       border   : { fg: 'white' },
-      selected : { bg: 'blue' }
+      selected : { bg: 'blue' },
     }
   });
 
@@ -3749,10 +3750,7 @@ class NavBar {
       mouse  : true,
       keys   : true,
       style : {
-        bg     : 'white',
-        prefix : {
-          fg : '#888',
-        },
+        bg : 'white',
         item : {
           fg : 'black',
           bg : 'white',
@@ -3764,7 +3762,7 @@ class NavBar {
         },
         selected : {
           fg : 'white',
-          bg : 'grey',
+          bg : 'blue',
         }
       },
       autoCommandKeys : false,
@@ -3844,7 +3842,7 @@ class NavBar {
       // fix for listBar#removeItem
       tabs.commands.forEach((command, index) => {
         command.prefix = index + 1;
-        command.element.content = `{#888-fg}${command.prefix}{/#888-fg}:${command.text}`;
+        command.element.content = `${command.prefix}:${command.text}`;
       });
       tabs.render();
       // TODO: we may want to maintain a navigation history
@@ -3990,6 +3988,13 @@ Object.defineProperties(Array.prototype, {
     enumerable : false,
   }
 });
+
+module.exports.safeGet = function (object, path) {
+  if (typeof path === 'string') {
+    path = path.split('.');
+  }
+  return path.reduce((r, p) => r && r[p] ? r[p] : null, object);
+}
 
 module.exports.isEmpty = str => !str || str === '';
 
