@@ -4123,9 +4123,11 @@ var Terminal = (function (_super) {
                         : 65;
                     break;
                 case 'wheel':
-                    button = ev.wheelDeltaY > 0
+                    // PATCH BEGIN
+                    button = ev.deltaY < 0
                         ? 64
                         : 65;
+                    // PATCH END
                     break;
             }
             shift = ev.shiftKey ? 4 : 0;
