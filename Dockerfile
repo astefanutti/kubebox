@@ -18,7 +18,7 @@ ENV LANG C.UTF-8
 
 # Node.js
 COPY --from=builder /usr/local/bin/node /usr/local/bin/
-COPY --from=builder /usr/lib /usr/lib
+COPY --from=builder /usr/lib/libgcc* /usr/lib/libstdc* /usr/lib/
 
 # Kubebox
 COPY --from=builder /kubebox/bundle.js /kubebox/client.js
