@@ -121,22 +121,6 @@ This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.
 $ kube-apiserver --cors-allowed-origins .*
 ```
 
-=== NPM
-
-Install Kubebox globally and run it:
-
-```sh
-$ npm install -g kubebox
-$ kubebox
-```
-
-Or locally:
-
-```sh
-$ npm install kubebox
-$ `npm bin`/kubebox
-```
-
 == RBAC
 
 If RBAC is enabled, Kubebox needs RBAC permissions to access the cluster resources.
@@ -176,7 +160,7 @@ You can find more information in {uri-service-account}[Configure Service Account
 |Close modal window / cancel form / rewind focus
 
 |kbd:[q], kbd:[Ctrl+q]
-|Exit footnoteref:[online keys, Not available in Web versions.]
+|Exit footnoteref:[online keys, Not available in Web version.]
 
 2+^.e|Login
 
