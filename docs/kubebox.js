@@ -2918,14 +2918,15 @@ class Dashboard {
     this.run = function (namespace) {
       current_namespace = namespace;
       // FIXME: should be cancellable
-      return until(get(client.get_pods(current_namespace)))
+      const promise = until(get(client.get_pods(current_namespace)))
         .spin(s => pods_table.setLabel(`${s} Pods`))
         .succeed(_ =>  pods_table.setLabel('Pods'))
         .then(response => {
           pods_list = JSON.parse(response.body.toString('utf8'));
           pods_list.items = pods_list.items || [];
         })
-        .then(() => updatePodsTable(pods_list))
+        .then(() => updatePodsTable(pods_list));
+      promise
         .then(() => debug.log(`{grey-fg}Watching for pods changes in namespace ${current_namespace} ...{/grey-fg}`))
         .then(() => screen.render())
         .then(() => {
@@ -2936,7 +2937,9 @@ class Dashboard {
           const { promise, cancellation } = get(client.watch_pods(current_namespace, pods_list.metadata.resourceVersion), { generator: updatePodTable });
           cancellations.add('dashboard', cancellation);
           return promise;
-        });
+        })
+        .catch(error => console.error(error.stack));
+      return promise;
     }
 
     function* updatePodTable() {
@@ -77560,7 +77563,7 @@ const { Transform } = require('stream');
 // TODO: expose a writable stream option instead of a generator
 module.exports.get = function (options, { generator, readable, async = true, cancellable = false } = {}) {
   if (generator) {
-    if (os.platform() === 'browser' && WebSocket) {
+    if (os.platform() === 'browser' && WebSocket && options.headers && (options.headers['Upgrade'] || '').toLowerCase() === 'websocket') {
       return getWebSocketStream(options, { generator, readable, async });
     } else {
       return getStream(options, { generator, readable, async });
