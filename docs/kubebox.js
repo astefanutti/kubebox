@@ -3155,6 +3155,8 @@ class Exec extends Duplex {
             // Paste from clipboard
             input(clipboardy.readSync());
             terminal.clearSelection();
+            // scrolls to bottom
+            terminal.setScrollPerc(100);
           }
           skipInputDataOnce = true;
         }
