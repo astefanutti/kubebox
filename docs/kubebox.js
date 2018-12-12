@@ -1441,12 +1441,12 @@ class XTerm extends blessed.ScrollableBox {
           x0 = x0 | (8 << 18);
         }
 
-        // default foreground is 257
-        if (((x0 >> 9) & 0x1ff) === 257) {
+        // default foreground
+        if (((x0 >> 9) & 0x1ff) === 256) {
           x0 = (x0 & ~(0x1ff << 9)) | (((this.dattr >> 9) & 0x1ff) << 9);
         }
 
-        // default background is 256
+        // default background
         if ((x0 & 0x1ff) === 256) {
           x0 = (x0 & ~0x1ff) | (this.dattr & 0x1ff);
         }
