@@ -17,12 +17,14 @@ ifndef::env-github[]
 endif::[]
 // URIs
 :uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.3.2
+:uri-kubebox-twitter: https://twitter.com/kubebox
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
 :uri-service-account: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 :uri-xterm-js: https://github.com/xtermjs/xterm.js
 
+image::https://img.shields.io/badge/twitter-%40kubebox-00ACEE.svg?style=flat-square[link={uri-kubebox-twitter}]
 {description}
 
 //image::https://astefanutti.github.io/kubebox/kubebox.svg[align="center"]
