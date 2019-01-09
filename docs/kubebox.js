@@ -2378,10 +2378,10 @@ module.exports = function (widget) {
   let delta = 0, tick = false;
 
   const scroll = function (d) {
-  delta += d;
+    delta += d;
     if (!tick) {
       setTimeout(function () {
-        if (delta != 0) {
+        if (delta != 0 && !widget.detached) {
           widget.scroll(delta);
           delta = 0;
         }
