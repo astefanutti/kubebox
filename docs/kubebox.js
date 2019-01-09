@@ -289,8 +289,6 @@ class Cluster {
   }
 }
 
-Cluster.default = new Cluster({ server: undefined, name: '' });
-
 module.exports = Cluster;
 },{"urijs":"urijs"}],3:[function(require,module,exports){
 module.exports.AuthProvider = require('./user').AuthProvider;
@@ -327,7 +325,7 @@ class KubeConfigManager extends EventEmitter {
       if (server) {
         this.server = server;
         this.server_contexts = findContextsByClusterUrl(this.contexts, this.server);
-        this.current_context = this.server_contexts.find(c => c.name === this.current_context.name) || Context.default;
+        this.current_context = this.server_contexts.find(c => c.name === this.current_context.name);
       }
     } else {
       const kube_config = readKubeConfigFromFiles({ debug });
@@ -341,7 +339,7 @@ class KubeConfigManager extends EventEmitter {
       if (url) {
         this.current_context = findOrCreateContext(this.contexts, { url });
       } else {
-        this.current_context = this.contexts.find(context => context.name === kube_config['current-context']) || Context.default;
+        this.current_context = this.contexts.find(context => context.name === kube_config['current-context']);
       }
     }
   }
@@ -349,10 +347,10 @@ class KubeConfigManager extends EventEmitter {
   loadFromConfig(config) {
     const kube_config = yaml.safeLoad(config);
     this.contexts = loadContexts(kube_config);
-    this.current_context = this.contexts.find(context => context.name === kube_config['current-context']) || Context.default;
+    this.current_context = this.contexts.find(context => context.name === kube_config['current-context']);
     if (this.server) {
       this.server_contexts = findContextsByClusterUrl(this.contexts, this.server);
-      this.current_context = this.server_contexts.find(c => c.name === this.current_context.name) || Context.default;
+      this.current_context = this.server_contexts.find(c => c.name === this.current_context.name);
     }
     if (os.platform() === 'browser') {
       writeKubeConfigInLocalStore(this);
@@ -493,7 +491,7 @@ function readKubeConfigFromLocalStore({ debug }) {
       debug.log(`Unable to load '.kube-config' from local storage: ${error}`);
     }
   }
-  return { contexts: [], current_context: Context.default };
+  return { contexts: [], current_context: undefined };
 }
 
 function writeKubeConfigInLocalStore(kube_config) {
@@ -3522,7 +3520,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     width        : 35,
     left         : 15,
     bottom       : 6,
-    value        : kube_config ? kube_config.current_context.cluster.server : '',
   });
 
   blessed.text({
@@ -3543,7 +3540,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     width        : 30,
     left         : 15,
     bottom       : 4,
-    value        : kube_config ? kube_config.current_context.user.username : '',
   });
 
   blessed.text({
@@ -3565,7 +3561,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     left         : 15,
     censor       : true,
     bottom       : 3,
-    value        : kube_config ? kube_config.current_context.user.password : '',
   });
 
   blessed.text({
@@ -3586,7 +3581,6 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     width        : 33,
     left         : 15,
     bottom       : 2,
-    value        : kube_config ? kube_config.current_context.user.token : '',
   });
 
   if (os.platform() === 'browser' && kube_config) {
@@ -3689,6 +3683,8 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
     }
     form.screen.render();
   }
+
+  refresh();
 
   return {
     form, refresh,
@@ -77699,13 +77695,6 @@ class Context {
   }
 }
 
-Context.default = new Context({
-  cluster   : Cluster.default,
-  namespace : Namespace.default,
-  user      : User.default,
-  name      : '',
-});
-
 module.exports = Context;
 }).call(this,require("buffer").Buffer)
 },{"./cluster":2,"./namespace":5,"./user":6,"buffer":130,"fs":80,"os":192,"urijs":"urijs"}],"http-then":[function(require,module,exports){
@@ -78155,8 +78144,10 @@ class Kubebox extends EventEmitter {
     } else {
       kube_config = new KubeConfig({ debug });
       this.loadKubeConfig = config => kube_config.loadFromConfig(config);
-      client.master_api = kube_config.current_context.getMasterApi();
-      current_namespace = kube_config.current_context.namespace.name;
+      if (kube_config.current_context) {
+        client.master_api = kube_config.current_context.getMasterApi();
+        current_namespace = kube_config.current_context.namespace.name;
+      }
     }
 
     const navbar = new NavBar(screen);
