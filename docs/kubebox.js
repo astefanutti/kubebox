@@ -652,9 +652,8 @@ class User {
 
 class AuthProvider {
 
-  // TODO: support reading / using IDP certificate authority
   constructor(name, { 'idp-issuer-url': url, 'id-token': token, 'refresh-token': refresh_token,
-      'client-id': client_id, 'client-secret': client_secret }) {
+      'client-id': client_id, 'client-secret': client_secret, 'idp-certificate-authority' : ca }) {
     this.client_id = client_id;
     this.client_secret = client_secret;
     this.name = name;
@@ -665,6 +664,7 @@ class AuthProvider {
     } else {
       this.url = url;
     }
+    this.idp_certificate_authority = ca;
   }
 }
 
@@ -757,7 +757,8 @@ module.exports.isPodRunningOrTerminating = function (pod) {
 (function (Buffer){
 'use strict';
 
-const get = require('./http-then').get,
+const fs  = require('fs'),
+      get = require('./http-then').get,
       URI = require('urijs');
 
 class OpenIdConnect {
@@ -765,6 +766,14 @@ class OpenIdConnect {
   constructor(/* User.AuthProvider */ auth_provider) {
     this.auth_provider = auth_provider;
     this.jwt = this.auth_provider.token;
+
+    if (this.auth_provider.idp_certificate_authority) {
+      if (os.platform() !== 'browser') {
+        this.auth_provider.ca = fs.readFileSync(this.auth_provider.idp_certificate_authority);
+      } else {
+        console.error('Reading IDP certificate authority file \'%s\' is not supported!', this.auth_provider.idp_certificate_authority);
+      }
+    }
   }
 
   refresh_token() {
@@ -809,6 +818,7 @@ class OpenIdConnect {
   provider_configuration_options() {
     // https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig
     const options = URI.parse(this.auth_provider.url);
+    if (this.auth_provider.ca) options.ca = this.auth_provider.ca;
     options.path = URI.joinPaths(options.path, '.well-known/openid-configuration');
     options.protocol += ':';
     return options;
@@ -816,6 +826,7 @@ class OpenIdConnect {
 
   refresh_token_options() {
     const options = URI.parse(this.token_url);
+    if (this.auth_provider.ca) options.ca = this.auth_provider.ca;
     options.protocol += ':';
     options.method = 'POST';
     options.postData = {
@@ -831,7 +842,7 @@ class OpenIdConnect {
 module.exports = OpenIdConnect;
 
 }).call(this,require("buffer").Buffer)
-},{"./http-then":"http-then","buffer":130,"urijs":"urijs"}],9:[function(require,module,exports){
+},{"./http-then":"http-then","buffer":130,"fs":80,"urijs":"urijs"}],9:[function(require,module,exports){
 'use strict';
 
 module.exports.delay = delay => new Promise(resolve => setTimeout(resolve, delay));
