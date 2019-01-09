@@ -40,9 +40,11 @@ function execute(request, { generator, readable, async, cancellable }) {
     promise = promise.then(token => options.headers['Authorization'] = `Bearer ${token}`);
   }
 
-  const { promise: p, cancellation } = get(options, { generator, readable, async, cancellable: true });
-  cancellations.push(cancellation);
-  promise = promise.then(() => p);
+  promise = promise.then(() => {
+    const { promise: p, cancellation } = get(options, { generator, readable, async, cancellable: true });
+    cancellations.push(cancellation);
+    return p;
+  });
 
   return cancellable || generator ? { promise, cancellation: () => cancellations.forEach(c => c()) } : promise;
 }
@@ -784,13 +786,17 @@ class OpenIdConnect {
     } else {
       const { promise: p, cancellation } = get(this.provider_configuration_options(), { cancellable: true });
       cancellations.push(cancellation);
-      promise = p.then(response => JSON.parse(response.body.toString('utf8')).token_endpoint)
+      promise = p
+        .then(response => JSON.parse(response.body.toString('utf8')).token_endpoint)
         .then(token_url => this.token_url = token_url);
     }
 
-    const { promise: p, cancellation } = get(this.refresh_token_options(), { cancellable: true });
-    cancellations.push(cancellation);
-    promise = promise.then(_ => p)
+    promise = promise
+      .then(_ => {
+        const { promise: p, cancellation } = get(this.refresh_token_options(), { cancellable: true });
+        cancellations.push(cancellation);
+        return p;
+      })
       .then(response => {
         const token = JSON.parse(response.body.toString('utf8')).id_token;
         this.jwt = token;
