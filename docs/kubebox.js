@@ -3029,7 +3029,6 @@ class Dashboard {
       screen.append(pods_table);
       screen.append(resources);
       screen.append(pod_log);
-      pod_log.setScrollPerc(100);
       pods_table.focus();
     }
 
