@@ -312,7 +312,7 @@ const EventEmitter = require('events'),
 
 const { AuthProvider, User, Namespace, Context, Cluster } = require('./config');
 
-const { isNotEmpty, isLocalStorageAvailable } = require('../util');
+const { isNotEmpty, isLocalStorageAvailable, safeGet } = require('../util');
 
 class KubeConfigManager extends EventEmitter {
 
@@ -325,7 +325,7 @@ class KubeConfigManager extends EventEmitter {
       if (server) {
         this.server = server;
         this.server_contexts = findContextsByClusterUrl(this.contexts, this.server);
-        this.current_context = this.server_contexts.find(c => c.name === this.current_context.name);
+        this.current_context = kube_config.current_context ? this.server_contexts.find(c => c.name === this.current_context.name) : undefined;
       }
     } else {
       const kube_config = readKubeConfigFromFiles({ debug });
@@ -350,7 +350,7 @@ class KubeConfigManager extends EventEmitter {
     this.current_context = this.contexts.find(context => context.name === kube_config['current-context']);
     if (this.server) {
       this.server_contexts = findContextsByClusterUrl(this.contexts, this.server);
-      this.current_context = this.server_contexts.find(c => c.name === this.current_context.name);
+      this.current_context = this.server_contexts.find(c => c.name === kube_config['current-context']);
     }
     if (os.platform() === 'browser') {
       writeKubeConfigInLocalStore(this);
@@ -529,7 +529,7 @@ function loadContexts(kube_config) {
   if (kube_config.contexts) {
     kube_config.contexts.forEach(context => contexts.push(new Context({
       cluster   : clusters.find(cluster => cluster.name === context.context.cluster),
-      namespace : new Namespace(context.context.namespace),
+      namespace : context.context.namespace ? new Namespace(context.context.namespace) : undefined,
       user      : users.find(user => user.name === context.context.user),
       name      : context.name,
     })));
@@ -542,10 +542,10 @@ function findOrCreateContext(contexts, { url, username, namespace/*, ...login*/ 
   const byUrl = findContextsByClusterUrl(contexts, url);
   if (byUrl.length === 1 && !username && !namespace) return byUrl[0];
 
-  const byUser = byUrl.filter(context => context.user.username === username);
+  const byUser = byUrl.filter(context => safeGet(context, 'user.username') === username);
   if (byUser.length === 1 && !namespace) return byUser[0];
 
-  const byNamespace = byUser.filter(context => context.namespace.name === namespace);
+  const byNamespace = byUser.filter(context => safeGet(context, 'namespace.name') === namespace);
   if (byNamespace.length === 1) return byNamespace[0];
 
   let cluster, user;
@@ -569,9 +569,9 @@ function findOrCreateContext(contexts, { url, username, namespace/*, ...login*/ 
   }
   return new Context({
     cluster,
-    user      : user || User.default,
-    namespace : namespace ? new Namespace(namespace) : Namespace.default,
-  })
+    user      : user,
+    namespace : namespace ? new Namespace(namespace) : undefined,
+  });
 }
 
 function findContextsByClusterUrl(contexts, url) {
@@ -597,8 +597,6 @@ class Namespace {
     this.name = name;
   }
 }
-
-Namespace.default = new Namespace();
 
 module.exports = Namespace;
 },{}],6:[function(require,module,exports){
@@ -667,8 +665,6 @@ class AuthProvider {
     this.idp_certificate_authority = ca;
   }
 }
-
-User.default = new User({ name: '', token: '' });
 
 module.exports.AuthProvider = AuthProvider;
 module.exports.User = User;
@@ -3447,6 +3443,8 @@ module.exports = Exec;
 const blessed = require('blessed'),
       os      = require('os');
 
+const { safeGet } = require('../util');
+
 function login_form(screen, kube_config, kubebox, { closable } = { closable: false }) {
   const form = blessed.form({
     name      : 'form',
@@ -3671,15 +3669,16 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
   url.options.inputOnFocus = false;
 
   const refresh = function () {
-    if (!kube_config.current_context) return;
+    // If no current context, let's try the first one if any
+    if (!kube_config.current_context) kube_config.nextContext();
 
-    const user = kube_config.current_context.user;
-    url.value = kube_config.current_context.cluster.server || '';
+    url.value = safeGet(kube_config, 'current_context', 'cluster.server') || '';
+    const user = safeGet(kube_config, 'current_context', 'user') || {};
     username.value = user.username || '';
     token.value = user.token || '';
     password.value = user.password || '';
     if (user.auth_provider && user.auth_provider.token) {
-      token.value = user.auth_provider.token; 
+      token.value = user.auth_provider.token;
     }
     form.screen.render();
   }
@@ -3782,7 +3781,7 @@ function prompt(screen, kube_config, kubebox, { closable, message }) {
 module.exports.prompt = prompt;
 
 }).call(this,require('_process'))
-},{"_process":216,"blessed":"blessed","os":192}],29:[function(require,module,exports){
+},{"../util":33,"_process":216,"blessed":"blessed","os":192}],29:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -4178,11 +4177,8 @@ Object.defineProperties(Array.prototype, {
   }
 });
 
-module.exports.safeGet = function (object, path) {
-  if (typeof path === 'string') {
-    path = path.split('.');
-  }
-  return path.reduce((r, p) => r && r[p] ? r[p] : null, object);
+module.exports.safeGet = function (object, ...path) {
+  return path.flatMap(p => p.split('.')).reduce((r, p) => r && r[p] ? r[p] : null, object);
 }
 
 module.exports.isEmpty = str => !str || str === '';
@@ -77583,12 +77579,9 @@ module.exports = blessed;
 (function (Buffer){
 'use strict';
 
-const fs        = require('fs'),
-      Cluster   = require('./cluster'),
-      Namespace = require('./namespace'),
-      os        = require('os'),
-      URI       = require('urijs'),
-      User      = require('./user');
+const fs  = require('fs'),
+      os  = require('os'),
+      URI = require('urijs');
 
 /**
  * contexts:
@@ -77607,10 +77600,12 @@ class Context {
 
   constructor({ cluster, namespace, user, name }) {
     if (typeof name === 'undefined') {
-      if (typeof namespace.name === 'undefined') {
-        this.name = cluster.name + '/' + user.username;
-      } else {
-        this.name = namespace.name + '/' + cluster.name + '/' + user.username;
+      this.name = cluster.name;
+      if (namespace) {
+        this.name = `${namespace.name}/${this.name}`;
+      }
+      if (user) {
+        this.name = `${this.name}/${user.username}`;
       }
     } else {
       this.name = name;
@@ -77620,55 +77615,57 @@ class Context {
     this.user = user;
   }
 
+  // TODO: handle browser support for loading local files (client certificate, key, ...)
   getMasterApi() {
-    if (typeof this.cluster.server === 'undefined') {
+    const cluster = this.cluster;
+    if (typeof cluster.server === 'undefined') {
       return undefined;
     }
-
     const api = Context.getBaseMasterApi(this.cluster.server);
-    // TODO: handle browser support for loading file certs
-    if (this.user.certificatePath) {
+    const user = this.user || {};
+    if (user.certificatePath) {
       if (os.platform() !== 'browser') {
-        api.cert = fs.readFileSync(this.user.certificatePath);
+        api.cert = fs.readFileSync(user.certificatePath);
       } else {
-        console.error('Reading user client certificate file \'%s\' is not supported!', this.user.certificatePath);
+        console.error('Reading user client certificate file \'%s\' is not supported!', user.certificatePath);
       }
     }
-    if (this.user.certificateBase64) {
-      api.cert = Buffer.from(this.user.certificateBase64, 'base64');
+    if (user.certificateBase64) {
+      api.cert = Buffer.from(user.certificateBase64, 'base64');
     }
-    if (this.user.keyPath) {
+    if (user.keyPath) {
       if (os.platform() !== 'browser') {
-        api.key = fs.readFileSync(this.user.keyPath);
+        api.key = fs.readFileSync(user.keyPath);
       } else {
-        console.error('Reading user client key file \'%s\' is not supported!', this.user.keyPath);
+        console.error('Reading user client key file \'%s\' is not supported!', user.keyPath);
       }
     }
-    if (this.user.keyBase64) {
-      api.key = Buffer.from(this.user.keyBase64, 'base64');
+    if (user.keyBase64) {
+      api.key = Buffer.from(user.keyBase64, 'base64');
     }
-    if (this.user.token) {
-      api.headers.Authorization = `Bearer ${this.user.token}`;
+    if (user.token) {
+      api.headers.Authorization = `Bearer ${user.token}`;
     }
-    if (this.user.auth_provider && this.user.auth_provider.token) {
-      const auth_provider = this.user.auth_provider;
+    if (user.auth_provider && user.auth_provider.token) {
+      const auth_provider = user.auth_provider;
       api.headers.Authorization = `Bearer ${auth_provider.token}`;
       if (auth_provider.refresh_token && auth_provider.url && auth_provider.client_id && auth_provider.client_secret) {
+        // FIXME: do not pollute API options and pass the current context to the client instead
         api.auth_provider = auth_provider;
       }
     }
-    if (this.cluster.rejectUnauthorized) {
+    if (cluster.rejectUnauthorized) {
       api.rejectUnauthorized = false;
     }
-    if (this.cluster.ca) {
+    if (cluster.ca) {
       if (os.platform() !== 'browser') {
-        api.ca = fs.readFileSync(this.cluster.ca);
+        api.ca = fs.readFileSync(cluster.ca);
       } else {
-        console.error('Reading cluster certificate authority file \'%s\' is not supported!', this.cluster.ca);
+        console.error('Reading cluster certificate authority file \'%s\' is not supported!', cluster.ca);
       }
     }
-    if (this.cluster.certData) {
-      api.ca = Buffer.from(this.cluster.certData, 'base64');
+    if (cluster.certData) {
+      api.ca = Buffer.from(cluster.certData, 'base64');
     }
     return api;
   }
@@ -77709,7 +77706,7 @@ class Context {
 
 module.exports = Context;
 }).call(this,require("buffer").Buffer)
-},{"./cluster":2,"./namespace":5,"./user":6,"buffer":130,"fs":80,"os":192,"urijs":"urijs"}],"http-then":[function(require,module,exports){
+},{"buffer":130,"fs":80,"os":192,"urijs":"urijs"}],"http-then":[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
@@ -78133,7 +78130,7 @@ const Client       = require('./client'),
 
 const { KubeConfig } = require('./config/config');
 const { Dashboard, login, namespaces, NavBar, spinner } = require('./ui/ui');
-const { isNotEmpty, isEmpty } = require('./util');
+const { isNotEmpty, isEmpty, safeGet } = require('./util');
 const { call, wait } = require('./promise');
 
 // runtime fixes for Blessed
@@ -78158,7 +78155,7 @@ class Kubebox extends EventEmitter {
       this.loadKubeConfig = config => kube_config.loadFromConfig(config);
       if (kube_config.current_context) {
         client.master_api = kube_config.current_context.getMasterApi();
-        current_namespace = kube_config.current_context.namespace.name;
+        current_namespace = safeGet(kube_config.current_context, 'namespace.name');
       }
     }
 
@@ -78232,7 +78229,7 @@ class Kubebox extends EventEmitter {
       .catch(fail({ closable: true })));
 
     if (typeof client.master_api !== 'undefined') {
-      connect(kube_config ? kube_config.current_context.user : null).catch(fail());
+      connect(safeGet(kube_config, 'current_context', 'user')).catch(fail());
     } else {
       logging().catch(fail());
     }
@@ -78342,7 +78339,7 @@ class Kubebox extends EventEmitter {
         // (in memory / into the Web browser local store)
         kube_config.updateOrInsertContext(login);
         client.master_api = kube_config.current_context.getMasterApi();
-        current_namespace = kube_config.current_context.namespace.name;
+        current_namespace = safeGet(kube_config.current_context, 'namespace', 'name');
       } else {
         current_namespace = null;
       }
