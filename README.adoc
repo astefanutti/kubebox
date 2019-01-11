@@ -24,7 +24,7 @@ endif::[]
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 :uri-xterm-js: https://github.com/xtermjs/xterm.js
 
-image::https://img.shields.io/badge/twitter-%40kubebox-00ACEE.svg?style=flat-square[link={uri-kubebox-twitter}]
+image::https://img.shields.io/badge/%40kubebox-00ACEE.svg?style=flat-square&logo=twitter&colorA=555&logoColor=fff[link={uri-kubebox-twitter}]
 {description}
 
 //image::https://astefanutti.github.io/kubebox/kubebox.svg[align="center"]
