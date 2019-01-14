@@ -215,7 +215,7 @@ var AccessibilityManager = (function (_super) {
 }(Lifecycle_2.Disposable));
 exports.AccessibilityManager = AccessibilityManager;
 
-},{"./Strings":13,"./common/Lifecycle":18,"./core/Platform":21,"./ui/Lifecycle":48,"./ui/RenderDebouncer":50}],2:[function(require,module,exports){
+},{"./Strings":13,"./common/Lifecycle":19,"./core/Platform":22,"./ui/Lifecycle":49,"./ui/RenderDebouncer":52}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -241,9 +241,12 @@ exports.CHAR_DATA_CHAR_INDEX = 1;
 exports.CHAR_DATA_WIDTH_INDEX = 2;
 exports.CHAR_DATA_CODE_INDEX = 3;
 exports.MAX_BUFFER_SIZE = 4294967295;
-exports.NULL_CELL_CHAR = ' ';
+exports.NULL_CELL_CHAR = '';
 exports.NULL_CELL_WIDTH = 1;
-exports.NULL_CELL_CODE = 32;
+exports.NULL_CELL_CODE = 0;
+exports.WHITESPACE_CELL_CHAR = ' ';
+exports.WHITESPACE_CELL_WIDTH = 1;
+exports.WHITESPACE_CELL_CODE = 32;
 var Buffer = (function () {
     function Buffer(_terminal, _hasScrollback) {
         this._terminal = _terminal;
@@ -393,7 +396,7 @@ var Buffer = (function () {
         while (stringIndex) {
             var line = this.lines.get(lineIndex);
             if (!line) {
-                [-1, -1];
+                return [-1, -1];
             }
             for (var i = 0; i < line.length; ++i) {
                 stringIndex -= line.get(i)[exports.CHAR_DATA_CHAR_INDEX].length;
@@ -407,49 +410,11 @@ var Buffer = (function () {
     };
     Buffer.prototype.translateBufferLineToString = function (lineIndex, trimRight, startCol, endCol) {
         if (startCol === void 0) { startCol = 0; }
-        if (endCol === void 0) { endCol = null; }
-        var lineString = '';
         var line = this.lines.get(lineIndex);
         if (!line) {
             return '';
         }
-        var startIndex = startCol;
-        if (endCol === null) {
-            endCol = line.length;
-        }
-        var endIndex = endCol;
-        for (var i = 0; i < line.length; i++) {
-            var char = line.get(i);
-            lineString += char[exports.CHAR_DATA_CHAR_INDEX];
-            if (char[exports.CHAR_DATA_WIDTH_INDEX] === 0) {
-                if (startCol >= i) {
-                    startIndex--;
-                }
-                if (endCol > i) {
-                    endIndex--;
-                }
-            }
-            else {
-                if (char[exports.CHAR_DATA_CHAR_INDEX].length > 1) {
-                    if (startCol > i) {
-                        startIndex += char[exports.CHAR_DATA_CHAR_INDEX].length - 1;
-                    }
-                    if (endCol > i) {
-                        endIndex += char[exports.CHAR_DATA_CHAR_INDEX].length - 1;
-                    }
-                }
-            }
-        }
-        if (trimRight) {
-            var rightWhitespaceIndex = lineString.search(/\s+$/);
-            if (rightWhitespaceIndex !== -1) {
-                endIndex = Math.min(endIndex, rightWhitespaceIndex);
-            }
-            if (endIndex <= startIndex) {
-                return '';
-            }
-        }
-        return lineString.substring(startIndex, endIndex);
+        return line.translateToString(trimRight, startCol, endCol);
     };
     Buffer.prototype.getWrappedRangeForLine = function (y) {
         var first = y;
@@ -575,7 +540,7 @@ var BufferStringIterator = (function () {
         range.last = Math.min(range.last, this._buffer.lines.length);
         var result = '';
         for (var i = range.first; i <= range.last; ++i) {
-            result += this._buffer.translateBufferLineToString(i, (this._trimRight) ? i === range.last : false);
+            result += this._buffer.translateBufferLineToString(i, this._trimRight);
         }
         this._current = range.last + 1;
         return { range: range, content: result };
@@ -584,7 +549,7 @@ var BufferStringIterator = (function () {
 }());
 exports.BufferStringIterator = BufferStringIterator;
 
-},{"./BufferLine":3,"./common/CircularList":16,"./common/EventEmitter":17,"./renderer/atlas/Types":43}],3:[function(require,module,exports){
+},{"./BufferLine":3,"./common/CircularList":16,"./common/EventEmitter":18,"./renderer/atlas/Types":44}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("./Buffer");
@@ -672,10 +637,34 @@ var BufferLineJSArray = (function () {
         newLine.copyFrom(this);
         return newLine;
     };
+    BufferLineJSArray.prototype.getTrimmedLength = function () {
+        for (var i = this.length - 1; i >= 0; --i) {
+            var ch = this.get(i);
+            if (ch[Buffer_1.CHAR_DATA_CHAR_INDEX] !== '') {
+                return i + ch[Buffer_1.CHAR_DATA_WIDTH_INDEX];
+            }
+        }
+        return 0;
+    };
+    BufferLineJSArray.prototype.translateToString = function (trimRight, startCol, endCol) {
+        if (trimRight === void 0) { trimRight = false; }
+        if (startCol === void 0) { startCol = 0; }
+        if (endCol === void 0) { endCol = this.length; }
+        if (trimRight) {
+            endCol = Math.min(endCol, this.getTrimmedLength());
+        }
+        var result = '';
+        while (startCol < endCol) {
+            result += this.get(startCol)[Buffer_1.CHAR_DATA_CHAR_INDEX] || Buffer_1.WHITESPACE_CELL_CHAR;
+            startCol += this.get(startCol)[Buffer_1.CHAR_DATA_WIDTH_INDEX] || 1;
+        }
+        return result;
+    };
     return BufferLineJSArray;
 }());
 exports.BufferLineJSArray = BufferLineJSArray;
 var CELL_SIZE = 3;
+var IS_COMBINED_BIT_MASK = 0x80000000;
 var BufferLine = (function () {
     function BufferLine(cols, fillCharData, isWrapped) {
         if (isWrapped === void 0) { isWrapped = false; }
@@ -697,11 +686,11 @@ var BufferLine = (function () {
         var stringData = this._data[index * CELL_SIZE + 1];
         return [
             this._data[index * CELL_SIZE + 0],
-            (stringData & 0x80000000)
+            (stringData & IS_COMBINED_BIT_MASK)
                 ? this._combined[index]
                 : (stringData) ? String.fromCharCode(stringData) : '',
             this._data[index * CELL_SIZE + 2],
-            (stringData & 0x80000000)
+            (stringData & IS_COMBINED_BIT_MASK)
                 ? this._combined[index].charCodeAt(this._combined[index].length - 1)
                 : stringData
         ];
@@ -710,7 +699,7 @@ var BufferLine = (function () {
         this._data[index * CELL_SIZE + 0] = value[0];
         if (value[1].length > 1) {
             this._combined[index] = value[1];
-            this._data[index * CELL_SIZE + 1] = index | 0x80000000;
+            this._data[index * CELL_SIZE + 1] = index | IS_COMBINED_BIT_MASK;
         }
         else {
             this._data[index * CELL_SIZE + 1] = value[1].charCodeAt(0);
@@ -816,6 +805,29 @@ var BufferLine = (function () {
         newLine.isWrapped = this.isWrapped;
         return newLine;
     };
+    BufferLine.prototype.getTrimmedLength = function () {
+        for (var i = this.length - 1; i >= 0; --i) {
+            if (this._data[i * CELL_SIZE + 1] !== 0) {
+                return i + this._data[i * CELL_SIZE + 2];
+            }
+        }
+        return 0;
+    };
+    BufferLine.prototype.translateToString = function (trimRight, startCol, endCol) {
+        if (trimRight === void 0) { trimRight = false; }
+        if (startCol === void 0) { startCol = 0; }
+        if (endCol === void 0) { endCol = this.length; }
+        if (trimRight) {
+            endCol = Math.min(endCol, this.getTrimmedLength());
+        }
+        var result = '';
+        while (startCol < endCol) {
+            var stringData = this._data[startCol * CELL_SIZE + 1];
+            result += (stringData & IS_COMBINED_BIT_MASK) ? this._combined[startCol] : (stringData) ? String.fromCharCode(stringData) : Buffer_1.WHITESPACE_CELL_CHAR;
+            startCol += this._data[startCol * CELL_SIZE + 2] || 1;
+        }
+        return result;
+    };
     return BufferLine;
 }());
 exports.BufferLine = BufferLine;
@@ -909,7 +921,7 @@ var BufferSet = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.BufferSet = BufferSet;
 
-},{"./Buffer":2,"./common/EventEmitter":17}],5:[function(require,module,exports){
+},{"./Buffer":2,"./common/EventEmitter":18}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TypedArrayUtils_1 = require("./common/TypedArrayUtils");
@@ -1052,7 +1064,7 @@ function getStringCellWidth(s) {
 }
 exports.getStringCellWidth = getStringCellWidth;
 
-},{"./common/TypedArrayUtils":19}],6:[function(require,module,exports){
+},{"./common/TypedArrayUtils":20}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CompositionHelper = (function () {
@@ -1219,13 +1231,13 @@ var PRINTABLES = r(0x20, 0x7f);
 var EXECUTABLES = r(0x00, 0x18);
 EXECUTABLES.push(0x19);
 EXECUTABLES.push.apply(EXECUTABLES, r(0x1c, 0x20));
-var DEFAULT_TRANSITION = 1 << 4 | 0;
+var NON_ASCII_PRINTABLE = 0xA0;
 exports.VT500_TRANSITION_TABLE = (function () {
     var table = new TransitionTable(4095);
     var states = r(0, 13 + 1);
     var state;
     for (state in states) {
-        for (var code = 0; code < 160; ++code) {
+        for (var code = 0; code <= NON_ASCII_PRINTABLE; ++code) {
             table.add(code, state, 1, 0);
         }
     }
@@ -1319,6 +1331,7 @@ exports.VT500_TRANSITION_TABLE = (function () {
     table.addMany(PRINTABLES, 13, 13, 13);
     table.add(0x7f, 13, 0, 13);
     table.addMany([0x1b, 0x9c], 13, 14, 0);
+    table.add(NON_ASCII_PRINTABLE, 8, 5, 8);
     return table;
 })();
 var DcsDummy = (function () {
@@ -1368,8 +1381,8 @@ var EscapeSequenceParser = (function (_super) {
         this._errorHandlerFb = null;
         this._printHandler = null;
         this._executeHandlers = null;
-        this._csiHandlers = null;
         this._escHandlers = null;
+        this._csiHandlers = null;
         this._oscHandlers = null;
         this._dcsHandlers = null;
         this._activeDcsHandler = null;
@@ -1391,8 +1404,24 @@ var EscapeSequenceParser = (function (_super) {
     EscapeSequenceParser.prototype.setExecuteHandlerFallback = function (callback) {
         this._executeHandlerFb = callback;
     };
+    EscapeSequenceParser.prototype.addCsiHandler = function (flag, callback) {
+        var index = flag.charCodeAt(0);
+        if (this._csiHandlers[index] === undefined) {
+            this._csiHandlers[index] = [];
+        }
+        var handlerList = this._csiHandlers[index];
+        handlerList.push(callback);
+        return {
+            dispose: function () {
+                var handlerIndex = handlerList.indexOf(callback);
+                if (handlerIndex !== -1) {
+                    handlerList.splice(handlerIndex, 1);
+                }
+            }
+        };
+    };
     EscapeSequenceParser.prototype.setCsiHandler = function (flag, callback) {
-        this._csiHandlers[flag.charCodeAt(0)] = callback;
+        this._csiHandlers[flag.charCodeAt(0)] = [callback];
     };
     EscapeSequenceParser.prototype.clearCsiHandler = function (flag) {
         if (this._csiHandlers[flag.charCodeAt(0)])
@@ -1411,8 +1440,23 @@ var EscapeSequenceParser = (function (_super) {
     EscapeSequenceParser.prototype.setEscHandlerFallback = function (callback) {
         this._escHandlerFb = callback;
     };
+    EscapeSequenceParser.prototype.addOscHandler = function (ident, callback) {
+        if (this._oscHandlers[ident] === undefined) {
+            this._oscHandlers[ident] = [];
+        }
+        var handlerList = this._oscHandlers[ident];
+        handlerList.push(callback);
+        return {
+            dispose: function () {
+                var handlerIndex = handlerList.indexOf(callback);
+                if (handlerIndex !== -1) {
+                    handlerList.splice(handlerIndex, 1);
+                }
+            }
+        };
+    };
     EscapeSequenceParser.prototype.setOscHandler = function (ident, callback) {
-        this._oscHandlers[ident] = callback;
+        this._oscHandlers[ident] = [callback];
     };
     EscapeSequenceParser.prototype.clearOscHandler = function (ident) {
         if (this._oscHandlers[ident])
@@ -1472,7 +1516,7 @@ var EscapeSequenceParser = (function (_super) {
                 params[params.length - 1] = params[params.length - 1] * 10 + code - 48;
                 continue;
             }
-            transition = (code < 0xa0) ? (table[currentState << 8 | code]) : DEFAULT_TRANSITION;
+            transition = table[currentState << 8 | (code < 0xa0 ? code : NON_ASCII_PRINTABLE)];
             switch (transition >> 4) {
                 case 2:
                     print = (~print) ? print : i;
@@ -1503,10 +1547,6 @@ var EscapeSequenceParser = (function (_super) {
                         switch (currentState) {
                             case 0:
                                 print = (~print) ? print : i;
-                                break;
-                            case 8:
-                                osc += String.fromCharCode(code);
-                                transition |= 8;
                                 break;
                             case 6:
                                 transition |= 6;
@@ -1543,11 +1583,16 @@ var EscapeSequenceParser = (function (_super) {
                     }
                     break;
                 case 7:
-                    callback = this._csiHandlers[code];
-                    if (callback)
-                        callback(params, collect);
-                    else
+                    var handlers = this._csiHandlers[code];
+                    var j = handlers ? handlers.length - 1 : -1;
+                    for (; j >= 0; j--) {
+                        if (handlers[j](params, collect)) {
+                            break;
+                        }
+                    }
+                    if (j < 0) {
                         this._csiHandlerFb(collect, params, code);
+                    }
                     break;
                 case 8:
                     if (code === 0x3b)
@@ -1606,7 +1651,15 @@ var EscapeSequenceParser = (function (_super) {
                     osc = '';
                     break;
                 case 5:
-                    osc += data.charAt(i);
+                    for (var j_1 = i + 1;; j_1++) {
+                        if (j_1 >= l
+                            || (code = data.charCodeAt(j_1)) < 0x20
+                            || (code > 0x7f && code <= 0x9f)) {
+                            osc += data.substring(i, j_1);
+                            i = j_1 - 1;
+                            break;
+                        }
+                    }
                     break;
                 case 6:
                     if (osc && code !== 0x18 && code !== 0x1a) {
@@ -1617,11 +1670,16 @@ var EscapeSequenceParser = (function (_super) {
                         else {
                             var identifier = parseInt(osc.substring(0, idx));
                             var content = osc.substring(idx + 1);
-                            callback = this._oscHandlers[identifier];
-                            if (callback)
-                                callback(content);
-                            else
+                            var handlers_1 = this._oscHandlers[identifier];
+                            var j_2 = handlers_1 ? handlers_1.length - 1 : -1;
+                            for (; j_2 >= 0; j_2--) {
+                                if (handlers_1[j_2](content)) {
+                                    break;
+                                }
+                            }
+                            if (j_2 < 0) {
                                 this._oscHandlerFb(identifier, content);
+                            }
                         }
                     }
                     if (code === 0x1b)
@@ -1650,7 +1708,7 @@ var EscapeSequenceParser = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EscapeSequenceParser = EscapeSequenceParser;
 
-},{"./common/Lifecycle":18}],8:[function(require,module,exports){
+},{"./common/Lifecycle":19}],8:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -1673,21 +1731,6 @@ var CharWidth_1 = require("./CharWidth");
 var EscapeSequenceParser_1 = require("./EscapeSequenceParser");
 var Lifecycle_1 = require("./common/Lifecycle");
 var GLEVEL = { '(': 0, ')': 1, '*': 2, '+': 3, '-': 1, '.': 2 };
-var RequestTerminfo = (function () {
-    function RequestTerminfo(_terminal) {
-        this._terminal = _terminal;
-    }
-    RequestTerminfo.prototype.hook = function (collect, params, flag) {
-        this._data = '';
-    };
-    RequestTerminfo.prototype.put = function (data, start, end) {
-        this._data += data.substring(start, end);
-    };
-    RequestTerminfo.prototype.unhook = function () {
-        this._terminal.handler(EscapeSequences_1.C0.ESC + "P0+r" + this._data + EscapeSequences_1.C0.ESC + "\\");
-    };
-    return RequestTerminfo;
-}());
 var DECRQSS = (function () {
     function DECRQSS(_terminal) {
         this._terminal = _terminal;
@@ -1717,7 +1760,7 @@ var DECRQSS = (function () {
                 return this._terminal.handler(EscapeSequences_1.C0.ESC + "P1$r" + style + " q" + EscapeSequences_1.C0.ESC + "\\");
             default:
                 this._terminal.error('Unknown DCS $q %s', this._data);
-                this._terminal.handler(EscapeSequences_1.C0.ESC + "P0$r" + this._data + EscapeSequences_1.C0.ESC + "\\");
+                this._terminal.handler(EscapeSequences_1.C0.ESC + "P0$r" + EscapeSequences_1.C0.ESC + "\\");
         }
     };
     return DECRQSS;
@@ -1828,7 +1871,6 @@ var InputHandler = (function (_super) {
             return state;
         });
         _this._parser.setDcsHandler('$q', new DECRQSS(_this._terminal));
-        _this._parser.setDcsHandler('+q', new RequestTerminfo(_this._terminal));
         return _this;
     }
     InputHandler.prototype.dispose = function () {
@@ -1946,6 +1988,12 @@ var InputHandler = (function (_super) {
             }
         }
         this._terminal.updateRange(buffer.y);
+    };
+    InputHandler.prototype.addCsiHandler = function (flag, callback) {
+        return this._parser.addCsiHandler(flag, callback);
+    };
+    InputHandler.prototype.addOscHandler = function (ident, callback) {
+        return this._parser.addOscHandler(ident, callback);
     };
     InputHandler.prototype.bell = function () {
         this._terminal.bell();
@@ -2770,7 +2818,7 @@ var InputHandler = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.InputHandler = InputHandler;
 
-},{"./Buffer":2,"./CharWidth":5,"./EscapeSequenceParser":7,"./common/Lifecycle":18,"./common/data/EscapeSequences":20,"./core/data/Charsets":22}],9:[function(require,module,exports){
+},{"./Buffer":2,"./CharWidth":5,"./EscapeSequenceParser":7,"./common/Lifecycle":19,"./common/data/EscapeSequences":21,"./core/data/Charsets":23}],9:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -2901,7 +2949,13 @@ var Linkifier = (function (_super) {
             }
             stringIndex = text.indexOf(uri, stringIndex + 1);
             rex.lastIndex = stringIndex + uri.length;
+            if (stringIndex < 0) {
+                return "break";
+            }
             var bufferIndex = this_1._terminal.buffer.stringIndexToBufferIndex(rowIndex, stringIndex);
+            if (bufferIndex[0] < 0) {
+                return "break";
+            }
             var line = this_1._terminal.buffer.lines.get(bufferIndex[0]);
             var char = line.get(bufferIndex[1]);
             var fg;
@@ -2976,7 +3030,7 @@ var Linkifier = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.Linkifier = Linkifier;
 
-},{"./Buffer":2,"./CharWidth":5,"./common/EventEmitter":17,"./ui/MouseZoneManager":49}],10:[function(require,module,exports){
+},{"./Buffer":2,"./CharWidth":5,"./common/EventEmitter":18,"./ui/MouseZoneManager":51}],10:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -2992,7 +3046,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var MouseHelper_1 = require("./utils/MouseHelper");
+var MouseHelper_1 = require("./ui/MouseHelper");
 var Browser = require("./core/Platform");
 var EventEmitter_1 = require("./common/EventEmitter");
 var SelectionModel_1 = require("./SelectionModel");
@@ -3088,7 +3142,7 @@ var SelectionManager = (function (_super) {
                 }
             }
             else {
-                var startRowEndCol = start[1] === end[1] ? end[0] : null;
+                var startRowEndCol = start[1] === end[1] ? end[0] : undefined;
                 result.push(this._buffer.translateBufferLineToString(start[1], true, start[0], startRowEndCol));
                 for (var i = start[1] + 1; i <= end[1] - 1; i++) {
                     var bufferLine = this._buffer.lines.get(i);
@@ -3551,7 +3605,7 @@ var SelectionManager = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.SelectionManager = SelectionManager;
 
-},{"./Buffer":2,"./SelectionModel":11,"./common/EventEmitter":17,"./core/Platform":21,"./handlers/AltClickHandler":24,"./utils/MouseHelper":53}],11:[function(require,module,exports){
+},{"./Buffer":2,"./SelectionModel":11,"./common/EventEmitter":18,"./core/Platform":22,"./handlers/AltClickHandler":25,"./ui/MouseHelper":50}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var SelectionModel = (function () {
@@ -3721,8 +3775,7 @@ var CharMeasure_1 = require("./ui/CharMeasure");
 var Browser = require("./core/Platform");
 var Lifecycle_1 = require("./ui/Lifecycle");
 var Strings = require("./Strings");
-var MouseHelper_1 = require("./utils/MouseHelper");
-var Clone_1 = require("./utils/Clone");
+var MouseHelper_1 = require("./ui/MouseHelper");
 var SoundManager_1 = require("./SoundManager");
 var ColorManager_1 = require("./renderer/ColorManager");
 var MouseZoneManager_1 = require("./ui/MouseZoneManager");
@@ -3731,6 +3784,7 @@ var ScreenDprMonitor_1 = require("./ui/ScreenDprMonitor");
 var CharAtlasCache_1 = require("./renderer/atlas/CharAtlasCache");
 var DomRenderer_1 = require("./renderer/dom/DomRenderer");
 var Keyboard_1 = require("./core/input/Keyboard");
+var Clone_1 = require("./common/Clone");
 var document = (typeof window !== 'undefined') ? window.document : null;
 var WRITE_BUFFER_PAUSE_THRESHOLD = 5;
 var WRITE_BATCH_SIZE = 300;
@@ -3962,6 +4016,7 @@ var Terminal = (function (_super) {
                     this.renderer.onResize(this.cols, this.rows);
                     this.refresh(0, this.rows - 1);
                 }
+                break;
             case 'rendererType':
                 if (this.renderer) {
                     this.unregister(this.renderer);
@@ -4615,6 +4670,12 @@ var Terminal = (function (_super) {
     Terminal.prototype.attachCustomKeyEventHandler = function (customKeyEventHandler) {
         this._customKeyEventHandler = customKeyEventHandler;
     };
+    Terminal.prototype.addCsiHandler = function (flag, callback) {
+        return this._inputHandler.addCsiHandler(flag, callback);
+    };
+    Terminal.prototype.addOscHandler = function (ident, callback) {
+        return this._inputHandler.addOscHandler(ident, callback);
+    };
     Terminal.prototype.registerLinkMatcher = function (regex, handler, options) {
         var matcherId = this.linkifier.registerLinkMatcher(regex, handler, options);
         this.refresh(0, this.rows - 1);
@@ -4957,7 +5018,7 @@ function matchColorDistance(r1, g1, b1, r2, g2, b2) {
         + Math.pow(11 * (b1 - b2), 2);
 }
 
-},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":4,"./CompositionHelper":6,"./InputHandler":8,"./Linkifier":9,"./SelectionManager":10,"./SoundManager":12,"./Strings":13,"./Viewport":15,"./common/EventEmitter":17,"./common/data/EscapeSequences":20,"./core/Platform":21,"./core/input/Keyboard":23,"./renderer/ColorManager":28,"./renderer/Renderer":32,"./renderer/atlas/CharAtlasCache":36,"./renderer/dom/DomRenderer":44,"./ui/CharMeasure":46,"./ui/Clipboard":47,"./ui/Lifecycle":48,"./ui/MouseZoneManager":49,"./ui/ScreenDprMonitor":51,"./utils/Clone":52,"./utils/MouseHelper":53}],15:[function(require,module,exports){
+},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":4,"./CompositionHelper":6,"./InputHandler":8,"./Linkifier":9,"./SelectionManager":10,"./SoundManager":12,"./Strings":13,"./Viewport":15,"./common/Clone":17,"./common/EventEmitter":18,"./common/data/EscapeSequences":21,"./core/Platform":22,"./core/input/Keyboard":24,"./renderer/ColorManager":29,"./renderer/Renderer":33,"./renderer/atlas/CharAtlasCache":37,"./renderer/dom/DomRenderer":45,"./ui/CharMeasure":47,"./ui/Clipboard":48,"./ui/Lifecycle":49,"./ui/MouseHelper":50,"./ui/MouseZoneManager":51,"./ui/ScreenDprMonitor":53}],15:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5114,7 +5175,7 @@ var Viewport = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.Viewport = Viewport;
 
-},{"./common/Lifecycle":18,"./ui/Lifecycle":48}],16:[function(require,module,exports){
+},{"./common/Lifecycle":19,"./ui/Lifecycle":49}],16:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5283,7 +5344,26 @@ var CircularList = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.CircularList = CircularList;
 
-},{"./EventEmitter":17}],17:[function(require,module,exports){
+},{"./EventEmitter":18}],17:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+function clone(val, depth) {
+    if (depth === void 0) { depth = 5; }
+    if (typeof val !== 'object') {
+        return val;
+    }
+    if (val === null) {
+        return null;
+    }
+    var clonedObject = Array.isArray(val) ? [] : {};
+    for (var key in val) {
+        clonedObject[key] = depth <= 1 ? val[key] : clone(val[key], depth - 1);
+    }
+    return clonedObject;
+}
+exports.clone = clone;
+
+},{}],18:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5367,7 +5447,7 @@ var EventEmitter = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EventEmitter = EventEmitter;
 
-},{"./Lifecycle":18}],18:[function(require,module,exports){
+},{"./Lifecycle":19}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Disposable = (function () {
@@ -5393,7 +5473,7 @@ var Disposable = (function () {
 }());
 exports.Disposable = Disposable;
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function fill(array, value, start, end) {
@@ -5423,7 +5503,7 @@ function fillFallback(array, value, start, end) {
 }
 exports.fillFallback = fillFallback;
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var C0;
@@ -5499,7 +5579,7 @@ var C1;
     C1.APC = '\x9f';
 })(C1 = exports.C1 || (exports.C1 = {}));
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var isNode = (typeof navigator === 'undefined') ? true : false;
@@ -5517,7 +5597,7 @@ function contains(arr, el) {
     return arr.indexOf(el) >= 0;
 }
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHARSETS = {};
@@ -5678,7 +5758,7 @@ exports.CHARSETS['='] = {
     '~': 'û'
 };
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../../common/data/EscapeSequences");
@@ -6017,13 +6097,16 @@ function evaluateKeyboardEvent(ev, applicationCursorMode, isMac, macOptionIsMeta
                     result.type = 1;
                 }
             }
+            else if (ev.key && !ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.keyCode >= 48 && ev.key.length === 1) {
+                result.key = ev.key;
+            }
             break;
     }
     return result;
 }
 exports.evaluateKeyboardEvent = evaluateKeyboardEvent;
 
-},{"../../common/data/EscapeSequences":20}],24:[function(require,module,exports){
+},{"../../common/data/EscapeSequences":21}],25:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../common/data/EscapeSequences");
@@ -6162,7 +6245,7 @@ function repeat(count, str) {
     return rpt;
 }
 
-},{"../common/data/EscapeSequences":20}],25:[function(require,module,exports){
+},{"../common/data/EscapeSequences":21}],26:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("../Terminal");
@@ -6225,6 +6308,12 @@ var Terminal = (function () {
     };
     Terminal.prototype.attachCustomKeyEventHandler = function (customKeyEventHandler) {
         this._core.attachCustomKeyEventHandler(customKeyEventHandler);
+    };
+    Terminal.prototype.addCsiHandler = function (flag, callback) {
+        return this._core.addCsiHandler(flag, callback);
+    };
+    Terminal.prototype.addOscHandler = function (ident, callback) {
+        return this._core.addOscHandler(ident, callback);
     };
     Terminal.prototype.registerLinkMatcher = function (regex, handler, options) {
         return this._core.registerLinkMatcher(regex, handler, options);
@@ -6309,7 +6398,7 @@ var Terminal = (function () {
 }());
 exports.Terminal = Terminal;
 
-},{"../Strings":13,"../Terminal":14}],26:[function(require,module,exports){
+},{"../Strings":13,"../Terminal":14}],27:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./atlas/Types");
@@ -6434,9 +6523,9 @@ var BaseRenderLayer = (function () {
     };
     BaseRenderLayer.prototype.fillCharTrueColor = function (terminal, charData, x, y) {
         this._ctx.font = this._getFont(terminal, false, false);
-        this._ctx.textBaseline = 'top';
+        this._ctx.textBaseline = 'middle';
         this._clipRow(terminal, y);
-        this._ctx.fillText(charData[Buffer_1.CHAR_DATA_CHAR_INDEX], x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop);
+        this._ctx.fillText(charData[Buffer_1.CHAR_DATA_CHAR_INDEX], x * this._scaledCellWidth + this._scaledCharLeft, (y + 0.5) * this._scaledCellHeight + this._scaledCharTop);
     };
     BaseRenderLayer.prototype.drawChars = function (terminal, chars, code, width, x, y, fg, bg, bold, dim, italic) {
         var drawInBrightColor = terminal.options.drawBoldTextInBrightColors && bold && fg < 8 && fg !== Types_1.INVERTED_DEFAULT_COLOR;
@@ -6456,7 +6545,7 @@ var BaseRenderLayer = (function () {
     BaseRenderLayer.prototype._drawUncachedChars = function (terminal, chars, width, fg, x, y, bold, dim, italic) {
         this._ctx.save();
         this._ctx.font = this._getFont(terminal, bold, italic);
-        this._ctx.textBaseline = 'top';
+        this._ctx.textBaseline = 'middle';
         if (fg === Types_1.INVERTED_DEFAULT_COLOR) {
             this._ctx.fillStyle = this._colors.background.css;
         }
@@ -6470,7 +6559,7 @@ var BaseRenderLayer = (function () {
         if (dim) {
             this._ctx.globalAlpha = Types_1.DIM_OPACITY;
         }
-        this._ctx.fillText(chars, x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop);
+        this._ctx.fillText(chars, x * this._scaledCellWidth + this._scaledCharLeft, (y + 0.5) * this._scaledCellHeight + this._scaledCharTop);
         this._ctx.restore();
     };
     BaseRenderLayer.prototype._clipRow = function (terminal, y) {
@@ -6487,7 +6576,7 @@ var BaseRenderLayer = (function () {
 }());
 exports.BaseRenderLayer = BaseRenderLayer;
 
-},{"../Buffer":2,"./atlas/CharAtlasCache":36,"./atlas/CharAtlasUtils":38,"./atlas/Types":43}],27:[function(require,module,exports){
+},{"../Buffer":2,"./atlas/CharAtlasCache":37,"./atlas/CharAtlasUtils":39,"./atlas/Types":44}],28:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("../Buffer");
@@ -6654,7 +6743,7 @@ var CharacterJoinerRegistry = (function () {
 }());
 exports.CharacterJoinerRegistry = CharacterJoinerRegistry;
 
-},{"../Buffer":2}],28:[function(require,module,exports){
+},{"../Buffer":2}],29:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var DEFAULT_FOREGROUND = fromHex('#ffffff');
@@ -6782,7 +6871,7 @@ var ColorManager = (function () {
 }());
 exports.ColorManager = ColorManager;
 
-},{}],29:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7072,7 +7161,7 @@ var CursorBlinkStateManager = (function () {
     return CursorBlinkStateManager;
 }());
 
-},{"../Buffer":2,"./BaseRenderLayer":26}],30:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":27}],31:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var GridCache = (function () {
@@ -7102,7 +7191,7 @@ var GridCache = (function () {
 }());
 exports.GridCache = GridCache;
 
-},{}],31:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7177,7 +7266,7 @@ var LinkRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.LinkRenderLayer = LinkRenderLayer;
 
-},{"./BaseRenderLayer":26,"./atlas/CharAtlasUtils":38,"./atlas/Types":43}],32:[function(require,module,exports){
+},{"./BaseRenderLayer":27,"./atlas/CharAtlasUtils":39,"./atlas/Types":44}],33:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7373,7 +7462,7 @@ var Renderer = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.Renderer = Renderer;
 
-},{"../common/EventEmitter":17,"../renderer/CharacterJoinerRegistry":27,"../ui/RenderDebouncer":50,"../ui/ScreenDprMonitor":51,"./ColorManager":28,"./CursorRenderLayer":29,"./LinkRenderLayer":31,"./SelectionRenderLayer":33,"./TextRenderLayer":34}],33:[function(require,module,exports){
+},{"../common/EventEmitter":18,"../renderer/CharacterJoinerRegistry":28,"../ui/RenderDebouncer":52,"../ui/ScreenDprMonitor":53,"./ColorManager":29,"./CursorRenderLayer":30,"./LinkRenderLayer":32,"./SelectionRenderLayer":34,"./TextRenderLayer":35}],34:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7469,7 +7558,7 @@ var SelectionRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.SelectionRenderLayer = SelectionRenderLayer;
 
-},{"./BaseRenderLayer":26}],34:[function(require,module,exports){
+},{"./BaseRenderLayer":27}],35:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7521,8 +7610,8 @@ var TextRenderLayer = (function (_super) {
             var joinedRanges = joinerRegistry ? joinerRegistry.getJoinedCharacters(row) : [];
             for (var x = 0; x < terminal.cols; x++) {
                 var charData = line.get(x);
-                var code = charData[Buffer_1.CHAR_DATA_CODE_INDEX];
-                var chars = charData[Buffer_1.CHAR_DATA_CHAR_INDEX];
+                var code = charData[Buffer_1.CHAR_DATA_CODE_INDEX] || Buffer_1.WHITESPACE_CELL_CODE;
+                var chars = charData[Buffer_1.CHAR_DATA_CHAR_INDEX] || Buffer_1.WHITESPACE_CELL_CHAR;
                 var attr = charData[Buffer_1.CHAR_DATA_ATTR_INDEX];
                 var width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
                 var isJoined = false;
@@ -7662,7 +7751,7 @@ var TextRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.TextRenderLayer = TextRenderLayer;
 
-},{"../Buffer":2,"./BaseRenderLayer":26,"./GridCache":30,"./atlas/CharAtlasUtils":38,"./atlas/Types":43}],35:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":27,"./GridCache":31,"./atlas/CharAtlasUtils":39,"./atlas/Types":44}],36:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var BaseCharAtlas = (function () {
@@ -7682,7 +7771,7 @@ var BaseCharAtlas = (function () {
 }());
 exports.default = BaseCharAtlas;
 
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CharAtlasUtils_1 = require("./CharAtlasUtils");
@@ -7705,6 +7794,7 @@ function acquireCharAtlas(terminal, colors, scaledCharWidth, scaledCharHeight) {
                 return entry.atlas;
             }
             if (entry.ownedBy.length === 1) {
+                entry.atlas.dispose();
                 charAtlasCache.splice(i, 1);
             }
             else {
@@ -7734,6 +7824,7 @@ function removeTerminalFromCache(terminal) {
         var index = charAtlasCache[i].ownedBy.indexOf(terminal);
         if (index !== -1) {
             if (charAtlasCache[i].ownedBy.length === 1) {
+                charAtlasCache[i].atlas.dispose();
                 charAtlasCache.splice(i, 1);
             }
             else {
@@ -7745,7 +7836,7 @@ function removeTerminalFromCache(terminal) {
 }
 exports.removeTerminalFromCache = removeTerminalFromCache;
 
-},{"./CharAtlasUtils":38,"./DynamicCharAtlas":39,"./NoneCharAtlas":41,"./StaticCharAtlas":42}],37:[function(require,module,exports){
+},{"./CharAtlasUtils":39,"./DynamicCharAtlas":40,"./NoneCharAtlas":42,"./StaticCharAtlas":43}],38:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Platform_1 = require("../../core/Platform");
@@ -7760,13 +7851,13 @@ function generateStaticCharAtlasTexture(context, canvasFactory, config) {
     ctx.save();
     ctx.fillStyle = config.colors.foreground.css;
     ctx.font = getFont(config.fontWeight, config);
-    ctx.textBaseline = 'top';
+    ctx.textBaseline = 'middle';
     for (var i = 0; i < 256; i++) {
         ctx.save();
         ctx.beginPath();
         ctx.rect(i * cellWidth, 0, cellWidth, cellHeight);
         ctx.clip();
-        ctx.fillText(String.fromCharCode(i), i * cellWidth, 0);
+        ctx.fillText(String.fromCharCode(i), i * cellWidth, cellHeight / 2);
         ctx.restore();
     }
     ctx.save();
@@ -7776,7 +7867,7 @@ function generateStaticCharAtlasTexture(context, canvasFactory, config) {
         ctx.beginPath();
         ctx.rect(i * cellWidth, cellHeight, cellWidth, cellHeight);
         ctx.clip();
-        ctx.fillText(String.fromCharCode(i), i * cellWidth, cellHeight);
+        ctx.fillText(String.fromCharCode(i), i * cellWidth, cellHeight * 1.5);
         ctx.restore();
     }
     ctx.restore();
@@ -7789,7 +7880,7 @@ function generateStaticCharAtlasTexture(context, canvasFactory, config) {
             ctx.rect(i * cellWidth, y, cellWidth, cellHeight);
             ctx.clip();
             ctx.fillStyle = config.colors.ansi[colorIndex].css;
-            ctx.fillText(String.fromCharCode(i), i * cellWidth, y);
+            ctx.fillText(String.fromCharCode(i), i * cellWidth, y + cellHeight / 2);
             ctx.restore();
         }
     }
@@ -7802,7 +7893,7 @@ function generateStaticCharAtlasTexture(context, canvasFactory, config) {
             ctx.rect(i * cellWidth, y, cellWidth, cellHeight);
             ctx.clip();
             ctx.fillStyle = config.colors.ansi[colorIndex].css;
-            ctx.fillText(String.fromCharCode(i), i * cellWidth, y);
+            ctx.fillText(String.fromCharCode(i), i * cellWidth, y + cellHeight / 2);
             ctx.restore();
         }
     }
@@ -7837,7 +7928,7 @@ function getFont(fontWeight, config) {
     return fontWeight + " " + config.fontSize * config.devicePixelRatio + "px " + config.fontFamily;
 }
 
-},{"../../core/Platform":21,"./Types":43}],38:[function(require,module,exports){
+},{"../../core/Platform":22,"./Types":44}],39:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./Types");
@@ -7888,7 +7979,7 @@ function is256Color(colorCode) {
 }
 exports.is256Color = is256Color;
 
-},{"./Types":43}],39:[function(require,module,exports){
+},{"./Types":44}],40:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8039,12 +8130,12 @@ var DynamicCharAtlas = (function (_super) {
         var fontStyle = glyph.italic ? 'italic' : '';
         this._tmpCtx.font =
             fontStyle + " " + fontWeight + " " + this._config.fontSize * this._config.devicePixelRatio + "px " + this._config.fontFamily;
-        this._tmpCtx.textBaseline = 'top';
+        this._tmpCtx.textBaseline = 'middle';
         this._tmpCtx.fillStyle = this._getForegroundColor(glyph).css;
         if (glyph.dim) {
             this._tmpCtx.globalAlpha = Types_1.DIM_OPACITY;
         }
-        this._tmpCtx.fillText(glyph.chars, 0, 0);
+        this._tmpCtx.fillText(glyph.chars, 0, this._config.scaledCharHeight / 2);
         this._tmpCtx.restore();
         var imageData = this._tmpCtx.getImageData(0, 0, this._config.scaledCharWidth, this._config.scaledCharHeight);
         var isEmpty = false;
@@ -8090,7 +8181,7 @@ var DynamicCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = DynamicCharAtlas;
 
-},{"../../core/Platform":21,"../ColorManager":28,"./BaseCharAtlas":35,"./CharAtlasGenerator":37,"./LRUMap":40,"./Types":43}],40:[function(require,module,exports){
+},{"../../core/Platform":22,"../ColorManager":29,"./BaseCharAtlas":36,"./CharAtlasGenerator":38,"./LRUMap":41,"./Types":44}],41:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var LRUMap = (function () {
@@ -8200,7 +8291,7 @@ var LRUMap = (function () {
 }());
 exports.default = LRUMap;
 
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8229,7 +8320,7 @@ var NoneCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = NoneCharAtlas;
 
-},{"./BaseCharAtlas":35}],42:[function(require,module,exports){
+},{"./BaseCharAtlas":36}],43:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8312,7 +8403,7 @@ var StaticCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = StaticCharAtlas;
 
-},{"./BaseCharAtlas":35,"./CharAtlasGenerator":37,"./CharAtlasUtils":38,"./Types":43}],43:[function(require,module,exports){
+},{"./BaseCharAtlas":36,"./CharAtlasGenerator":38,"./CharAtlasUtils":39,"./Types":44}],44:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_COLOR = 256;
@@ -8320,7 +8411,7 @@ exports.INVERTED_DEFAULT_COLOR = 257;
 exports.DIM_OPACITY = 0.5;
 exports.CHAR_ATLAS_CELL_SPACING = 1;
 
-},{}],44:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8611,9 +8702,11 @@ var DomRenderer = (function (_super) {
                 return;
             }
             var span = row.children[x];
-            span.style.textDecoration = enabled ? 'underline' : 'none';
-            x = (x + 1) % cols;
-            if (x === 0) {
+            if (span) {
+                span.style.textDecoration = enabled ? 'underline' : 'none';
+            }
+            if (++x >= cols) {
+                x = 0;
                 y++;
             }
         }
@@ -8622,7 +8715,7 @@ var DomRenderer = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.DomRenderer = DomRenderer;
 
-},{"../../common/EventEmitter":17,"../../ui/RenderDebouncer":50,"../ColorManager":28,"../atlas/Types":43,"./DomRendererRowFactory":45}],45:[function(require,module,exports){
+},{"../../common/EventEmitter":18,"../../ui/RenderDebouncer":52,"../ColorManager":29,"../atlas/Types":44,"./DomRendererRowFactory":46}],46:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("../../Buffer");
@@ -8650,7 +8743,7 @@ var DomRendererRowFactory = (function () {
         }
         for (var x = 0; x < lineLength; x++) {
             var charData = lineData.get(x);
-            var char = charData[Buffer_1.CHAR_DATA_CHAR_INDEX];
+            var char = charData[Buffer_1.CHAR_DATA_CHAR_INDEX] || Buffer_1.WHITESPACE_CELL_CHAR;
             var attr = charData[Buffer_1.CHAR_DATA_ATTR_INDEX];
             var width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
             if (width === 0) {
@@ -8712,7 +8805,7 @@ var DomRendererRowFactory = (function () {
 }());
 exports.DomRendererRowFactory = DomRendererRowFactory;
 
-},{"../../Buffer":2,"../atlas/Types":43}],46:[function(require,module,exports){
+},{"../../Buffer":2,"../atlas/Types":44}],47:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8773,7 +8866,7 @@ var CharMeasure = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.CharMeasure = CharMeasure;
 
-},{"../common/EventEmitter":17}],47:[function(require,module,exports){
+},{"../common/EventEmitter":18}],48:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function prepareTextForTerminal(text) {
@@ -8850,7 +8943,7 @@ function rightClickHandler(ev, textarea, selectionManager, shouldSelectWord) {
 }
 exports.rightClickHandler = rightClickHandler;
 
-},{}],48:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function addDisposableDomListener(node, type, handler, useCapture) {
@@ -8868,7 +8961,47 @@ function addDisposableDomListener(node, type, handler, useCapture) {
 }
 exports.addDisposableDomListener = addDisposableDomListener;
 
-},{}],49:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var MouseHelper = (function () {
+    function MouseHelper(_renderer) {
+        this._renderer = _renderer;
+    }
+    MouseHelper.prototype.setRenderer = function (renderer) {
+        this._renderer = renderer;
+    };
+    MouseHelper.getCoordsRelativeToElement = function (event, element) {
+        var rect = element.getBoundingClientRect();
+        return [event.clientX - rect.left, event.clientY - rect.top];
+    };
+    MouseHelper.prototype.getCoords = function (event, element, charMeasure, colCount, rowCount, isSelection) {
+        if (!charMeasure.width || !charMeasure.height) {
+            return null;
+        }
+        var coords = MouseHelper.getCoordsRelativeToElement(event, element);
+        if (!coords) {
+            return null;
+        }
+        coords[0] = Math.ceil((coords[0] + (isSelection ? this._renderer.dimensions.actualCellWidth / 2 : 0)) / this._renderer.dimensions.actualCellWidth);
+        coords[1] = Math.ceil(coords[1] / this._renderer.dimensions.actualCellHeight);
+        coords[0] = Math.min(Math.max(coords[0], 1), colCount + (isSelection ? 1 : 0));
+        coords[1] = Math.min(Math.max(coords[1], 1), rowCount);
+        return coords;
+    };
+    MouseHelper.prototype.getRawByteCoords = function (event, element, charMeasure, colCount, rowCount) {
+        var coords = this.getCoords(event, element, charMeasure, colCount, rowCount);
+        var x = coords[0];
+        var y = coords[1];
+        x += 32;
+        y += 32;
+        return { x: x, y: y };
+    };
+    return MouseHelper;
+}());
+exports.MouseHelper = MouseHelper;
+
+},{}],51:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9048,7 +9181,7 @@ var MouseZone = (function () {
 }());
 exports.MouseZone = MouseZone;
 
-},{"../common/Lifecycle":18,"./Lifecycle":48}],50:[function(require,module,exports){
+},{"../common/Lifecycle":19,"./Lifecycle":49}],52:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var RenderDebouncer = (function () {
@@ -9088,7 +9221,7 @@ var RenderDebouncer = (function () {
 }());
 exports.RenderDebouncer = RenderDebouncer;
 
-},{}],51:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9146,86 +9279,12 @@ var ScreenDprMonitor = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.ScreenDprMonitor = ScreenDprMonitor;
 
-},{"../common/Lifecycle":18}],52:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.clone = function (val, depth) {
-    if (depth === void 0) { depth = 5; }
-    if (typeof val !== 'object') {
-        return val;
-    }
-    if (val === null) {
-        return null;
-    }
-    var clonedObject = Array.isArray(val) ? [] : {};
-    for (var key in val) {
-        clonedObject[key] = depth <= 1 ? val[key] : exports.clone(val[key], depth - 1);
-    }
-    return clonedObject;
-};
-
-},{}],53:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var MouseHelper = (function () {
-    function MouseHelper(_renderer) {
-        this._renderer = _renderer;
-    }
-    MouseHelper.prototype.setRenderer = function (renderer) {
-        this._renderer = renderer;
-    };
-    MouseHelper.getCoordsRelativeToElement = function (event, element) {
-        if (event.pageX === null || event.pageX === undefined) {
-            return null;
-        }
-        var originalElement = element;
-        var x = event.pageX;
-        var y = event.pageY;
-        while (element) {
-            x -= element.offsetLeft;
-            y -= element.offsetTop;
-            element = element.offsetParent;
-        }
-        element = originalElement;
-        while (element && element !== element.ownerDocument.body) {
-            x += element.scrollLeft;
-            y += element.scrollTop;
-            element = element.parentElement;
-        }
-        return [x, y];
-    };
-    MouseHelper.prototype.getCoords = function (event, element, charMeasure, colCount, rowCount, isSelection) {
-        if (!charMeasure.width || !charMeasure.height) {
-            return null;
-        }
-        var coords = MouseHelper.getCoordsRelativeToElement(event, element);
-        if (!coords) {
-            return null;
-        }
-        coords[0] = Math.ceil((coords[0] + (isSelection ? this._renderer.dimensions.actualCellWidth / 2 : 0)) / this._renderer.dimensions.actualCellWidth);
-        coords[1] = Math.ceil(coords[1] / this._renderer.dimensions.actualCellHeight);
-        coords[0] = Math.min(Math.max(coords[0], 1), colCount + (isSelection ? 1 : 0));
-        coords[1] = Math.min(Math.max(coords[1], 1), rowCount);
-        return coords;
-    };
-    MouseHelper.prototype.getRawByteCoords = function (event, element, charMeasure, colCount, rowCount) {
-        var coords = this.getCoords(event, element, charMeasure, colCount, rowCount);
-        var x = coords[0];
-        var y = coords[1];
-        x += 32;
-        y += 32;
-        return { x: x, y: y };
-    };
-    return MouseHelper;
-}());
-exports.MouseHelper = MouseHelper;
-
-},{}],54:[function(require,module,exports){
+},{"../common/Lifecycle":19}],54:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("./public/Terminal");
 module.exports = Terminal_1.Terminal;
 
-},{"./public/Terminal":25}]},{},[54])(54)
+},{"./public/Terminal":26}]},{},[54])(54)
 });
 //# sourceMappingURL=xterm.js.map
