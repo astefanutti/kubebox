@@ -394,8 +394,10 @@ class KubeConfigManager extends EventEmitter {
     }
     // update context with login form information
     if (isNotEmpty(login.token)) {
+      if (!context.user) context.user = {};
       context.user.token = login.token;
     } else {
+      if (!context.user) context.user = {};
       context.user.username = login.username;
       context.user.password = login.password;
     }
@@ -845,9 +847,11 @@ module.exports = OpenIdConnect;
 },{"./http-then":"http-then","buffer":130,"fs":80,"urijs":"urijs"}],9:[function(require,module,exports){
 'use strict';
 
-module.exports.delay = delay => new Promise(resolve => setTimeout(resolve, delay));
+module.exports.delay = delay => value => new Promise(resolve => setTimeout(resolve, delay, value));
 
-module.exports.wait = ms => () => module.exports.delay(ms);
+module.exports.pause = (ms, value) => module.exports.delay(ms)(value);
+
+module.exports.wait = ms => () => module.exports.pause(ms);
 
 module.exports.call = f => val => {
   f(); return val;
@@ -2554,7 +2558,7 @@ const blessed  = require('blessed'),
 
 const { isNotEmpty, humanBytes, humanCores } = util;
 
-const { delay } = require('../promise');
+const { pause } = require('../promise');
 
 class Dashboard {
 
@@ -2837,7 +2841,7 @@ class Dashboard {
         }
         // wait 1s and retry the pod log follow request from the latest timestamp if any
         // TODO: max number of retries per time window
-        delay(1000)
+        pause(1000)
           .then(() => client.pod(namespace, name).get())
           .then(response => JSON.parse(response.body.toString('utf8')))
           .then(pod => {
@@ -3659,7 +3663,7 @@ function login_form(screen, kube_config, kubebox, { closable } = { closable: fal
 
   const refresh = function () {
     // If no current context, let's try the first one if any
-    if (!kube_config.current_context) kube_config.nextContext();
+    if (kube_config && !kube_config.current_context) kube_config.nextContext();
 
     url.value = safeGet(kube_config, 'current_context', 'cluster.server') || '';
     const user = safeGet(kube_config, 'current_context', 'user') || {};
@@ -78120,7 +78124,9 @@ const Client       = require('./client'),
 const { KubeConfig } = require('./config/config');
 const { Dashboard, login, namespaces, NavBar, spinner } = require('./ui/ui');
 const { isNotEmpty, isEmpty, safeGet } = require('./util');
-const { call, wait } = require('./promise');
+const { call, pause, wait } = require('./promise');
+
+const isWebBrowser = os.platform() === 'browser';
 
 // runtime fixes for Blessed
 require('./ui/blessed/patches');
@@ -78133,7 +78139,7 @@ class Kubebox extends EventEmitter {
     const cancellations = new task.Cancellations();
     const { debug, log } = require('./ui/debug')(screen);
     const { until } = spinner(screen);
-    const CORS = os.platform() === 'browser' && !server;
+    const CORS = isWebBrowser && !server;
 
     let kube_config, current_namespace;
     const client = new Client();
@@ -78209,8 +78215,11 @@ class Kubebox extends EventEmitter {
     function fail(options = {}) {
       return error => {
         debug.log(`{red-fg}${error.name === 'Kubebox' ? error.message : error.stack}{/red-fg}`);
+        if (error.name !== 'Kubebox' && isWebBrowser) {
+          console.error(error);
+        }
         return logging(Object.assign({}, options, { message: `{red-fg}${error.message}{/red-fg}` }))
-          .catch(fail(options));
+          .catch(error => pause(1000, error).then(fail(options)));
       }
     }
 
@@ -78269,7 +78278,7 @@ class Kubebox extends EventEmitter {
             ? log(`{red-fg}Connection failed to ${client.url}{/red-fg}`)
                 // throttle reconnection
                 .then(wait(100))
-                .then(() => logging(Object.assign({}, options, { message: os.platform() === 'browser'
+                .then(() => logging(Object.assign({}, options, { message: isWebBrowser
                   // fetch and XHR API do not expose connection network error details :(
                   ? `{red-fg}Connection failed to ${client.url}{/red-fg}`
                   : `{red-fg}${error.message}{/red-fg}` })))
