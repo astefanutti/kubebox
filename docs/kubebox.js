@@ -77569,11 +77569,12 @@ blessed.helpers.merge(blessed, blessed.widget);
 module.exports = blessed;
 
 },{"./colors":35,"./helpers":38,"./program":40,"./tput":41,"./unicode":42,"./widget":43}],"context":[function(require,module,exports){
-(function (Buffer){
+(function (process,Buffer){
 'use strict';
 
 const fs  = require('fs'),
       os  = require('os'),
+      tls = require('tls'),
       URI = require('urijs');
 
 /**
@@ -77608,7 +77609,9 @@ class Context {
     this.user = user;
   }
 
-  // TODO: handle browser support for loading local files (client certificate, key, ...)
+  // TODO: handle browser support for loading local files (client certificate and key)
+  // FIXME: do not pollute API options with extra properties, like auth provider or secure
+  // context, and pass the current context to the client instead
   getMasterApi() {
     const cluster = this.cluster;
     if (typeof cluster.server === 'undefined') {
@@ -77643,22 +77646,38 @@ class Context {
       const auth_provider = user.auth_provider;
       api.headers.Authorization = `Bearer ${auth_provider.token}`;
       if (auth_provider.refresh_token && auth_provider.url && auth_provider.client_id && auth_provider.client_secret) {
-        // FIXME: do not pollute API options and pass the current context to the client instead
         api.auth_provider = auth_provider;
       }
     }
     if (cluster.rejectUnauthorized) {
       api.rejectUnauthorized = false;
     }
+    let ca;
     if (cluster.ca) {
       if (os.platform() !== 'browser') {
-        api.ca = fs.readFileSync(cluster.ca);
+        ca = fs.readFileSync(cluster.ca);
       } else {
-        console.error('Reading cluster certificate authority file \'%s\' is not supported!', cluster.ca);
+        console.error('Reading cluster certificate authority file \'%s\' is not supported! You can use your browser or operating system certificates management tool.', cluster.ca);
       }
     }
     if (cluster.certData) {
-      api.ca = Buffer.from(cluster.certData, 'base64');
+      if (os.platform() !== 'browser') {
+        ca = Buffer.from(cluster.certData, 'base64');
+      } else {
+        console.error('Using cluster certificate authority data is not supported! You can use your browser or operating system certificates management tool.');
+      }
+    }
+    if (ca) {
+      const defaults = {
+        rejectUnauthorized  : '0' !== process.env.NODE_TLS_REJECT_UNAUTHORIZED,
+        ciphers             : tls.DEFAULT_CIPHERS,
+        checkServerIdentity : tls.checkServerIdentity,
+        minDHSize           : 1024,
+      };
+      // if (!options.keepAlive) options.singleUse = true;
+      const sc = tls.createSecureContext(defaults);
+      sc.context.addCACert(ca);
+      api.secureContext = sc;
     }
     return api;
   }
@@ -77698,8 +77717,8 @@ class Context {
 }
 
 module.exports = Context;
-}).call(this,require("buffer").Buffer)
-},{"buffer":130,"fs":80,"os":192,"urijs":"urijs"}],"http-then":[function(require,module,exports){
+}).call(this,require('_process'),require("buffer").Buffer)
+},{"_process":216,"buffer":130,"fs":80,"os":192,"tls":80,"urijs":"urijs"}],"http-then":[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
