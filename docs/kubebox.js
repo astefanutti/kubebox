@@ -243,9 +243,9 @@ function mergeSingle(target, source) {
       if (!target[key]) target[key] = {};
       merge(target[key], prop);
     } else if (key === 'path') {
-      target.path = URI.joinPaths(target.path || '', source.path)
+      target.path = URI.joinPaths(target.path || '', source.path || '')
         .setQuery(URI.parseQuery(URI.parse(target.path || '').query || ''))
-        .setQuery(URI.parseQuery(URI.parse(source.path).query || ''))
+        .setQuery(URI.parseQuery(URI.parse(source.path || '').query || ''))
         .resource();
     } else {
       target[key] = prop;
@@ -279,13 +279,28 @@ class Cluster {
     if (typeof name !== 'undefined') {
       this.name = name;
     } else {
-      const { protocol, hostname, port } = URI.parse(server);
-      this.name = hostname + ':' + port; 
+      const { hostname, port } = Cluster.getUrlParts(server);
+      if (port) {
+        this.name = `${hostname}:${port}`;
+      } else {
+        this.name = hostname;
+      }
     }
     this.server = server;
     this.rejectUnauthorized = rejectUnauthorized;
     this.ca = cert;
     this.certData = certData;
+  }
+
+  static getUrlParts(url) {
+    const uri = URI.parse(url);
+    let parts = {};
+    if (uri.protocol) {
+      parts = uri;
+    } else {
+      URI.parseHost(url, parts);
+    }
+    return parts;
   }
 }
 
@@ -307,7 +322,6 @@ const EventEmitter = require('events'),
       fs           = require('fs'),
       os           = require('os'),
       path         = require('path'),
-      URI          = require('urijs'),
       yaml         = require('js-yaml');
 
 const { AuthProvider, User, Namespace, Context, Cluster } = require('./config');
@@ -577,20 +591,23 @@ function findOrCreateContext(contexts, { url, username, namespace/*, ...login*/ 
 }
 
 function findContextsByClusterUrl(contexts, url) {
-  let uri = URI(url);
-  if (!uri.protocol()) {
-    uri = URI(`https://${url}`);
+  let { protocol = 'https', hostname, port, path = '' } = Cluster.getUrlParts(url);
+  if (!port) {
+    port = protocol === 'https' ? '443' : '80';
   }
-  const port = uri.protocol() === 'https' ? '443' : '80';
   return contexts.filter(context => {
-    const u = URI(context.cluster.server);
-    return u.hostname() === uri.hostname() && u.protocol() === uri.protocol() && u.port() === (uri.port() || port);
+    const { protocol: pr = 'https', hostname: h, port: po, path: pa = '' } = Cluster.getUrlParts(context.cluster.server);
+    if (h !== hostname) return false;
+    if (pr !== protocol) return false;
+    if ((po || (pr === 'https' ? '443' : '80')) !== port) return false;
+    if (pa !== path) return false;
+    return true;
   });
 }
 
 module.exports = KubeConfigManager;
 }).call(this,require('_process'))
-},{"../util":33,"./config":3,"_process":216,"events":167,"fs":80,"js-yaml":269,"os":192,"path":209,"urijs":"urijs"}],5:[function(require,module,exports){
+},{"../util":33,"./config":3,"_process":216,"events":167,"fs":80,"js-yaml":269,"os":192,"path":209}],5:[function(require,module,exports){
 'use strict';
 
 class Namespace {
@@ -77572,11 +77589,10 @@ module.exports = blessed;
 (function (process,Buffer){
 'use strict';
 
-const fs  = require('fs'),
-      os  = require('os'),
-      tls = require('tls'),
-      URI = require('urijs');
-
+const Cluster = require('./cluster'),
+      fs      = require('fs'),
+      os      = require('os'),
+      tls     = require('tls');
 /**
  * contexts:
  * - context:
@@ -77697,14 +77713,7 @@ class Context {
         return url;
       },
       set url(url) {
-        const uri = URI.parse(url);
-        let parts = {};
-        if (uri.protocol) {
-          parts = uri;
-        } else {
-          URI.parseHost(url, parts);
-        }
-        const { protocol = 'https', hostname, port, path } = parts;
+        const { protocol = 'https', hostname, port, path } = Cluster.getUrlParts(url);
         this.protocol = protocol + ':';
         this.hostname = hostname;
         this.port = port;
@@ -77718,7 +77727,7 @@ class Context {
 
 module.exports = Context;
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"_process":216,"buffer":130,"fs":80,"os":192,"tls":80,"urijs":"urijs"}],"http-then":[function(require,module,exports){
+},{"./cluster":2,"_process":216,"buffer":130,"fs":80,"os":192,"tls":80}],"http-then":[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
