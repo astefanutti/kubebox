@@ -768,6 +768,10 @@ module.exports.isPodRunningOrTerminating = function (pod) {
   return status === 'Running' || status === 'Terminating';
 }
 
+module.exports.isPodCompleted = function (pod) {
+  return module.exports.podStatus(pod) === 'Completed';
+}
+
 },{}],8:[function(require,module,exports){
 (function (Buffer){
 'use strict';
@@ -2819,11 +2823,11 @@ class Dashboard {
       pod_log.reset();
       screen.render();
 
-      // non-running pod
-      // TODO: display info message in selection widgets
-      // Alternatively, we could watch for the pod status and update selection
-      // once it's running.
-      if (!k8s.isPodRunningOrTerminating(pod)) {
+      // non-running nor completed pod
+      if (!k8s.isPodRunningOrTerminating(pod) && !k8s.isPodCompleted(pod)) {
+        // TODO: display info message in selection widgets
+        // Alternatively, we could watch for the pod status and update selection
+        // once it's running.
         container_selected = null;
         return;
       }
