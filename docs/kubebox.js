@@ -77694,8 +77694,9 @@ class Context {
         checkServerIdentity : tls.checkServerIdentity,
         minDHSize           : 1024,
       };
+      const options = Object.assign(defaults, { cert: api.cert, key: api.key });
       // if (!options.keepAlive) options.singleUse = true;
-      const sc = tls.createSecureContext(defaults);
+      const sc = tls.createSecureContext(options);
       sc.context.addCACert(ca);
       api.secureContext = sc;
     }
