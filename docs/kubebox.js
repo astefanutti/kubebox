@@ -486,16 +486,16 @@ function readKubeConfigFromLocalStore({ debug }) {
       return JSON.parse(kube_config, (key, value) => {
         switch (key) {
           case 'cluster':
-            return new Cluster(value);
+            return Object.assign(new Cluster(value), value);
           case 'user':
-            return new User(value);
+            return Object.assign(new User(value), value);
           case 'namespace':
             return new Namespace(value.name);
           case 'context':
           case 'current_context':
             return new Context(value);
           case 'auth_provider':
-            return new AuthProvider(value);
+            return Object.assign(new AuthProvider(value), value);
           case 'contexts':
             return value.map(i => new Context(i));
           default:
@@ -650,7 +650,7 @@ class User {
       throw Error('User name must be defined!');
     }
     if (typeof auth_provider !== 'undefined') {
-      this.auth_provider = new AuthProvider(auth_provider.name, auth_provider.config);
+      this.auth_provider = new AuthProvider(Object.assign({ name: auth_provider.name }, auth_provider.config));
     }
     this.name = name;
     this.token = token;
@@ -669,7 +669,7 @@ class User {
 
 class AuthProvider {
 
-  constructor(name, { 'idp-issuer-url': url, 'id-token': token, 'refresh-token': refresh_token,
+  constructor({ name,  'idp-issuer-url': url, 'id-token': token, 'refresh-token': refresh_token,
       'client-id': client_id, 'client-secret': client_secret, 'idp-certificate-authority' : ca }) {
     this.client_id = client_id;
     this.client_secret = client_secret;
