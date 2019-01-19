@@ -6,23 +6,24 @@
     "configurations": [
         {
             "name": "Node (launch)",
+            "runtimeVersion": "9.8.0",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceRoot}/index.js",
-            "args": [
-                ""
-            ],
+            "program": "${workspaceFolder}/index.js",
+            // "args": [
+            //     ""
+            // ],
             "env": {
                 // "KUBECONFIG": "/var/run/kubernetes/admin.kubeconfig"
             },
-            "cwd": "${workspaceRoot}",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         },
         {
             "name": "Node (attach)",
             "type": "node",
             "request": "attach",
-            "port": 9229
+            "processId": "${command:PickProcess}"
         },
         {
             // Serve the 'docs' directory to http://localhost:8080
@@ -30,7 +31,7 @@
             "type": "chrome",
             "request": "launch",
             "url": "http://localhost:8080/index.html",
-            "webRoot": "${workspaceRoot}/",
+            "webRoot": "${workspaceFolder}/",
             "sourceMaps": true
         },
         {
@@ -41,7 +42,7 @@
             "request": "attach",
             "port": 9222,
             "url": "http://localhost:8080/index.html",
-            "webRoot": "${workspaceRoot}",
+            "webRoot": "${workspaceFolder}",
             "sourceMaps": true,
             "trace": true
         }
