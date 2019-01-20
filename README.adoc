@@ -16,7 +16,7 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
-:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.3.2
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.4.0
 :uri-kubebox-twitter: https://twitter.com/kubebox
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
@@ -60,10 +60,10 @@ Download the Kubebox standalone executable for your OS:
 
 --
 [source,shell,subs=attributes+]
-# OSX
-$ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
 # Linux
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
+# OSX
+$ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
 # Windows
 $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 --
