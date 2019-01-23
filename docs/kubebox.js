@@ -3075,28 +3075,36 @@ class Dashboard {
     // FIXME: handle current namespace deletion nicely
     this.run = function (namespace) {
       current_namespace = namespace;
+      let listPodsError;
       // FIXME: should be cancellable
       const promise = until(client.pods(current_namespace).get())
         .spin(s => pods_table.setLabel(`${s} Pods`))
-        .succeed(_ =>  pods_table.setLabel('Pods'))
+        .succeed(_ => pods_table.setLabel('Pods'))
         .then(response => {
           pods_list = JSON.parse(response.body.toString('utf8'));
           pods_list.items = pods_list.items || [];
-        })
-        .then(() => updatePodsTable(pods_list));
+          updatePodsTable(pods_list);
+        }).catch(error => {
+          listPodsError = error;
+          return Promise.reject(error);
+        });
+
       promise
-        .then(() => debug.log(`{grey-fg}Watching for pods changes in namespace ${current_namespace} ...{/grey-fg}`))
-        .then(() => screen.render())
         .then(() => {
+          debug.log(`{grey-fg}Watching for pods changes in namespace ${current_namespace} ...{/grey-fg}`);
+          screen.render();
           const id = setInterval(refreshPodAges, 1000);
           cancellations.add('dashboard.refreshPodAges', () => clearInterval(id));
-        })
-        .then(() => {
-          const { promise, cancellation } = client.pods(current_namespace).watch(pods_list.metadata.resourceVersion).get({ generator: updatePodTable });
+          const { promise, cancellation } = client.pods(current_namespace)
+            .watch(pods_list.metadata.resourceVersion)
+            .get({ generator: updatePodTable });
           cancellations.add('dashboard', cancellation);
           return promise;
         })
-        .catch(error => console.error(error.stack));
+        .catch(error => {
+          if (!listPodsError) console.error(error.stack);
+        });
+
       return promise;
     }
 
