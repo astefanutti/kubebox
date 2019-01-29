@@ -3846,20 +3846,21 @@ function prompt(screen, client, { current_namespace, promptAfterRequest } = { pr
   return new Promise(function(fulfill, reject) {
     const list = namespaces_list(screen);
     const { until } = spinner(screen);
-    let namespaces = [];
+    let namespaces = [], message;
 
     // TODO: watch for namespaces changes when the selection list is open
     function request_namespaces() {
       return (client.openshift ? client.projects().get() : client.namespaces().get())
         .then(response => JSON.parse(response.body.toString('utf8')))
-        // TODO: display a message in case the user has access to no namespaces
         .then(response => namespaces = response)
-        .then(namespaces => list.setItems(namespaces.items.reduce((data, namespace) => {
-          data.push(namespace.metadata.name === current_namespace
-            ? `{blue-fg}${namespace.metadata.name}{/blue-fg}`
-            : namespace.metadata.name);
-          return data;
-          }, [])))
+        .then(namespaces => namespaces.items.length === 0
+          ? list_message('No available namespaces')
+          : list.setItems(namespaces.items.reduce((data, namespace) => {
+            data.push(namespace.metadata.name === current_namespace
+              ? `{blue-fg}${namespace.metadata.name}{/blue-fg}`
+              : namespace.metadata.name);
+            return data;
+            }, [])))
         .then(() => screen.render());
     }
 
@@ -3881,6 +3882,21 @@ function prompt(screen, client, { current_namespace, promptAfterRequest } = { pr
       screen.render();
     }
 
+    function list_message(text, options = {}) {
+      if (message) message.destroy();
+      message = blessed.text(Object.assign({
+        parent  : list,
+        tags    : true,
+        top     : '50%-1',
+        left    : 'center',
+        width   : 'shrink',
+        height  : 'shrink',
+        align   : 'center',
+        valign  : 'middle',
+        content : text,
+      }, options));
+    }
+
     if (promptAfterRequest) {
       request_namespaces()
         .then(prompt_namespaces_list)
@@ -3896,17 +3912,9 @@ function prompt(screen, client, { current_namespace, promptAfterRequest } = { pr
         });
     }
 
-    list.on('action', (item) => {
-      // Force the user to select a namespace
-      if (item || current_namespace) {
-        close_namespaces_list();
-      }
-    });
-
     list.on('cancel', () => {
-      if (current_namespace) {
-        fulfill(current_namespace);
-      }
+      close_namespaces_list();
+      fulfill(current_namespace);
     });
 
     list.on('key q', () => {
@@ -3916,8 +3924,14 @@ function prompt(screen, client, { current_namespace, promptAfterRequest } = { pr
     });
 
     list.on('select', (item, i) => {
-      const namespace = namespaces.items[i].metadata.name;
-      fulfill(namespace);
+      close_namespaces_list();
+      if (item) {
+        const namespace = namespaces.items[i].metadata.name;
+        fulfill(namespace);
+      } else {
+        // no namespaces
+        fulfill(current_namespace);
+      }
     });
   });
 }
@@ -78238,7 +78252,7 @@ class Kubebox extends EventEmitter {
     screen.key(['n'], () => {
       namespaces.prompt(screen, client, { current_namespace })
         .then(namespace => {
-          if (namespace === current_namespace) return;
+          if (!namespace || namespace === current_namespace) return;
           dashboard.reset();
           // switch dashboard to new namespace
           current_namespace = namespace;
@@ -78291,15 +78305,16 @@ class Kubebox extends EventEmitter {
           .catch(error => error.response && [401, 403].includes(error.response.statusCode)
             ? Promise.resolve()
             : Promise.reject(error)))
-        .then(() => current_namespace
-          ? Promise.resolve(current_namespace)
-          : namespaces.prompt(screen, client, { promptAfterRequest : true })
-            .then(namespace => current_namespace = namespace))
+        .then(() => current_namespace || namespaces
+          .prompt(screen, client, { promptAfterRequest: true })
+          .then(namespace => namespace
+            ? current_namespace = namespace
+            : Promise.reject(Error('CANCEL_NAMESPACE'))))
         .then(dashboard.run))
         .spin(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}...`))
-          .cancel(c => cancellations.add('connect', c))
-          .succeed(s => status.setContent(`${s} Connected to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
-          .fail(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
+        .cancel(c => cancellations.add('connect', c))
+        .succeed(s => status.setContent(`${s} Connected to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
+        .fail(s => status.setContent(`${s} Connecting to {bold}${client.url}{/bold}${options.user ? ` as {bold}${options.user.metadata.name}{/bold}` : ''}`))
         .catch(error => error.response && [401, 403].includes(error.response.statusCode)
           ? log(`Authentication required for ${client.url}`)
             .then(() => login
@@ -78318,7 +78333,9 @@ class Kubebox extends EventEmitter {
                     : Promise.reject(error))
               : logging(options))
           : error.message
-            ? log(`{red-fg}Connection failed to ${client.url}{/red-fg}`)
+            ? error.message == "CANCEL_NAMESPACE"
+              ? logging(Object.assign({}, options, { message: '' }))
+              : log(`{red-fg}Connection failed to ${client.url}{/red-fg}`)
                 // throttle reconnection
                 .then(wait(100))
                 .then(() => logging(Object.assign({}, options, { message: isWebBrowser
@@ -78346,7 +78363,8 @@ class Kubebox extends EventEmitter {
       if (!client.openshift)
         return Promise.reject(error(`Authentication failed for ${client.url}`));
       // password takes precedence over token
-      return (isNotEmpty(login.token) && isEmpty(login.password) ? Promise.resolve(login.token)
+      return (isNotEmpty(login.token) && isEmpty(login.password)
+        ? Promise.resolve(login.token)
         // try retrieving an OAuth access token from the OpenShift OAuth server
         : CORS
           ? client.oauth_authorize_web(login).get()
