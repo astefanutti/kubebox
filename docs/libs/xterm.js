@@ -215,7 +215,7 @@ var AccessibilityManager = (function (_super) {
 }(Lifecycle_2.Disposable));
 exports.AccessibilityManager = AccessibilityManager;
 
-},{"./Strings":13,"./common/Lifecycle":19,"./core/Platform":22,"./ui/Lifecycle":49,"./ui/RenderDebouncer":52}],2:[function(require,module,exports){
+},{"./Strings":14,"./common/Lifecycle":20,"./core/Platform":23,"./ui/Lifecycle":51,"./ui/RenderDebouncer":54}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -231,9 +231,10 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+var BufferLine_1 = require("./BufferLine");
+var BufferReflow_1 = require("./BufferReflow");
 var CircularList_1 = require("./common/CircularList");
 var EventEmitter_1 = require("./common/EventEmitter");
-var BufferLine_1 = require("./BufferLine");
 var Types_1 = require("./renderer/atlas/Types");
 exports.DEFAULT_ATTR = (0 << 18) | (Types_1.DEFAULT_COLOR << 9) | (256 << 0);
 exports.CHAR_DATA_ATTR_INDEX = 0;
@@ -247,46 +248,23 @@ exports.NULL_CELL_CODE = 0;
 exports.WHITESPACE_CELL_CHAR = ' ';
 exports.WHITESPACE_CELL_WIDTH = 1;
 exports.WHITESPACE_CELL_CODE = 32;
+exports.FILL_CHAR_DATA = [exports.DEFAULT_ATTR, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE];
 var Buffer = (function () {
     function Buffer(_terminal, _hasScrollback) {
         this._terminal = _terminal;
         this._hasScrollback = _hasScrollback;
         this.markers = [];
+        this._cols = this._terminal.cols;
+        this._rows = this._terminal.rows;
         this.clear();
     }
-    Buffer.prototype.setBufferLineFactory = function (type) {
-        if (type === 'JsArray') {
-            if (this._bufferLineConstructor !== BufferLine_1.BufferLineJSArray) {
-                this._bufferLineConstructor = BufferLine_1.BufferLineJSArray;
-                this._recreateLines();
-            }
-        }
-        else {
-            if (this._bufferLineConstructor !== BufferLine_1.BufferLine) {
-                this._bufferLineConstructor = BufferLine_1.BufferLine;
-                this._recreateLines();
-            }
-        }
-    };
-    Buffer.prototype._recreateLines = function () {
-        if (!this.lines)
-            return;
-        for (var i = 0; i < this.lines.length; ++i) {
-            var oldLine = this.lines.get(i);
-            var newLine = new this._bufferLineConstructor(oldLine.length);
-            for (var j = 0; j < oldLine.length; ++j) {
-                newLine.set(j, oldLine.get(j));
-            }
-            this.lines.set(i, newLine);
-        }
-    };
     Buffer.prototype.getBlankLine = function (attr, isWrapped) {
         var fillCharData = [attr, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE];
-        return new this._bufferLineConstructor(this._terminal.cols, fillCharData, isWrapped);
+        return new BufferLine_1.BufferLine(this._cols, fillCharData, isWrapped);
     };
     Object.defineProperty(Buffer.prototype, "hasScrollback", {
         get: function () {
-            return this._hasScrollback && this.lines.maxLength > this._terminal.rows;
+            return this._hasScrollback && this.lines.maxLength > this._rows;
         },
         enumerable: true,
         configurable: true
@@ -295,7 +273,7 @@ var Buffer = (function () {
         get: function () {
             var absoluteY = this.ybase + this.y;
             var relativeY = absoluteY - this.ydisp;
-            return (relativeY >= 0 && relativeY < this._terminal.rows);
+            return (relativeY >= 0 && relativeY < this._rows);
         },
         enumerable: true,
         configurable: true
@@ -312,21 +290,20 @@ var Buffer = (function () {
             if (fillAttr === undefined) {
                 fillAttr = exports.DEFAULT_ATTR;
             }
-            var i = this._terminal.rows;
+            var i = this._rows;
             while (i--) {
                 this.lines.push(this.getBlankLine(fillAttr));
             }
         }
     };
     Buffer.prototype.clear = function () {
-        this.setBufferLineFactory(this._terminal.options.experimentalBufferLineImpl);
         this.ydisp = 0;
         this.ybase = 0;
         this.y = 0;
         this.x = 0;
-        this.lines = new CircularList_1.CircularList(this._getCorrectBufferLength(this._terminal.rows));
+        this.lines = new CircularList_1.CircularList(this._getCorrectBufferLength(this._rows));
         this.scrollTop = 0;
-        this.scrollBottom = this._terminal.rows - 1;
+        this.scrollBottom = this._rows - 1;
         this.setupTabStops();
     };
     Buffer.prototype.resize = function (newCols, newRows) {
@@ -335,15 +312,14 @@ var Buffer = (function () {
             this.lines.maxLength = newMaxLength;
         }
         if (this.lines.length > 0) {
-            if (this._terminal.cols < newCols) {
-                var ch = [exports.DEFAULT_ATTR, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE];
+            if (this._cols < newCols) {
                 for (var i = 0; i < this.lines.length; i++) {
-                    this.lines.get(i).resize(newCols, ch);
+                    this.lines.get(i).resize(newCols, exports.FILL_CHAR_DATA);
                 }
             }
             var addToY = 0;
-            if (this._terminal.rows < newRows) {
-                for (var y = this._terminal.rows; y < newRows; y++) {
+            if (this._rows < newRows) {
+                for (var y = this._rows; y < newRows; y++) {
                     if (this.lines.length < newRows + this.ybase) {
                         if (this.ybase > 0 && this.lines.length <= this.ybase + this.y + addToY + 1) {
                             this.ybase--;
@@ -353,14 +329,13 @@ var Buffer = (function () {
                             }
                         }
                         else {
-                            var fillCharData = [exports.DEFAULT_ATTR, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE];
-                            this.lines.push(new this._bufferLineConstructor(newCols, fillCharData));
+                            this.lines.push(new BufferLine_1.BufferLine(newCols, exports.FILL_CHAR_DATA));
                         }
                     }
                 }
             }
             else {
-                for (var y = this._terminal.rows; y > newRows; y--) {
+                for (var y = this._rows; y > newRows; y--) {
                     if (this.lines.length > newRows + this.ybase) {
                         if (this.lines.length > this.ybase + this.y + 1) {
                             this.lines.pop();
@@ -391,15 +366,197 @@ var Buffer = (function () {
             this.scrollTop = 0;
         }
         this.scrollBottom = newRows - 1;
+        if (this._hasScrollback) {
+            this._reflow(newCols, newRows);
+            if (this._cols > newCols) {
+                for (var i = 0; i < this.lines.length; i++) {
+                    this.lines.get(i).resize(newCols, exports.FILL_CHAR_DATA);
+                }
+            }
+        }
+        this._cols = newCols;
+        this._rows = newRows;
     };
-    Buffer.prototype.stringIndexToBufferIndex = function (lineIndex, stringIndex) {
+    Buffer.prototype._reflow = function (newCols, newRows) {
+        if (this._cols === newCols) {
+            return;
+        }
+        if (newCols > this._cols) {
+            this._reflowLarger(newCols);
+        }
+        else {
+            this._reflowSmaller(newCols, newRows);
+        }
+    };
+    Buffer.prototype._reflowLarger = function (newCols) {
+        var toRemove = BufferReflow_1.reflowLargerGetLinesToRemove(this.lines, newCols, this.ybase + this.y);
+        if (toRemove.length > 0) {
+            var newLayoutResult = BufferReflow_1.reflowLargerCreateNewLayout(this.lines, toRemove);
+            BufferReflow_1.reflowLargerApplyNewLayout(this.lines, newLayoutResult.layout);
+            this._reflowLargerAdjustViewport(newCols, newLayoutResult.countRemoved);
+        }
+    };
+    Buffer.prototype._reflowLargerAdjustViewport = function (newCols, countRemoved) {
+        var viewportAdjustments = countRemoved;
+        while (viewportAdjustments-- > 0) {
+            if (this.ybase === 0) {
+                if (this.y > 0) {
+                    this.y--;
+                }
+                if (this.lines.length < this._rows) {
+                    this.lines.push(new BufferLine_1.BufferLine(newCols, exports.FILL_CHAR_DATA));
+                }
+            }
+            else {
+                if (this.ydisp === this.ybase) {
+                    this.ydisp--;
+                }
+                this.ybase--;
+            }
+        }
+    };
+    Buffer.prototype._reflowSmaller = function (newCols, newRows) {
+        var toInsert = [];
+        var countToInsert = 0;
+        for (var y = this.lines.length - 1; y >= 0; y--) {
+            var nextLine = this.lines.get(y);
+            if (!nextLine.isWrapped && nextLine.getTrimmedLength() <= newCols) {
+                continue;
+            }
+            var wrappedLines = [nextLine];
+            while (nextLine.isWrapped && y > 0) {
+                nextLine = this.lines.get(--y);
+                wrappedLines.unshift(nextLine);
+            }
+            var absoluteY = this.ybase + this.y;
+            if (absoluteY >= y && absoluteY < y + wrappedLines.length) {
+                continue;
+            }
+            var lastLineLength = wrappedLines[wrappedLines.length - 1].getTrimmedLength();
+            var destLineLengths = BufferReflow_1.reflowSmallerGetNewLineLengths(wrappedLines, this._cols, newCols);
+            var linesToAdd = destLineLengths.length - wrappedLines.length;
+            var trimmedLines = void 0;
+            if (this.ybase === 0 && this.y !== this.lines.length - 1) {
+                trimmedLines = Math.max(0, this.y - this.lines.maxLength + linesToAdd);
+            }
+            else {
+                trimmedLines = Math.max(0, this.lines.length - this.lines.maxLength + linesToAdd);
+            }
+            var newLines = [];
+            for (var i = 0; i < linesToAdd; i++) {
+                var newLine = this.getBlankLine(exports.DEFAULT_ATTR, true);
+                newLines.push(newLine);
+            }
+            if (newLines.length > 0) {
+                toInsert.push({
+                    start: y + wrappedLines.length + countToInsert,
+                    newLines: newLines
+                });
+                countToInsert += newLines.length;
+            }
+            wrappedLines.push.apply(wrappedLines, newLines);
+            var destLineIndex = destLineLengths.length - 1;
+            var destCol = destLineLengths[destLineIndex];
+            if (destCol === 0) {
+                destLineIndex--;
+                destCol = destLineLengths[destLineIndex];
+            }
+            var srcLineIndex = wrappedLines.length - linesToAdd - 1;
+            var srcCol = lastLineLength;
+            while (srcLineIndex >= 0) {
+                var cellsToCopy = Math.min(srcCol, destCol);
+                wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[srcLineIndex], srcCol - cellsToCopy, destCol - cellsToCopy, cellsToCopy, true);
+                destCol -= cellsToCopy;
+                if (destCol === 0) {
+                    destLineIndex--;
+                    destCol = destLineLengths[destLineIndex];
+                }
+                srcCol -= cellsToCopy;
+                if (srcCol === 0) {
+                    srcLineIndex--;
+                    srcCol = wrappedLines[Math.max(srcLineIndex, 0)].getTrimmedLength();
+                }
+            }
+            for (var i = 0; i < wrappedLines.length; i++) {
+                if (destLineLengths[i] < newCols) {
+                    wrappedLines[i].set(destLineLengths[i], exports.FILL_CHAR_DATA);
+                }
+            }
+            var viewportAdjustments = linesToAdd - trimmedLines;
+            while (viewportAdjustments-- > 0) {
+                if (this.ybase === 0) {
+                    if (this.y < this._rows - 1) {
+                        this.y++;
+                        this.lines.pop();
+                    }
+                    else {
+                        this.ybase++;
+                        this.ydisp++;
+                    }
+                }
+                else {
+                    if (this.ybase < Math.min(this.lines.maxLength, this.lines.length + countToInsert) - newRows) {
+                        if (this.ybase === this.ydisp) {
+                            this.ydisp++;
+                        }
+                        this.ybase++;
+                    }
+                }
+            }
+        }
+        if (toInsert.length > 0) {
+            var insertEvents = [];
+            var originalLines = [];
+            for (var i = 0; i < this.lines.length; i++) {
+                originalLines.push(this.lines.get(i));
+            }
+            var originalLinesLength = this.lines.length;
+            var originalLineIndex = originalLinesLength - 1;
+            var nextToInsertIndex = 0;
+            var nextToInsert = toInsert[nextToInsertIndex];
+            this.lines.length = Math.min(this.lines.maxLength, this.lines.length + countToInsert);
+            var countInsertedSoFar = 0;
+            for (var i = Math.min(this.lines.maxLength - 1, originalLinesLength + countToInsert - 1); i >= 0; i--) {
+                if (nextToInsert && nextToInsert.start > originalLineIndex + countInsertedSoFar) {
+                    for (var nextI = nextToInsert.newLines.length - 1; nextI >= 0; nextI--) {
+                        this.lines.set(i--, nextToInsert.newLines[nextI]);
+                    }
+                    i++;
+                    insertEvents.push({
+                        index: originalLineIndex + 1,
+                        amount: nextToInsert.newLines.length
+                    });
+                    countInsertedSoFar += nextToInsert.newLines.length;
+                    nextToInsert = toInsert[++nextToInsertIndex];
+                }
+                else {
+                    this.lines.set(i, originalLines[originalLineIndex--]);
+                }
+            }
+            var insertCountEmitted = 0;
+            for (var i = insertEvents.length - 1; i >= 0; i--) {
+                insertEvents[i].index += insertCountEmitted;
+                this.lines.emit('insert', insertEvents[i]);
+                insertCountEmitted += insertEvents[i].amount;
+            }
+            var amountToTrim = Math.max(0, originalLinesLength + countToInsert - this.lines.maxLength);
+            if (amountToTrim > 0) {
+                this.lines.emitMayRemoveListeners('trim', amountToTrim);
+            }
+        }
+    };
+    Buffer.prototype.stringIndexToBufferIndex = function (lineIndex, stringIndex, trimRight) {
+        if (trimRight === void 0) { trimRight = false; }
         while (stringIndex) {
             var line = this.lines.get(lineIndex);
             if (!line) {
                 return [-1, -1];
             }
-            for (var i = 0; i < line.length; ++i) {
-                stringIndex -= line.get(i)[exports.CHAR_DATA_CHAR_INDEX].length;
+            var length_1 = (trimRight) ? line.getTrimmedLength() : line.length;
+            for (var i = 0; i < length_1; ++i) {
+                if (line.get(i)[exports.CHAR_DATA_WIDTH_INDEX]) {
+                    stringIndex -= line.get(i)[exports.CHAR_DATA_CHAR_INDEX].length || 1;
+                }
                 if (stringIndex < 0) {
                     return [lineIndex, i];
                 }
@@ -437,7 +594,7 @@ var Buffer = (function () {
             this.tabs = {};
             i = 0;
         }
-        for (; i < this._terminal.cols; i += this._terminal.options.tabStopWidth) {
+        for (; i < this._cols; i += this._terminal.options.tabStopWidth) {
             this.tabs[i] = true;
         }
     };
@@ -447,15 +604,15 @@ var Buffer = (function () {
         }
         while (!this.tabs[--x] && x > 0)
             ;
-        return x >= this._terminal.cols ? this._terminal.cols - 1 : x < 0 ? 0 : x;
+        return x >= this._cols ? this._cols - 1 : x < 0 ? 0 : x;
     };
     Buffer.prototype.nextStop = function (x) {
         if (x === null || x === undefined) {
             x = this.x;
         }
-        while (!this.tabs[++x] && x < this._terminal.cols)
+        while (!this.tabs[++x] && x < this._cols)
             ;
-        return x >= this._terminal.cols ? this._terminal.cols - 1 : x < 0 ? 0 : x;
+        return x >= this._cols ? this._cols - 1 : x < 0 ? 0 : x;
     };
     Buffer.prototype.addMarker = function (y) {
         var _this = this;
@@ -465,6 +622,19 @@ var Buffer = (function () {
             marker.line -= amount;
             if (marker.line < 0) {
                 marker.dispose();
+            }
+        }));
+        marker.register(this.lines.addDisposableListener('insert', function (event) {
+            if (marker.line >= event.index) {
+                marker.line += event.amount;
+            }
+        }));
+        marker.register(this.lines.addDisposableListener('delete', function (event) {
+            if (marker.line >= event.index && marker.line < event.index + event.amount) {
+                marker.dispose();
+            }
+            if (marker.line > event.index) {
+                marker.line -= event.amount;
             }
         }));
         marker.register(marker.addDisposableListener('dispose', function () { return _this._removeMarker(marker); }));
@@ -549,120 +719,10 @@ var BufferStringIterator = (function () {
 }());
 exports.BufferStringIterator = BufferStringIterator;
 
-},{"./BufferLine":3,"./common/CircularList":16,"./common/EventEmitter":18,"./renderer/atlas/Types":44}],3:[function(require,module,exports){
+},{"./BufferLine":3,"./BufferReflow":4,"./common/CircularList":17,"./common/EventEmitter":19,"./renderer/atlas/Types":46}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("./Buffer");
-var BufferLineJSArray = (function () {
-    function BufferLineJSArray(cols, fillCharData, isWrapped) {
-        this.isWrapped = false;
-        this._data = [];
-        if (!fillCharData) {
-            fillCharData = [0, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE];
-        }
-        for (var i = 0; i < cols; i++) {
-            this._push(fillCharData);
-        }
-        if (isWrapped) {
-            this.isWrapped = true;
-        }
-        this.length = this._data.length;
-    }
-    BufferLineJSArray.prototype._pop = function () {
-        var data = this._data.pop();
-        this.length = this._data.length;
-        return data;
-    };
-    BufferLineJSArray.prototype._push = function (data) {
-        this._data.push(data);
-        this.length = this._data.length;
-    };
-    BufferLineJSArray.prototype._splice = function (start, deleteCount) {
-        var items = [];
-        for (var _i = 2; _i < arguments.length; _i++) {
-            items[_i - 2] = arguments[_i];
-        }
-        var _a;
-        var removed = (_a = this._data).splice.apply(_a, [start, deleteCount].concat(items));
-        this.length = this._data.length;
-        return removed;
-    };
-    BufferLineJSArray.prototype.get = function (index) {
-        return this._data[index];
-    };
-    BufferLineJSArray.prototype.set = function (index, data) {
-        this._data[index] = data;
-    };
-    BufferLineJSArray.prototype.insertCells = function (pos, n, ch) {
-        while (n--) {
-            this._splice(pos, 0, ch);
-            this._pop();
-        }
-    };
-    BufferLineJSArray.prototype.deleteCells = function (pos, n, fillCharData) {
-        while (n--) {
-            this._splice(pos, 1);
-            this._push(fillCharData);
-        }
-    };
-    BufferLineJSArray.prototype.replaceCells = function (start, end, fillCharData) {
-        while (start < end && start < this.length) {
-            this.set(start++, fillCharData);
-        }
-    };
-    BufferLineJSArray.prototype.resize = function (cols, fillCharData, shrink) {
-        if (shrink === void 0) { shrink = false; }
-        while (this._data.length < cols) {
-            this._data.push(fillCharData);
-        }
-        if (shrink) {
-            while (this._data.length > cols) {
-                this._data.pop();
-            }
-        }
-        this.length = this._data.length;
-    };
-    BufferLineJSArray.prototype.fill = function (fillCharData) {
-        for (var i = 0; i < this.length; ++i) {
-            this.set(i, fillCharData);
-        }
-    };
-    BufferLineJSArray.prototype.copyFrom = function (line) {
-        this._data = line._data.slice(0);
-        this.length = line.length;
-        this.isWrapped = line.isWrapped;
-    };
-    BufferLineJSArray.prototype.clone = function () {
-        var newLine = new BufferLineJSArray(0);
-        newLine.copyFrom(this);
-        return newLine;
-    };
-    BufferLineJSArray.prototype.getTrimmedLength = function () {
-        for (var i = this.length - 1; i >= 0; --i) {
-            var ch = this.get(i);
-            if (ch[Buffer_1.CHAR_DATA_CHAR_INDEX] !== '') {
-                return i + ch[Buffer_1.CHAR_DATA_WIDTH_INDEX];
-            }
-        }
-        return 0;
-    };
-    BufferLineJSArray.prototype.translateToString = function (trimRight, startCol, endCol) {
-        if (trimRight === void 0) { trimRight = false; }
-        if (startCol === void 0) { startCol = 0; }
-        if (endCol === void 0) { endCol = this.length; }
-        if (trimRight) {
-            endCol = Math.min(endCol, this.getTrimmedLength());
-        }
-        var result = '';
-        while (startCol < endCol) {
-            result += this.get(startCol)[Buffer_1.CHAR_DATA_CHAR_INDEX] || Buffer_1.WHITESPACE_CELL_CHAR;
-            startCol += this.get(startCol)[Buffer_1.CHAR_DATA_WIDTH_INDEX] || 1;
-        }
-        return result;
-    };
-    return BufferLineJSArray;
-}());
-exports.BufferLineJSArray = BufferLineJSArray;
 var CELL_SIZE = 3;
 var IS_COMBINED_BIT_MASK = 0x80000000;
 var BufferLine = (function () {
@@ -694,6 +754,9 @@ var BufferLine = (function () {
                 ? this._combined[index].charCodeAt(this._combined[index].length - 1)
                 : stringData
         ];
+    };
+    BufferLine.prototype.getWidth = function (index) {
+        return this._data[index * CELL_SIZE + 2];
     };
     BufferLine.prototype.set = function (index, value) {
         this._data[index * CELL_SIZE + 0] = value[0];
@@ -743,9 +806,8 @@ var BufferLine = (function () {
             this.set(start++, fillCharData);
         }
     };
-    BufferLine.prototype.resize = function (cols, fillCharData, shrink) {
-        if (shrink === void 0) { shrink = false; }
-        if (cols === this.length || (!shrink && cols < this.length)) {
+    BufferLine.prototype.resize = function (cols, fillCharData) {
+        if (cols === this.length) {
             return;
         }
         if (cols > this.length) {
@@ -763,14 +825,22 @@ var BufferLine = (function () {
                 this.set(i, fillCharData);
             }
         }
-        else if (shrink) {
+        else {
             if (cols) {
                 var data = new Uint32Array(cols * CELL_SIZE);
                 data.set(this._data.subarray(0, cols * CELL_SIZE));
                 this._data = data;
+                var keys = Object.keys(this._combined);
+                for (var i = 0; i < keys.length; i++) {
+                    var key = parseInt(keys[i], 10);
+                    if (key >= cols) {
+                        delete this._combined[key];
+                    }
+                }
             }
             else {
                 this._data = null;
+                this._combined = {};
             }
         }
         this.length = cols;
@@ -813,6 +883,30 @@ var BufferLine = (function () {
         }
         return 0;
     };
+    BufferLine.prototype.copyCellsFrom = function (src, srcCol, destCol, length, applyInReverse) {
+        var srcData = src._data;
+        if (applyInReverse) {
+            for (var cell = length - 1; cell >= 0; cell--) {
+                for (var i = 0; i < CELL_SIZE; i++) {
+                    this._data[(destCol + cell) * CELL_SIZE + i] = srcData[(srcCol + cell) * CELL_SIZE + i];
+                }
+            }
+        }
+        else {
+            for (var cell = 0; cell < length; cell++) {
+                for (var i = 0; i < CELL_SIZE; i++) {
+                    this._data[(destCol + cell) * CELL_SIZE + i] = srcData[(srcCol + cell) * CELL_SIZE + i];
+                }
+            }
+        }
+        var srcCombinedKeys = Object.keys(src._combined);
+        for (var i = 0; i < srcCombinedKeys.length; i++) {
+            var key = parseInt(srcCombinedKeys[i], 10);
+            if (key >= srcCol) {
+                this._combined[key - srcCol + destCol] = src._combined[key];
+            }
+        }
+    };
     BufferLine.prototype.translateToString = function (trimRight, startCol, endCol) {
         if (trimRight === void 0) { trimRight = false; }
         if (startCol === void 0) { startCol = 0; }
@@ -833,6 +927,139 @@ var BufferLine = (function () {
 exports.BufferLine = BufferLine;
 
 },{"./Buffer":2}],4:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var Buffer_1 = require("./Buffer");
+function reflowLargerGetLinesToRemove(lines, newCols, bufferAbsoluteY) {
+    var toRemove = [];
+    for (var y = 0; y < lines.length - 1; y++) {
+        var i = y;
+        var nextLine = lines.get(++i);
+        if (!nextLine.isWrapped) {
+            continue;
+        }
+        var wrappedLines = [lines.get(y)];
+        while (i < lines.length && nextLine.isWrapped) {
+            wrappedLines.push(nextLine);
+            nextLine = lines.get(++i);
+        }
+        if (bufferAbsoluteY >= y && bufferAbsoluteY < i) {
+            y += wrappedLines.length - 1;
+            continue;
+        }
+        var destLineIndex = 0;
+        var destCol = wrappedLines[destLineIndex].getTrimmedLength();
+        var srcLineIndex = 1;
+        var srcCol = 0;
+        while (srcLineIndex < wrappedLines.length) {
+            var srcTrimmedTineLength = wrappedLines[srcLineIndex].getTrimmedLength();
+            var srcRemainingCells = srcTrimmedTineLength - srcCol;
+            var destRemainingCells = newCols - destCol;
+            var cellsToCopy = Math.min(srcRemainingCells, destRemainingCells);
+            wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[srcLineIndex], srcCol, destCol, cellsToCopy, false);
+            destCol += cellsToCopy;
+            if (destCol === newCols) {
+                destLineIndex++;
+                destCol = 0;
+            }
+            srcCol += cellsToCopy;
+            if (srcCol === srcTrimmedTineLength) {
+                srcLineIndex++;
+                srcCol = 0;
+            }
+            if (destCol === 0 && destLineIndex !== 0) {
+                if (wrappedLines[destLineIndex - 1].getWidth(newCols - 1) === 2) {
+                    wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[destLineIndex - 1], newCols - 1, destCol++, 1, false);
+                    wrappedLines[destLineIndex - 1].set(newCols - 1, Buffer_1.FILL_CHAR_DATA);
+                }
+            }
+        }
+        wrappedLines[destLineIndex].replaceCells(destCol, newCols, Buffer_1.FILL_CHAR_DATA);
+        var countToRemove = 0;
+        for (var i_1 = wrappedLines.length - 1; i_1 > 0; i_1--) {
+            if (i_1 > destLineIndex || wrappedLines[i_1].getTrimmedLength() === 0) {
+                countToRemove++;
+            }
+            else {
+                break;
+            }
+        }
+        if (countToRemove > 0) {
+            toRemove.push(y + wrappedLines.length - countToRemove);
+            toRemove.push(countToRemove);
+        }
+        y += wrappedLines.length - 1;
+    }
+    return toRemove;
+}
+exports.reflowLargerGetLinesToRemove = reflowLargerGetLinesToRemove;
+function reflowLargerCreateNewLayout(lines, toRemove) {
+    var layout = [];
+    var nextToRemoveIndex = 0;
+    var nextToRemoveStart = toRemove[nextToRemoveIndex];
+    var countRemovedSoFar = 0;
+    for (var i = 0; i < lines.length; i++) {
+        if (nextToRemoveStart === i) {
+            var countToRemove = toRemove[++nextToRemoveIndex];
+            lines.emit('delete', {
+                index: i - countRemovedSoFar,
+                amount: countToRemove
+            });
+            i += countToRemove - 1;
+            countRemovedSoFar += countToRemove;
+            nextToRemoveStart = toRemove[++nextToRemoveIndex];
+        }
+        else {
+            layout.push(i);
+        }
+    }
+    return {
+        layout: layout,
+        countRemoved: countRemovedSoFar
+    };
+}
+exports.reflowLargerCreateNewLayout = reflowLargerCreateNewLayout;
+function reflowLargerApplyNewLayout(lines, newLayout) {
+    var newLayoutLines = [];
+    for (var i = 0; i < newLayout.length; i++) {
+        newLayoutLines.push(lines.get(newLayout[i]));
+    }
+    for (var i = 0; i < newLayoutLines.length; i++) {
+        lines.set(i, newLayoutLines[i]);
+    }
+    lines.length = newLayout.length;
+}
+exports.reflowLargerApplyNewLayout = reflowLargerApplyNewLayout;
+function reflowSmallerGetNewLineLengths(wrappedLines, oldCols, newCols) {
+    var newLineLengths = [];
+    var cellsNeeded = wrappedLines.map(function (l) { return l.getTrimmedLength(); }).reduce(function (p, c) { return p + c; });
+    var srcCol = 0;
+    var srcLine = 0;
+    var cellsAvailable = 0;
+    while (cellsAvailable < cellsNeeded) {
+        if (cellsNeeded - cellsAvailable < newCols) {
+            newLineLengths.push(cellsNeeded - cellsAvailable);
+            break;
+        }
+        srcCol += newCols;
+        var oldTrimmedLength = wrappedLines[srcLine].getTrimmedLength();
+        if (srcCol > oldTrimmedLength) {
+            srcCol -= oldTrimmedLength;
+            srcLine++;
+        }
+        var endsWithWide = wrappedLines[srcLine].getWidth(srcCol - 1) === 2;
+        if (endsWithWide) {
+            srcCol--;
+        }
+        var lineLength = endsWithWide ? newCols - 1 : newCols;
+        newLineLengths.push(lineLength);
+        cellsAvailable += lineLength;
+    }
+    return newLineLengths;
+}
+exports.reflowSmallerGetNewLineLengths = reflowSmallerGetNewLineLengths;
+
+},{"./Buffer":2}],5:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -921,7 +1148,7 @@ var BufferSet = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.BufferSet = BufferSet;
 
-},{"./Buffer":2,"./common/EventEmitter":18}],5:[function(require,module,exports){
+},{"./Buffer":2,"./common/EventEmitter":19}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TypedArrayUtils_1 = require("./common/TypedArrayUtils");
@@ -1064,7 +1291,7 @@ function getStringCellWidth(s) {
 }
 exports.getStringCellWidth = getStringCellWidth;
 
-},{"./common/TypedArrayUtils":20}],6:[function(require,module,exports){
+},{"./common/TypedArrayUtils":21}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CompositionHelper = (function () {
@@ -1109,12 +1336,12 @@ var CompositionHelper = (function () {
         }
         return true;
     };
-    CompositionHelper.prototype._finalizeComposition = function (waitForPropogation) {
+    CompositionHelper.prototype._finalizeComposition = function (waitForPropagation) {
         var _this = this;
         this._compositionView.classList.remove('active');
         this._isComposing = false;
         this._clearTextareaPosition();
-        if (!waitForPropogation) {
+        if (!waitForPropagation) {
             this._isSendingComposition = false;
             var input = this._textarea.value.substring(this._compositionPosition.start, this._compositionPosition.end);
             this._terminal.handler(input);
@@ -1185,7 +1412,7 @@ var CompositionHelper = (function () {
 }());
 exports.CompositionHelper = CompositionHelper;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -1202,6 +1429,7 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var Lifecycle_1 = require("./common/Lifecycle");
+var TextDecoder_1 = require("./core/input/TextDecoder");
 function r(low, high) {
     var c = high - low;
     var arr = new Array(c);
@@ -1275,6 +1503,7 @@ exports.VT500_TRANSITION_TABLE = (function () {
     table.addMany(PRINTABLES, 7, 0, 7);
     table.addMany(EXECUTABLES, 7, 0, 7);
     table.add(0x9c, 7, 0, 0);
+    table.add(0x7f, 7, 0, 7);
     table.add(0x5b, 1, 11, 3);
     table.addMany(r(0x40, 0x7f), 3, 7, 0);
     table.addMany(r(0x30, 0x3a), 3, 8, 4);
@@ -1488,7 +1717,7 @@ var EscapeSequenceParser = (function (_super) {
         this._collect = '';
         this._activeDcsHandler = null;
     };
-    EscapeSequenceParser.prototype.parse = function (data) {
+    EscapeSequenceParser.prototype.parse = function (data, length) {
         var code = 0;
         var transition = 0;
         var error = false;
@@ -1501,14 +1730,13 @@ var EscapeSequenceParser = (function (_super) {
         var table = this.TRANSITIONS.table;
         var dcsHandler = this._activeDcsHandler;
         var callback = null;
-        var l = data.length;
-        for (var i = 0; i < l; ++i) {
-            code = data.charCodeAt(i);
+        for (var i = 0; i < length; ++i) {
+            code = data[i];
             if (currentState === 0 && code > 0x1f && code < 0x80) {
                 print = (~print) ? print : i;
                 do
                     i++;
-                while (i < l && data.charCodeAt(i) > 0x1f && data.charCodeAt(i) < 0x80);
+                while (i < length && data[i] > 0x1f && data[i] < 0x80);
                 i--;
                 continue;
             }
@@ -1652,10 +1880,10 @@ var EscapeSequenceParser = (function (_super) {
                     break;
                 case 5:
                     for (var j_1 = i + 1;; j_1++) {
-                        if (j_1 >= l
-                            || (code = data.charCodeAt(j_1)) < 0x20
+                        if (j_1 >= length
+                            || (code = data[j_1]) < 0x20
                             || (code > 0x7f && code <= 0x9f)) {
-                            osc += data.substring(i, j_1);
+                            osc += TextDecoder_1.utf32ToString(data, i, j_1);
                             i = j_1 - 1;
                             break;
                         }
@@ -1693,10 +1921,10 @@ var EscapeSequenceParser = (function (_super) {
             currentState = transition & 15;
         }
         if (currentState === 0 && ~print) {
-            this._printHandler(data, print, data.length);
+            this._printHandler(data, print, length);
         }
         else if (currentState === 13 && ~dcs && dcsHandler) {
-            dcsHandler.put(data, dcs, data.length);
+            dcsHandler.put(data, dcs, length);
         }
         this._osc = osc;
         this._collect = collect;
@@ -1708,7 +1936,7 @@ var EscapeSequenceParser = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EscapeSequenceParser = EscapeSequenceParser;
 
-},{"./common/Lifecycle":19}],8:[function(require,module,exports){
+},{"./common/Lifecycle":20,"./core/input/TextDecoder":26}],9:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -1730,19 +1958,24 @@ var Buffer_1 = require("./Buffer");
 var CharWidth_1 = require("./CharWidth");
 var EscapeSequenceParser_1 = require("./EscapeSequenceParser");
 var Lifecycle_1 = require("./common/Lifecycle");
+var TypedArrayUtils_1 = require("./common/TypedArrayUtils");
+var TextDecoder_1 = require("./core/input/TextDecoder");
 var GLEVEL = { '(': 0, ')': 1, '*': 2, '+': 3, '-': 1, '.': 2 };
 var DECRQSS = (function () {
     function DECRQSS(_terminal) {
         this._terminal = _terminal;
+        this._data = new Uint32Array(0);
     }
     DECRQSS.prototype.hook = function (collect, params, flag) {
-        this._data = '';
+        this._data = new Uint32Array(0);
     };
     DECRQSS.prototype.put = function (data, start, end) {
-        this._data += data.substring(start, end);
+        this._data = TypedArrayUtils_1.concat(this._data, data.subarray(start, end));
     };
     DECRQSS.prototype.unhook = function () {
-        switch (this._data) {
+        var data = TextDecoder_1.utf32ToString(this._data);
+        this._data = new Uint32Array(0);
+        switch (data) {
             case '"q':
                 return this._terminal.handler(EscapeSequences_1.C0.ESC + "P1$r0\"q" + EscapeSequences_1.C0.ESC + "\\");
             case '"p':
@@ -1759,7 +1992,7 @@ var DECRQSS = (function () {
                 style -= this._terminal.getOption('cursorBlink');
                 return this._terminal.handler(EscapeSequences_1.C0.ESC + "P1$r" + style + " q" + EscapeSequences_1.C0.ESC + "\\");
             default:
-                this._terminal.error('Unknown DCS $q %s', this._data);
+                this._terminal.error('Unknown DCS $q %s', data);
                 this._terminal.handler(EscapeSequences_1.C0.ESC + "P0$r" + EscapeSequences_1.C0.ESC + "\\");
         }
     };
@@ -1772,8 +2005,9 @@ var InputHandler = (function (_super) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
         _this._parser = _parser;
+        _this._parseBuffer = new Uint32Array(4096);
+        _this._stringDecoder = new TextDecoder_1.StringToUtf32();
         _this.register(_this._parser);
-        _this._surrogateFirst = '';
         _this._parser.setCsiHandlerFallback(function (collect, params, flag) {
             _this._terminal.error('Unknown CSI code: ', { collect: collect, params: params, flag: String.fromCharCode(flag) });
         });
@@ -1887,19 +2121,21 @@ var InputHandler = (function (_super) {
         if (this._terminal.debug) {
             this._terminal.log('data: ' + data);
         }
-        if (this._surrogateFirst) {
-            data = this._surrogateFirst + data;
-            this._surrogateFirst = '';
+        if (this._parseBuffer.length < data.length) {
+            this._parseBuffer = new Uint32Array(data.length);
         }
-        this._parser.parse(data);
+        for (var i = 0; i < data.length; ++i) {
+            this._parseBuffer[i] = data.charCodeAt(i);
+        }
+        this._parser.parse(this._parseBuffer, this._stringDecoder.decode(data, this._parseBuffer));
         buffer = this._terminal.buffer;
         if (buffer.x !== cursorStartX || buffer.y !== cursorStartY) {
             this._terminal.emit('cursormove');
         }
     };
     InputHandler.prototype.print = function (data, start, end) {
-        var char;
         var code;
+        var char;
         var chWidth;
         var buffer = this._terminal.buffer;
         var charset = this._terminal.charset;
@@ -1910,27 +2146,16 @@ var InputHandler = (function (_super) {
         var curAttr = this._terminal.curAttr;
         var bufferRow = buffer.lines.get(buffer.y + buffer.ybase);
         this._terminal.updateRange(buffer.y);
-        for (var stringPosition = start; stringPosition < end; ++stringPosition) {
-            char = data.charAt(stringPosition);
-            code = data.charCodeAt(stringPosition);
-            if (0xD800 <= code && code <= 0xDBFF) {
-                if (++stringPosition >= end) {
-                    this._surrogateFirst = char;
-                    continue;
-                }
-                var second = data.charCodeAt(stringPosition);
-                if (0xDC00 <= second && second <= 0xDFFF) {
-                    code = (code - 0xD800) * 0x400 + second - 0xDC00 + 0x10000;
-                    char += data.charAt(stringPosition);
-                }
-                else {
-                    stringPosition--;
-                }
-            }
+        for (var pos = start; pos < end; ++pos) {
+            code = data[pos];
+            char = TextDecoder_1.stringFromCodePoint(code);
             chWidth = CharWidth_1.wcwidth(code);
-            if (charset) {
-                char = charset[char] || char;
-                code = char.charCodeAt(0);
+            if (code < 127 && charset) {
+                var ch = charset[char];
+                if (ch) {
+                    code = ch.charCodeAt(0);
+                    char = ch;
+                }
             }
             if (screenReaderMode) {
                 this._terminal.emit('a11y.char', char);
@@ -2432,7 +2657,9 @@ var InputHandler = (function (_super) {
                     this._terminal.vt200Mouse = params[0] === 1000;
                     this._terminal.normalMouse = params[0] > 1000;
                     this._terminal.mouseEvents = true;
-                    this._terminal.element.classList.add('enable-mouse-events');
+                    if (this._terminal.element) {
+                        this._terminal.element.classList.add('enable-mouse-events');
+                    }
                     this._terminal.selectionManager.disable();
                     this._terminal.log('Binding to mouse events.');
                     break;
@@ -2521,7 +2748,9 @@ var InputHandler = (function (_super) {
                     this._terminal.vt200Mouse = false;
                     this._terminal.normalMouse = false;
                     this._terminal.mouseEvents = false;
-                    this._terminal.element.classList.remove('enable-mouse-events');
+                    if (this._terminal.element) {
+                        this._terminal.element.classList.remove('enable-mouse-events');
+                    }
                     this._terminal.selectionManager.enable();
                     break;
                 case 1004:
@@ -2818,7 +3047,7 @@ var InputHandler = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.InputHandler = InputHandler;
 
-},{"./Buffer":2,"./CharWidth":5,"./EscapeSequenceParser":7,"./common/Lifecycle":19,"./common/data/EscapeSequences":21,"./core/data/Charsets":23}],9:[function(require,module,exports){
+},{"./Buffer":2,"./CharWidth":6,"./EscapeSequenceParser":8,"./common/Lifecycle":20,"./common/TypedArrayUtils":21,"./common/data/EscapeSequences":22,"./core/data/Charsets":24,"./core/input/TextDecoder":26}],10:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -3030,7 +3259,7 @@ var Linkifier = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.Linkifier = Linkifier;
 
-},{"./Buffer":2,"./CharWidth":5,"./common/EventEmitter":18,"./ui/MouseZoneManager":51}],10:[function(require,module,exports){
+},{"./Buffer":2,"./CharWidth":6,"./common/EventEmitter":19,"./ui/MouseZoneManager":53}],11:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -3605,7 +3834,7 @@ var SelectionManager = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.SelectionManager = SelectionManager;
 
-},{"./Buffer":2,"./SelectionModel":11,"./common/EventEmitter":18,"./core/Platform":22,"./handlers/AltClickHandler":25,"./ui/MouseHelper":50}],11:[function(require,module,exports){
+},{"./Buffer":2,"./SelectionModel":12,"./common/EventEmitter":19,"./core/Platform":23,"./handlers/AltClickHandler":27,"./ui/MouseHelper":52}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var SelectionModel = (function () {
@@ -3685,7 +3914,7 @@ var SelectionModel = (function () {
 }());
 exports.SelectionModel = SelectionModel;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_BELL_SOUND = 'data:audio/wav;base64,UklGRigBAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQBAADpAFgCwAMlBZoG/wdmCcoKRAypDQ8PbRDBEQQTOxRtFYcWlBePGIUZXhoiG88bcBz7HHIdzh0WHlMeZx51HmkeUx4WHs8dah0AHXwc3hs9G4saxRnyGBIYGBcQFv8U4RPAEoYRQBACD70NWwwHC6gJOwjWBloF7gOBAhABkf8b/qv8R/ve+Xf4Ife79W/0JfPZ8Z/wde9N7ijtE+wU6xvqM+lb6H7nw+YX5mrlxuQz5Mzje+Ma49fioeKD4nXiYeJy4pHitOL04j/jn+MN5IPkFOWs5U3mDefM55/ogOl36m7rdOyE7abuyu8D8Unyj/Pg9D/2qfcb+Yn6/vuK/Qj/lAAlAg==';
@@ -3737,14 +3966,14 @@ var SoundManager = (function () {
 }());
 exports.SoundManager = SoundManager;
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.blankLine = 'Blank line';
 exports.promptLabel = 'Terminal input';
 exports.tooMuchOutput = 'Too much output to announce, navigate to rows manually to read';
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -3788,6 +4017,8 @@ var Clone_1 = require("./common/Clone");
 var document = (typeof window !== 'undefined') ? window.document : null;
 var WRITE_BUFFER_PAUSE_THRESHOLD = 5;
 var WRITE_BATCH_SIZE = 300;
+var MINIMUM_COLS = 2;
+var MINIMUM_ROWS = 1;
 var CONSTRUCTOR_ONLY_OPTIONS = ['cols', 'rows'];
 var DEFAULT_OPTIONS = {
     cols: 80,
@@ -3820,8 +4051,7 @@ var DEFAULT_OPTIONS = {
     tabStopWidth: 8,
     theme: null,
     rightClickSelectsWord: Browser.isMac,
-    rendererType: 'canvas',
-    experimentalBufferLineImpl: 'TypedArray'
+    rendererType: 'canvas'
 };
 var Terminal = (function (_super) {
     __extends(Terminal, _super);
@@ -3855,8 +4085,8 @@ var Terminal = (function (_super) {
             }
         });
         this._parent = document ? document.body : null;
-        this.cols = this.options.cols;
-        this.rows = this.options.rows;
+        this.cols = Math.max(this.options.cols, MINIMUM_COLS);
+        this.rows = Math.max(this.options.rows, MINIMUM_ROWS);
         if (this.options.handler) {
             this.on('data', this.options.handler);
         }
@@ -4052,11 +4282,6 @@ var Terminal = (function (_super) {
             case 'tabStopWidth':
                 this.buffers.setupTabStops();
                 break;
-            case 'experimentalBufferLineImpl':
-                this.buffers.normal.setBufferLineFactory(value);
-                this.buffers.alt.setBufferLineFactory(value);
-                this._blankLine = null;
-                break;
         }
         if (this.renderer) {
             this.renderer.onOptionsChanged();
@@ -4098,19 +4323,19 @@ var Terminal = (function (_super) {
         if (Browser.isFirefox) {
             this.register(Lifecycle_1.addDisposableDomListener(this.element, 'mousedown', function (event) {
                 if (event.button === 2) {
-                    Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager, _this.options.rightClickSelectsWord);
+                    Clipboard_1.rightClickHandler(event, _this, _this.selectionManager, _this.options.rightClickSelectsWord);
                 }
             }));
         }
         else {
             this.register(Lifecycle_1.addDisposableDomListener(this.element, 'contextmenu', function (event) {
-                Clipboard_1.rightClickHandler(event, _this.textarea, _this.selectionManager, _this.options.rightClickSelectsWord);
+                Clipboard_1.rightClickHandler(event, _this, _this.selectionManager, _this.options.rightClickSelectsWord);
             }));
         }
         if (Browser.isLinux) {
             this.register(Lifecycle_1.addDisposableDomListener(this.element, 'auxclick', function (event) {
                 if (event.button === 1) {
-                    Clipboard_1.moveTextAreaUnderMouseCursor(event, _this.textarea);
+                    Clipboard_1.moveTextAreaUnderMouseCursor(event, _this);
                 }
             }));
         }
@@ -4223,6 +4448,7 @@ var Terminal = (function (_super) {
         }));
         this.register(Lifecycle_1.addDisposableDomListener(this._viewportElement, 'scroll', function () { return _this.selectionManager.refresh(); }));
         this.mouseHelper = new MouseHelper_1.MouseHelper(this.renderer);
+        this.element.classList.toggle('enable-mouse-events', this.mouseEvents);
         if (this.options.screenReaderMode) {
             this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this);
         }
@@ -4528,37 +4754,26 @@ var Terminal = (function (_super) {
     Terminal.prototype.scroll = function (isWrapped) {
         if (isWrapped === void 0) { isWrapped = false; }
         var newLine;
-        var useRecycling = this.options.experimentalBufferLineImpl !== 'JsArray';
-        if (useRecycling) {
-            newLine = this._blankLine;
-            if (!newLine || newLine.length !== this.cols || newLine.get(0)[Buffer_1.CHAR_DATA_ATTR_INDEX] !== this.eraseAttr()) {
-                newLine = this.buffer.getBlankLine(this.eraseAttr(), isWrapped);
-                this._blankLine = newLine;
-            }
-            newLine.isWrapped = isWrapped;
-        }
-        else {
+        newLine = this._blankLine;
+        if (!newLine || newLine.length !== this.cols || newLine.get(0)[Buffer_1.CHAR_DATA_ATTR_INDEX] !== this.eraseAttr()) {
             newLine = this.buffer.getBlankLine(this.eraseAttr(), isWrapped);
+            this._blankLine = newLine;
         }
+        newLine.isWrapped = isWrapped;
         var topRow = this.buffer.ybase + this.buffer.scrollTop;
         var bottomRow = this.buffer.ybase + this.buffer.scrollBottom;
         if (this.buffer.scrollTop === 0) {
             var willBufferBeTrimmed = this.buffer.lines.isFull;
             if (bottomRow === this.buffer.lines.length - 1) {
-                if (useRecycling) {
-                    if (willBufferBeTrimmed) {
-                        this.buffer.lines.recycle().copyFrom(newLine);
-                    }
-                    else {
-                        this.buffer.lines.push(newLine.clone());
-                    }
+                if (willBufferBeTrimmed) {
+                    this.buffer.lines.recycle().copyFrom(newLine);
                 }
                 else {
-                    this.buffer.lines.push(newLine);
+                    this.buffer.lines.push(newLine.clone());
                 }
             }
             else {
-                this.buffer.lines.splice(bottomRow + 1, 0, (useRecycling) ? newLine.clone() : newLine);
+                this.buffer.lines.splice(bottomRow + 1, 0, newLine.clone());
             }
             if (!willBufferBeTrimmed) {
                 this.buffer.ybase++;
@@ -4575,7 +4790,7 @@ var Terminal = (function (_super) {
         else {
             var scrollRegionHeight = bottomRow - topRow + 1;
             this.buffer.lines.shiftElements(topRow + 1, scrollRegionHeight - 1, -1);
-            this.buffer.lines.set(bottomRow, (useRecycling) ? newLine.clone() : newLine);
+            this.buffer.lines.set(bottomRow, newLine.clone());
         }
         if (!this._userScrolling) {
             this.buffer.ydisp = this.buffer.ybase;
@@ -4856,10 +5071,10 @@ var Terminal = (function (_super) {
             }
             return;
         }
-        if (x < 1)
-            x = 1;
-        if (y < 1)
-            y = 1;
+        if (x < MINIMUM_COLS)
+            x = MINIMUM_COLS;
+        if (y < MINIMUM_ROWS)
+            y = MINIMUM_ROWS;
         this.buffers.resize(x, y);
         this.cols = x;
         this.rows = y;
@@ -5018,7 +5233,7 @@ function matchColorDistance(r1, g1, b1, r2, g2, b2) {
         + Math.pow(11 * (b1 - b2), 2);
 }
 
-},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":4,"./CompositionHelper":6,"./InputHandler":8,"./Linkifier":9,"./SelectionManager":10,"./SoundManager":12,"./Strings":13,"./Viewport":15,"./common/Clone":17,"./common/EventEmitter":18,"./common/data/EscapeSequences":21,"./core/Platform":22,"./core/input/Keyboard":24,"./renderer/ColorManager":29,"./renderer/Renderer":33,"./renderer/atlas/CharAtlasCache":37,"./renderer/dom/DomRenderer":45,"./ui/CharMeasure":47,"./ui/Clipboard":48,"./ui/Lifecycle":49,"./ui/MouseHelper":50,"./ui/MouseZoneManager":51,"./ui/ScreenDprMonitor":53}],15:[function(require,module,exports){
+},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":5,"./CompositionHelper":7,"./InputHandler":9,"./Linkifier":10,"./SelectionManager":11,"./SoundManager":13,"./Strings":14,"./Viewport":16,"./common/Clone":18,"./common/EventEmitter":19,"./common/data/EscapeSequences":22,"./core/Platform":23,"./core/input/Keyboard":25,"./renderer/ColorManager":31,"./renderer/Renderer":35,"./renderer/atlas/CharAtlasCache":39,"./renderer/dom/DomRenderer":47,"./ui/CharMeasure":49,"./ui/Clipboard":50,"./ui/Lifecycle":51,"./ui/MouseHelper":52,"./ui/MouseZoneManager":53,"./ui/ScreenDprMonitor":55}],16:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5175,7 +5390,7 @@ var Viewport = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.Viewport = Viewport;
 
-},{"./common/Lifecycle":19,"./ui/Lifecycle":49}],16:[function(require,module,exports){
+},{"./common/Lifecycle":20,"./ui/Lifecycle":51}],17:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5246,7 +5461,7 @@ var CircularList = (function (_super) {
         this._array[this._getCyclicIndex(this._length)] = value;
         if (this._length === this._maxLength) {
             this._startIndex = ++this._startIndex % this._maxLength;
-            this.emit('trim', 1);
+            this.emitMayRemoveListeners('trim', 1);
         }
         else {
             this._length++;
@@ -5257,7 +5472,7 @@ var CircularList = (function (_super) {
             throw new Error('Can only recycle when the buffer is full');
         }
         this._startIndex = ++this._startIndex % this._maxLength;
-        this.emit('trim', 1);
+        this.emitMayRemoveListeners('trim', 1);
         return this._array[this._getCyclicIndex(this._length - 1)];
     };
     Object.defineProperty(CircularList.prototype, "isFull", {
@@ -5281,22 +5496,20 @@ var CircularList = (function (_super) {
             }
             this._length -= deleteCount;
         }
-        if (items && items.length) {
-            for (var i = this._length - 1; i >= start; i--) {
-                this._array[this._getCyclicIndex(i + items.length)] = this._array[this._getCyclicIndex(i)];
-            }
-            for (var i = 0; i < items.length; i++) {
-                this._array[this._getCyclicIndex(start + i)] = items[i];
-            }
-            if (this._length + items.length > this._maxLength) {
-                var countToTrim = (this._length + items.length) - this._maxLength;
-                this._startIndex += countToTrim;
-                this._length = this._maxLength;
-                this.emit('trim', countToTrim);
-            }
-            else {
-                this._length += items.length;
-            }
+        for (var i = this._length - 1; i >= start; i--) {
+            this._array[this._getCyclicIndex(i + items.length)] = this._array[this._getCyclicIndex(i)];
+        }
+        for (var i = 0; i < items.length; i++) {
+            this._array[this._getCyclicIndex(start + i)] = items[i];
+        }
+        if (this._length + items.length > this._maxLength) {
+            var countToTrim = (this._length + items.length) - this._maxLength;
+            this._startIndex += countToTrim;
+            this._length = this._maxLength;
+            this.emitMayRemoveListeners('trim', countToTrim);
+        }
+        else {
+            this._length += items.length;
         }
     };
     CircularList.prototype.trimStart = function (count) {
@@ -5305,7 +5518,7 @@ var CircularList = (function (_super) {
         }
         this._startIndex += count;
         this._length -= count;
-        this.emit('trim', count);
+        this.emitMayRemoveListeners('trim', count);
     };
     CircularList.prototype.shiftElements = function (start, count, offset) {
         if (count <= 0) {
@@ -5327,7 +5540,7 @@ var CircularList = (function (_super) {
                 while (this._length > this._maxLength) {
                     this._length--;
                     this._startIndex++;
-                    this.emit('trim', 1);
+                    this.emitMayRemoveListeners('trim', 1);
                 }
             }
         }
@@ -5344,7 +5557,7 @@ var CircularList = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.CircularList = CircularList;
 
-},{"./EventEmitter":18}],17:[function(require,module,exports){
+},{"./EventEmitter":19}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function clone(val, depth) {
@@ -5363,7 +5576,7 @@ function clone(val, depth) {
 }
 exports.clone = clone;
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5436,6 +5649,22 @@ var EventEmitter = (function (_super) {
             obj[i].apply(this, args);
         }
     };
+    EventEmitter.prototype.emitMayRemoveListeners = function (type) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        if (!this._events[type]) {
+            return;
+        }
+        var obj = this._events[type];
+        var length = obj.length;
+        for (var i = 0; i < obj.length; i++) {
+            obj[i].apply(this, args);
+            i -= length - obj.length;
+            length = obj.length;
+        }
+    };
     EventEmitter.prototype.listeners = function (type) {
         return this._events[type] || [];
     };
@@ -5447,7 +5676,7 @@ var EventEmitter = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EventEmitter = EventEmitter;
 
-},{"./Lifecycle":19}],19:[function(require,module,exports){
+},{"./Lifecycle":20}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Disposable = (function () {
@@ -5473,7 +5702,7 @@ var Disposable = (function () {
 }());
 exports.Disposable = Disposable;
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function fill(array, value, start, end) {
@@ -5502,8 +5731,15 @@ function fillFallback(array, value, start, end) {
     return array;
 }
 exports.fillFallback = fillFallback;
+function concat(a, b) {
+    var result = new a.constructor(a.length + b.length);
+    result.set(a);
+    result.set(b, a.length);
+    return result;
+}
+exports.concat = concat;
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var C0;
@@ -5579,7 +5815,7 @@ var C1;
     C1.APC = '\x9f';
 })(C1 = exports.C1 || (exports.C1 = {}));
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var isNode = (typeof navigator === 'undefined') ? true : false;
@@ -5597,7 +5833,7 @@ function contains(arr, el) {
     return arr.indexOf(el) >= 0;
 }
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHARSETS = {};
@@ -5758,7 +5994,7 @@ exports.CHARSETS['='] = {
     '~': 'û'
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../../common/data/EscapeSequences");
@@ -6106,7 +6342,85 @@ function evaluateKeyboardEvent(ev, applicationCursorMode, isMac, macOptionIsMeta
 }
 exports.evaluateKeyboardEvent = evaluateKeyboardEvent;
 
-},{"../../common/data/EscapeSequences":21}],25:[function(require,module,exports){
+},{"../../common/data/EscapeSequences":22}],26:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var StringToUtf32 = (function () {
+    function StringToUtf32() {
+        this._interim = 0;
+    }
+    StringToUtf32.prototype.clear = function () {
+        this._interim = 0;
+    };
+    StringToUtf32.prototype.decode = function (input, target) {
+        var length = input.length;
+        if (!length) {
+            return 0;
+        }
+        var size = 0;
+        var startPos = 0;
+        if (this._interim) {
+            var second = input.charCodeAt(startPos++);
+            if (0xDC00 <= second && second <= 0xDFFF) {
+                target[size++] = (this._interim - 0xD800) * 0x400 + second - 0xDC00 + 0x10000;
+            }
+            else {
+                target[size++] = this._interim;
+                target[size++] = second;
+            }
+            this._interim = 0;
+        }
+        for (var i = startPos; i < length; ++i) {
+            var code = input.charCodeAt(i);
+            if (0xD800 <= code && code <= 0xDBFF) {
+                if (++i >= length) {
+                    this._interim = code;
+                    return size;
+                }
+                var second = input.charCodeAt(i);
+                if (0xDC00 <= second && second <= 0xDFFF) {
+                    target[size++] = (code - 0xD800) * 0x400 + second - 0xDC00 + 0x10000;
+                }
+                else {
+                    target[size++] = code;
+                    target[size++] = second;
+                }
+                continue;
+            }
+            target[size++] = code;
+        }
+        return size;
+    };
+    return StringToUtf32;
+}());
+exports.StringToUtf32 = StringToUtf32;
+function stringFromCodePoint(codePoint) {
+    if (codePoint > 0xFFFF) {
+        codePoint -= 0x10000;
+        return String.fromCharCode((codePoint >> 10) + 0xD800) + String.fromCharCode((codePoint % 0x400) + 0xDC00);
+    }
+    return String.fromCharCode(codePoint);
+}
+exports.stringFromCodePoint = stringFromCodePoint;
+function utf32ToString(data, start, end) {
+    if (start === void 0) { start = 0; }
+    if (end === void 0) { end = data.length; }
+    var result = '';
+    for (var i = start; i < end; ++i) {
+        var codepoint = data[i];
+        if (codepoint > 0xFFFF) {
+            codepoint -= 0x10000;
+            result += String.fromCharCode((codepoint >> 10) + 0xD800) + String.fromCharCode((codepoint % 0x400) + 0xDC00);
+        }
+        else {
+            result += String.fromCharCode(codepoint);
+        }
+    }
+    return result;
+}
+exports.utf32ToString = utf32ToString;
+
+},{}],27:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../common/data/EscapeSequences");
@@ -6245,7 +6559,7 @@ function repeat(count, str) {
     return rpt;
 }
 
-},{"../common/data/EscapeSequences":21}],26:[function(require,module,exports){
+},{"../common/data/EscapeSequences":22}],28:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("../Terminal");
@@ -6398,7 +6712,7 @@ var Terminal = (function () {
 }());
 exports.Terminal = Terminal;
 
-},{"../Strings":13,"../Terminal":14}],27:[function(require,module,exports){
+},{"../Strings":14,"../Terminal":15}],29:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./atlas/Types");
@@ -6576,7 +6890,7 @@ var BaseRenderLayer = (function () {
 }());
 exports.BaseRenderLayer = BaseRenderLayer;
 
-},{"../Buffer":2,"./atlas/CharAtlasCache":37,"./atlas/CharAtlasUtils":39,"./atlas/Types":44}],28:[function(require,module,exports){
+},{"../Buffer":2,"./atlas/CharAtlasCache":39,"./atlas/CharAtlasUtils":41,"./atlas/Types":46}],30:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("../Buffer");
@@ -6743,7 +7057,7 @@ var CharacterJoinerRegistry = (function () {
 }());
 exports.CharacterJoinerRegistry = CharacterJoinerRegistry;
 
-},{"../Buffer":2}],29:[function(require,module,exports){
+},{"../Buffer":2}],31:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var DEFAULT_FOREGROUND = fromHex('#ffffff');
@@ -6871,7 +7185,7 @@ var ColorManager = (function () {
 }());
 exports.ColorManager = ColorManager;
 
-},{}],30:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7161,7 +7475,7 @@ var CursorBlinkStateManager = (function () {
     return CursorBlinkStateManager;
 }());
 
-},{"../Buffer":2,"./BaseRenderLayer":27}],31:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":29}],33:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var GridCache = (function () {
@@ -7191,7 +7505,7 @@ var GridCache = (function () {
 }());
 exports.GridCache = GridCache;
 
-},{}],32:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7266,7 +7580,7 @@ var LinkRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.LinkRenderLayer = LinkRenderLayer;
 
-},{"./BaseRenderLayer":27,"./atlas/CharAtlasUtils":39,"./atlas/Types":44}],33:[function(require,module,exports){
+},{"./BaseRenderLayer":29,"./atlas/CharAtlasUtils":41,"./atlas/Types":46}],35:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7462,7 +7776,7 @@ var Renderer = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.Renderer = Renderer;
 
-},{"../common/EventEmitter":18,"../renderer/CharacterJoinerRegistry":28,"../ui/RenderDebouncer":52,"../ui/ScreenDprMonitor":53,"./ColorManager":29,"./CursorRenderLayer":30,"./LinkRenderLayer":32,"./SelectionRenderLayer":34,"./TextRenderLayer":35}],34:[function(require,module,exports){
+},{"../common/EventEmitter":19,"../renderer/CharacterJoinerRegistry":30,"../ui/RenderDebouncer":54,"../ui/ScreenDprMonitor":55,"./ColorManager":31,"./CursorRenderLayer":32,"./LinkRenderLayer":34,"./SelectionRenderLayer":36,"./TextRenderLayer":37}],36:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7558,7 +7872,7 @@ var SelectionRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.SelectionRenderLayer = SelectionRenderLayer;
 
-},{"./BaseRenderLayer":27}],35:[function(require,module,exports){
+},{"./BaseRenderLayer":29}],37:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7751,7 +8065,7 @@ var TextRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.TextRenderLayer = TextRenderLayer;
 
-},{"../Buffer":2,"./BaseRenderLayer":27,"./GridCache":31,"./atlas/CharAtlasUtils":39,"./atlas/Types":44}],36:[function(require,module,exports){
+},{"../Buffer":2,"./BaseRenderLayer":29,"./GridCache":33,"./atlas/CharAtlasUtils":41,"./atlas/Types":46}],38:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var BaseCharAtlas = (function () {
@@ -7771,7 +8085,7 @@ var BaseCharAtlas = (function () {
 }());
 exports.default = BaseCharAtlas;
 
-},{}],37:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CharAtlasUtils_1 = require("./CharAtlasUtils");
@@ -7836,7 +8150,7 @@ function removeTerminalFromCache(terminal) {
 }
 exports.removeTerminalFromCache = removeTerminalFromCache;
 
-},{"./CharAtlasUtils":39,"./DynamicCharAtlas":40,"./NoneCharAtlas":42,"./StaticCharAtlas":43}],38:[function(require,module,exports){
+},{"./CharAtlasUtils":41,"./DynamicCharAtlas":42,"./NoneCharAtlas":44,"./StaticCharAtlas":45}],40:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Platform_1 = require("../../core/Platform");
@@ -7928,7 +8242,7 @@ function getFont(fontWeight, config) {
     return fontWeight + " " + config.fontSize * config.devicePixelRatio + "px " + config.fontFamily;
 }
 
-},{"../../core/Platform":22,"./Types":44}],39:[function(require,module,exports){
+},{"../../core/Platform":23,"./Types":46}],41:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./Types");
@@ -7979,7 +8293,7 @@ function is256Color(colorCode) {
 }
 exports.is256Color = is256Color;
 
-},{"./Types":44}],40:[function(require,module,exports){
+},{"./Types":46}],42:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8181,7 +8495,7 @@ var DynamicCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = DynamicCharAtlas;
 
-},{"../../core/Platform":22,"../ColorManager":29,"./BaseCharAtlas":36,"./CharAtlasGenerator":38,"./LRUMap":41,"./Types":44}],41:[function(require,module,exports){
+},{"../../core/Platform":23,"../ColorManager":31,"./BaseCharAtlas":38,"./CharAtlasGenerator":40,"./LRUMap":43,"./Types":46}],43:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var LRUMap = (function () {
@@ -8291,7 +8605,7 @@ var LRUMap = (function () {
 }());
 exports.default = LRUMap;
 
-},{}],42:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8320,7 +8634,7 @@ var NoneCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = NoneCharAtlas;
 
-},{"./BaseCharAtlas":36}],43:[function(require,module,exports){
+},{"./BaseCharAtlas":38}],45:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8403,7 +8717,7 @@ var StaticCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = StaticCharAtlas;
 
-},{"./BaseCharAtlas":36,"./CharAtlasGenerator":38,"./CharAtlasUtils":39,"./Types":44}],44:[function(require,module,exports){
+},{"./BaseCharAtlas":38,"./CharAtlasGenerator":40,"./CharAtlasUtils":41,"./Types":46}],46:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_COLOR = 256;
@@ -8411,7 +8725,7 @@ exports.INVERTED_DEFAULT_COLOR = 257;
 exports.DIM_OPACITY = 0.5;
 exports.CHAR_ATLAS_CELL_SPACING = 1;
 
-},{}],45:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8715,7 +9029,7 @@ var DomRenderer = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.DomRenderer = DomRenderer;
 
-},{"../../common/EventEmitter":18,"../../ui/RenderDebouncer":52,"../ColorManager":29,"../atlas/Types":44,"./DomRendererRowFactory":46}],46:[function(require,module,exports){
+},{"../../common/EventEmitter":19,"../../ui/RenderDebouncer":54,"../ColorManager":31,"../atlas/Types":46,"./DomRendererRowFactory":48}],48:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("../../Buffer");
@@ -8805,7 +9119,7 @@ var DomRendererRowFactory = (function () {
 }());
 exports.DomRendererRowFactory = DomRendererRowFactory;
 
-},{"../../Buffer":2,"../atlas/Types":44}],47:[function(require,module,exports){
+},{"../../Buffer":2,"../atlas/Types":46}],49:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8856,9 +9170,10 @@ var CharMeasure = (function (_super) {
         if (geometry.width === 0 || geometry.height === 0) {
             return;
         }
-        if (this._width !== geometry.width || this._height !== geometry.height) {
+        var adjustedHeight = Math.ceil(geometry.height);
+        if (this._width !== geometry.width || this._height !== adjustedHeight) {
             this._width = geometry.width;
-            this._height = Math.ceil(geometry.height);
+            this._height = adjustedHeight;
             this.emit('charsizechanged');
         }
     };
@@ -8866,7 +9181,7 @@ var CharMeasure = (function (_super) {
 }(EventEmitter_1.EventEmitter));
 exports.CharMeasure = CharMeasure;
 
-},{"../common/EventEmitter":18}],48:[function(require,module,exports){
+},{"../common/EventEmitter":19}],50:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function prepareTextForTerminal(text) {
@@ -8915,35 +9230,38 @@ function pasteHandler(ev, term) {
     }
 }
 exports.pasteHandler = pasteHandler;
-function moveTextAreaUnderMouseCursor(ev, textarea) {
-    textarea.style.position = 'fixed';
-    textarea.style.width = '20px';
-    textarea.style.height = '20px';
-    textarea.style.left = (ev.clientX - 10) + 'px';
-    textarea.style.top = (ev.clientY - 10) + 'px';
-    textarea.style.zIndex = '1000';
-    textarea.focus();
+function moveTextAreaUnderMouseCursor(ev, term) {
+    var pos = term.screenElement.getBoundingClientRect();
+    var left = ev.clientX - pos.left - 10;
+    var top = ev.clientY - pos.top - 10;
+    term.textarea.style.position = 'absolute';
+    term.textarea.style.width = '20px';
+    term.textarea.style.height = '20px';
+    term.textarea.style.left = left + "px";
+    term.textarea.style.top = top + "px";
+    term.textarea.style.zIndex = '1000';
+    term.textarea.focus();
     setTimeout(function () {
-        textarea.style.position = null;
-        textarea.style.width = null;
-        textarea.style.height = null;
-        textarea.style.left = null;
-        textarea.style.top = null;
-        textarea.style.zIndex = null;
+        term.textarea.style.position = null;
+        term.textarea.style.width = null;
+        term.textarea.style.height = null;
+        term.textarea.style.left = null;
+        term.textarea.style.top = null;
+        term.textarea.style.zIndex = null;
     }, 200);
 }
 exports.moveTextAreaUnderMouseCursor = moveTextAreaUnderMouseCursor;
-function rightClickHandler(ev, textarea, selectionManager, shouldSelectWord) {
-    moveTextAreaUnderMouseCursor(ev, textarea);
+function rightClickHandler(ev, term, selectionManager, shouldSelectWord) {
+    moveTextAreaUnderMouseCursor(ev, term);
     if (shouldSelectWord && !selectionManager.isClickInSelection(ev)) {
         selectionManager.selectWordAtCursor(ev);
     }
-    textarea.value = selectionManager.selectionText;
-    textarea.select();
+    term.textarea.value = selectionManager.selectionText;
+    term.textarea.select();
 }
 exports.rightClickHandler = rightClickHandler;
 
-},{}],49:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function addDisposableDomListener(node, type, handler, useCapture) {
@@ -8961,7 +9279,7 @@ function addDisposableDomListener(node, type, handler, useCapture) {
 }
 exports.addDisposableDomListener = addDisposableDomListener;
 
-},{}],50:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var MouseHelper = (function () {
@@ -9001,7 +9319,7 @@ var MouseHelper = (function () {
 }());
 exports.MouseHelper = MouseHelper;
 
-},{}],51:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9181,7 +9499,7 @@ var MouseZone = (function () {
 }());
 exports.MouseZone = MouseZone;
 
-},{"../common/Lifecycle":19,"./Lifecycle":49}],52:[function(require,module,exports){
+},{"../common/Lifecycle":20,"./Lifecycle":51}],54:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var RenderDebouncer = (function () {
@@ -9221,7 +9539,7 @@ var RenderDebouncer = (function () {
 }());
 exports.RenderDebouncer = RenderDebouncer;
 
-},{}],53:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9279,12 +9597,12 @@ var ScreenDprMonitor = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.ScreenDprMonitor = ScreenDprMonitor;
 
-},{"../common/Lifecycle":19}],54:[function(require,module,exports){
+},{"../common/Lifecycle":20}],56:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("./public/Terminal");
 module.exports = Terminal_1.Terminal;
 
-},{"./public/Terminal":26}]},{},[54])(54)
+},{"./public/Terminal":28}]},{},[56])(56)
 });
 //# sourceMappingURL=xterm.js.map
