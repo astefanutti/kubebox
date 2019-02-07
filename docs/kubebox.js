@@ -1366,21 +1366,31 @@ class XTerm extends blessed.ScrollableBox {
       this.mousedown = true;
       // hacking the scrollbar logic so that it does not scroll when hovering it
       this._scrollingBar = true;
+
+      const buffer = this.term._core.buffer;
+      const xi = this.aleft + this.ileft;
+      const yi = this.atop + this.itop;
+
+      // start coordinates
+      const [line, index] = getUnwrappedLineCoordinates(this.term, buffer, data.x - xi, data.y - yi + buffer.ydisp);
       this._selection = {
-        x1: data.x,
-        // in absolute coordinates
-        y1: data.y + this.term._core.buffer.ydisp,
-      }
+        x1 : index,
+        y1 : line,
+        m1 : buffer.addMarker(line),
+      };
       let smd, smu, click = hrtime();
       this.onScreenEvent('mouse', smd = data => {
         // VTE seems to be sending mousemove while XTERM mousedown, let's handle both
         if (data.action !== 'mousemove' && data.action !== 'mousedown') {
           return;
         }
+        // end coordinates
+        // TODO: scroll vertically when y coordinate is out of current range
+        const [line, index] = getUnwrappedLineCoordinates(this.term, buffer, data.x - xi, data.y - yi + buffer.ydisp);
         Object.assign(this._selection || {}, {
-          x2: data.x,
-          // in absolute coordinates
-          y2: data.y + this.term._core.buffer.ydisp,
+          x2 : index,
+          y2 : line,
+          m2 : buffer.addMarker(line),
         });
         this.screen.render();
       });
@@ -1393,7 +1403,7 @@ class XTerm extends blessed.ScrollableBox {
         const { x1, y1, x2, y2 } = this._selection || {};
         if (x1 === x2 && y1 === y2 && elapsed[0] === 0 && elapsed[1] * 1e-6 < 100) {
           // emulate clicking instead of selecting
-          delete this._selection;
+          this.clearSelection();
           this.screen.render();
         }
       });
@@ -1422,49 +1432,52 @@ class XTerm extends blessed.ScrollableBox {
   }
 
   clearSelection() {
+    if (this._selection) {
+      // remove markers listeners used to keep track of buffer reflow
+      this._selection.m1.dispose();
+      this._selection.m2.dispose();
+    }
     delete this._selection;
   }
 
   getSelectedText() {
     if (!this._selection) return;
 
-    const xi = this.aleft + this.ileft;
-    const yi = this.atop + this.itop;
-    let { x1, x2, y1, y2 } = this._selection || {};
+    const buffer = this.term._core.buffer;
+
+    let { x1, x2, m1: { line: y1 }, m2: { line: y2 } } = this._selection;
+    // back to wrapped lines coordinates
+    [x1, y1] = getWrappedLineCoordinates(this.term, buffer, x1, y1);
+    [x2, y2] = getWrappedLineCoordinates(this.term, buffer, x2, y2);
     // make sure it's from left to right
     if (y1 > y2 || (y1 == y2 && x1 > x2)) {
       [x1, x2] = [x2, x1];
       [y1, y2] = [y2, y1];
     }
-    // convert to buffer coordinates
-    x1 -= xi;
-    x2 -= xi;
-    y1 -= yi;
-    y2 -= yi;
 
     const result = [];
     // get first row
-    result.push(this.term._core.buffer.translateBufferLineToString(y1, false, x1, y1 == y2 ? x2 + 1 : undefined));
+    result.push(buffer.translateBufferLineToString(y1, false, x1, y1 == y2 ? x2 + 1 : undefined));
 
     // get middle rows
     for (let i = y1 + 1; i <= y2 - 1; i++) {
-      const bufferLine = this.term._core.buffer.lines.get(i);
-      const lineText = this.term._core.buffer.translateBufferLineToString(i, true);
-      if (bufferLine.isWrapped) {
-        result[result.length - 1] += lineText;
+      const line = buffer.lines.get(i);
+      const text = buffer.translateBufferLineToString(i, true);
+      if (line.isWrapped) {
+        result[result.length - 1] += text;
       } else {
-        result.push(lineText);
+        result.push(text);
       }
     }
 
     // get last row
     if (y1 != y2) {
-      const bufferLine = this.term._core.buffer.lines.get(y2);
-      const lineText = this.term._core.buffer.translateBufferLineToString(y2, true, 0, x2 + 1);
-      if (bufferLine.isWrapped) {
-        result[result.length - 1] += lineText;
+      const line = buffer.lines.get(y2);
+      const text = buffer.translateBufferLineToString(y2, true, 0, x2 + 1);
+      if (line.isWrapped) {
+        result[result.length - 1] += text;
       } else {
-        result.push(lineText);
+        result.push(text);
       }
     }
 
@@ -1476,56 +1489,60 @@ class XTerm extends blessed.ScrollableBox {
     let ret = this._render();
     if (!ret) return;
 
-    // framebuffer synchronization:
-    // borrowed from original Blessed Terminal widget
-    // Copyright (c) 2013-2015 Christopher Jeffrey et al.
+    const buffer = this.term._core.buffer;
+    const ydisp = buffer.ydisp;
 
     // determine display attributes
     this.dattr = this.sattr(this.style);
 
     // determine position
-    let xi = ret.xi + this.ileft;
-    let xl = ret.xl - this.iright - 1; // scrollbar
-    let yi = ret.yi + this.itop;
-    let yl = ret.yl - this.ibottom;
+    const xi = ret.xi + this.ileft;
+    const xl = ret.xl - this.iright - 1; // scrollbar
+    const yi = ret.yi + this.itop;
+    const yl = ret.yl - this.ibottom;
 
     // selection
-    let { x1: xs1, x2: xs2, y1: ys1, y2: ys2 } = this._selection || {};
-    // make sure it's from left to right
-    if (ys1 > ys2 || (ys1 == ys2 && xs1 > xs2)) {
-      [xs1, xs2] = [xs2, xs1];
-      [ys1, ys2] = [ys2, ys1];
+    let { x1: xs1, x2: xs2, m1: { line: ys1 }, m2: { line: ys2 } } = this._selection || { m1: {}, m2: {} };
+    if (this._selection) {
+      // back to wrapped lines coordinates
+      [xs1, ys1] = getWrappedLineCoordinates(this.term, buffer, xs1, ys1);
+      [xs2, ys2] = getWrappedLineCoordinates(this.term, buffer, xs2, ys2);
+      // make sure it's from left to right
+      if (ys1 > ys2 || (ys1 == ys2 && xs1 > xs2)) {
+        [xs1, xs2] = [xs2, xs1];
+        [ys1, ys2] = [ys2, ys1];
+      }
+      // convert to screen coordinates
+      xs1 += xi;
+      xs2 += xi;
+      ys1 += yi - ydisp;
+      ys2 += yi - ydisp;
     }
-    // back to screen coordinates
-    const ydisp = this.term._core.buffer.ydisp;
-    ys1 -= ydisp;
-    ys2 -= ydisp;
 
     let cursor;
     // iterate over all lines
     for (let y = Math.max(yi, 0); y < yl; y++) {
       // fetch Blessed Screen and XTerm lines
       let sline = this.screen.lines[y];
-      let tline = this.term._core.buffer.lines.get(ydisp + y - yi);
+      let tline = buffer.lines.get(ydisp + y - yi);
       if (!sline || !tline)
         break;
 
       // update sline from tline
-      let dirty = false;
       const updateSLine = (s1, s2, val) => {
         if (sline[s1][s2] !== val) {
           sline[s1][s2] = val;
-          dirty = true;
+          sline.dirty = true;
         }
       }
 
       // determine cursor column position
-      if (y === yi + this.term._core.buffer.y
+      if (y === yi + buffer.y
           && this.term._core.cursorState
           && this.screen.focused === this
-          && (ydisp === this.term._core.buffer.ybase)
+          && (ydisp === buffer.ybase)
           && !this.term._core.cursorHidden) {
-        cursor = xi + this.term._core.buffer.x;
+        cursor = xi + buffer.x;
       } else {
         cursor = -1;
       }
@@ -1553,23 +1570,25 @@ class XTerm extends blessed.ScrollableBox {
           }
         }
 
-        // inverse x0 if selected
-        let inverse = false;
-        if (ys1 <= y && ys2 >= y) {
-          if (ys1 === ys2) {
-            if (xs1 <= x && xs2 >= x) {
+        if (this._selection) {
+          // inverse x0 if selected
+          let inverse = false;
+          if (ys1 <= y && ys2 >= y) {
+            if (ys1 === ys2) {
+              if (xs1 <= x && xs2 >= x) {
+                inverse = true;
+              }
+            } else if (y === ys1 && x >= xs1) {
+              inverse = true;
+            } else if (y === ys2 && x <= xs2) {
+              inverse = true;
+            } else if (y > ys1 && y < ys2) {
               inverse = true;
             }
-          } else if (y === ys1 && x >= xs1) {
-            inverse = true;
-          } else if (y === ys2 && x <= xs2) {
-            inverse = true;
-          } else if (y > ys1 && y < ys2) {
-            inverse = true;
           }
-        }
-        if (inverse && tline.get(x - xi)[3] != 0) {
-          x0 = x0 | (8 << 18);
+          if (inverse && tline.get(x - xi)[3] != 0) {
+            x0 = x0 | (8 << 18);
+          }
         }
 
         // default foreground
@@ -1585,10 +1604,6 @@ class XTerm extends blessed.ScrollableBox {
         // write screen attribute and character
         updateSLine(x, 0, x0);
         updateSLine(x, 1, x1);
-      }
-
-      if (dirty) {
-        sline.dirty = true;
       }
     }
     return ret;
@@ -1651,6 +1666,27 @@ class XTerm extends blessed.ScrollableBox {
       || /^\x1b\[(O|I)/.test(s);
   }
 }
+
+function getUnwrappedLineCoordinates(terminal, buffer, x, y) {
+  // keep the y coordinate within buffer range
+  const l = Math.min(Math.max(0, y), buffer.lines.length - 1);
+  const line = buffer.getWrappedRangeForLine(l).first;
+  const index = (l - line) * terminal.cols + Math.min(x, buffer.lines.get(l).getTrimmedLength() - 1);
+  return [line, index];
+};
+
+function getWrappedLineCoordinates(terminal, buffer, index, line) {
+  const { first, last } = buffer.getWrappedRangeForLine(line);
+
+  const y = first + Math.floor(index / terminal.cols);
+  const x = index % terminal.cols;
+
+  if (y > last) {
+    throw Error(`wrapped line coordinates [${index}, ${line}] is out of range`);
+  }
+
+  return [x, y];
+};
 
 module.exports = XTerm;
 
