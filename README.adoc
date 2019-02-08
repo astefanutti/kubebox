@@ -38,9 +38,9 @@ image::https://img.shields.io/badge/%40kubebox-00ACEE.svg?style=flat-square&logo
 
 === Features
 
-* [x] Configuration sourcing from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
+* [x] Configuration from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
 * [x] Switch contexts interactively
-* [x] Login and OAuth authentication support
+* [x] Authentication support (token, username / password, private key / cert, OpenID Connect)
 * [x] Namespace selection and pods list watching
 * [x] Container log scrolling / watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
