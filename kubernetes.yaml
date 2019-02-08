@@ -29,7 +29,8 @@ spec:
         backend:
           serviceName: kubebox
           servicePort: 8080
-    # host: ${ROUTE_HOSTNAME}
+    # TO BE UPDATED IF NEEDED
+    # host:
 ---
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -47,6 +48,7 @@ spec:
       labels:
         name: kubebox
     spec:
+      serviceAccountName: kubebox
       containers:
       - image: astefanutti/kubebox:server
         imagePullPolicy: Always
@@ -54,3 +56,36 @@ spec:
         ports:
         - containerPort: 8080
           protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubebox
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kubebox
+subjects:
+- kind: ServiceAccount
+  name: kubebox
+  # TO BE UPDATED IF NEEDED
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: kubebox
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubebox
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+  - watch
+  - list

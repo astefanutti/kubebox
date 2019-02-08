@@ -68,6 +68,34 @@ $ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
 $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
 --
 
+Then run:
+```sh
+$ ./kubebox
+```
+
+=== Server
+
+Kubebox can be served from a service hosted in your Kubernetes cluster.
+Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication with the Kubernetes master API is proxied by the server.
+
+To deploy the server in your Kubernetes cluster, run:
+
+```sh
+# Make sure to replace the following fields:
+# - The ingress host
+# - The subject service account namespace
+$ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
+```
+
+For the Ingress resource to work, the cluster must have an Ingress controller running.
+See {uri-ingress-controllers}[Ingress controllers] for more information.
+
+Alternatively, to deploy the server in your OpenShift cluster, run:
+
+```sh
+$ oc new-app -f https://raw.github.com/astefanutti/kubebox/master/openshift.yaml
+```
+
 === Kubectl
 
 You can run Kubebox as an _in-cluster_ client with `kubectl`, e.g.:
@@ -76,7 +104,7 @@ You can run Kubebox as an _in-cluster_ client with `kubectl`, e.g.:
 $ kubectl run kubebox -it --rm --env="TERM=xterm" --image=astefanutti/kubebox --restart=Never
 ```
 
-See the <<RBAC, RBAC>> section for more information about RBAC authorization.
+If RBAC is enabled, you'll have to use the `--serviceaccount` option and reference a service account with sufficient permissions.
 
 === Docker
 
@@ -92,27 +120,6 @@ You may want to mount your home directory so that Kubebox can rely on the `~/.ku
 $ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
 ```
 
-=== Server
-
-Kubebox can be served from a service deployed in the target Kubernetes cluster.
-Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication with the Kubernetes master API is proxied by the server.
-
-To deploy the server in your Kubernetes cluster, run:
-
-```sh
-# Replace the ROUTE_HOSTNAME variable
-$ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
-```
-
-For the Ingress resource to work, the cluster must have an Ingress controller running.
-See {uri-ingress-controllers}[Ingress controllers] for more information. Besides, see the <<RBAC, RBAC>> section for more information about RBAC authorization.
-
-Alternatively, to deploy the server in your OpenShift cluster, run:
-
-```sh
-$ oc new-app -f https://raw.github.com/astefanutti/kubebox/master/openshift.yaml
-```
-
 === Online
 
 Kubebox is available online at https://astefanutti.github.com/kubebox.
@@ -122,19 +129,6 @@ This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.
 ```sh
 $ kube-apiserver --cors-allowed-origins .*
 ```
-
-== RBAC
-
-If RBAC is enabled, Kubebox needs RBAC permissions to access the cluster resources.
-By default, while running as _in-cluster_ client or server, Kubebox uses the `default` service account credentials to access the API server.
-
-The following command can be run to bind the `cluster-admin` role to the `default` service account:
-
-```sh
-$ kubectl create clusterrolebinding default-cluster-admin --clusterrole=cluster-admin --serviceaccount=default:default
-```
-
-You can find more information in {uri-service-account}[Configure Service Accounts for Pods].
 
 == Commands
 
