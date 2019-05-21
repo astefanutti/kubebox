@@ -15,7 +15,8 @@ const blessed       = require('blessed'),
       Kubebox       = require('./lib/kubebox');
 
 const screen = blessed.screen({
-  ignoreLocked: ['C-q'],
+  ignoreLocked : ['C-q'],
+  fullUnicode  : true,
 });
 
 screen.key(['q', 'C-q'], (ch, key) => {
