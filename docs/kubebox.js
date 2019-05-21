@@ -772,6 +772,10 @@ module.exports.isPodCompleted = function (pod) {
   return module.exports.podStatus(pod) === 'Completed';
 }
 
+module.exports.isPodError = function (pod) {
+  return module.exports.podStatus(pod) === 'Error';
+}
+
 },{}],8:[function(require,module,exports){
 (function (Buffer){
 'use strict';
@@ -2859,8 +2863,8 @@ class Dashboard {
       pod_log.reset();
       screen.render();
 
-      // non-running nor completed pod
-      if (!k8s.isPodRunningOrTerminating(pod) && !k8s.isPodCompleted(pod)) {
+      // non-running nor completed / errored pod
+      if (!k8s.isPodRunningOrTerminating(pod) && !k8s.isPodCompleted(pod) && !k8s.isPodError(pod)) {
         // TODO: display info message in selection widgets
         // Alternatively, we could watch for the pod status and update selection
         // once it's running.
@@ -3114,8 +3118,8 @@ class Dashboard {
       let listPodsError;
       // FIXME: should be cancellable
       const promise = until(client.pods(current_namespace).get())
-        .spin(s => pods_table.setLabel(`${s} Pods`))
-        .succeed(_ => pods_table.setLabel('Pods'))
+        .spin(s => pods_table.setLabel(`${s} Pods {grey-fg}[${current_namespace}]{/grey-fg}`))
+        .succeed(_ => pods_table.setLabel(`Pods {grey-fg}[${current_namespace}]{/grey-fg}`))
         .then(response => {
           pods_list = JSON.parse(response.body.toString('utf8'));
           pods_list.items = pods_list.items || [];
