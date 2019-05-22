@@ -3103,6 +3103,7 @@ class Dashboard {
       pod_selected = null;
       container_selected = null;
       // reset dashboard widgets
+      pods_table.setLabel('Pods');
       pods_table.setData([]);
       resources.setLabel('Resources');
       graphs.forEach(g => g.reset());
