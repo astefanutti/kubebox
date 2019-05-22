@@ -669,8 +669,8 @@ class User {
 
 class AuthProvider {
 
-  constructor({ name,  'idp-issuer-url': url, 'id-token': token, 'refresh-token': refresh_token,
-      'client-id': client_id, 'client-secret': client_secret, 'idp-certificate-authority' : ca }) {
+  constructor({ name, 'idp-issuer-url': url, 'id-token': token, 'refresh-token': refresh_token,
+      'client-id': client_id, 'client-secret': client_secret, 'idp-certificate-authority': ca }) {
     this.client_id = client_id;
     this.client_secret = client_secret;
     this.name = name;
@@ -1314,6 +1314,9 @@ class XTerm extends blessed.ScrollableBox {
     setOption(this.options.style, 'bg', 'default');
     setOption(this.options.style, 'fg', 'default');
 
+    // determine display attributes
+    this.dattr = this.sattr(this.style);
+
     // This code executes in the jsdom global scope
     this.term = new Terminal({
       cols: this.width - this.iwidth - 1,
@@ -1341,9 +1344,6 @@ class XTerm extends blessed.ScrollableBox {
       syncScrollArea: () => {},
     };
 
-    // monkey-patch XTerm to prevent any key handling
-    this.term._core.keyDown = () => {};
-    this.term._core.keyPress = () => {};
     this.term.focus();
 
     // pass-through title changes by application
@@ -1494,9 +1494,6 @@ class XTerm extends blessed.ScrollableBox {
 
     const buffer = this.term._core.buffer;
     const ydisp = buffer.ydisp;
-
-    // determine display attributes
-    this.dattr = this.sattr(this.style);
 
     // determine position
     const xi = ret.xi + this.ileft;
