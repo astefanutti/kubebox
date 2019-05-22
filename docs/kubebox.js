@@ -1279,10 +1279,11 @@ exports.arrayMax = function (array, iteratee) {
 }
 
 },{"x256":313}],14:[function(require,module,exports){
-(function (Buffer,process,global){
-const blessed = require('blessed'),
-      hrtime  = require('./hrtime'),
-      os      = require('os');
+(function (Buffer,process){
+const blessed  = require('blessed'),
+      debounce = require('lodash.debounce'),
+      hrtime   = require('./hrtime'),
+      os       = require('os');
 
 const Terminal = os.platform() === 'browser'
   ? window.Terminal
@@ -1353,10 +1354,8 @@ class XTerm extends blessed.ScrollableBox {
 
     // TODO: we may want to dynamically adjust the width depending on the scrollbar
     const resize = () => this.term.resize(this.width - this.iwidth - 1, this.height - this.iheight);
-
     // pass-through Blessed resize events to XTerm
-    const nextTick = global.setImmediate || process.nextTick.bind(process);
-    this.on('resize', () => nextTick(resize));
+    this.on('resize', debounce(resize, 150, { trailing: true }));
     // perform an initial resizing once
     this.once('render', resize);
 
@@ -1694,8 +1693,8 @@ function getWrappedLineCoordinates(terminal, buffer, index, line) {
 
 module.exports = XTerm;
 
-}).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":187,"./hrtime":15,"_process":216,"blessed":"blessed","os":192,"xterm":undefined}],15:[function(require,module,exports){
+}).call(this,{"isBuffer":require("../../../node_modules/browserify/node_modules/is-buffer/index.js")},require('_process'))
+},{"../../../node_modules/browserify/node_modules/is-buffer/index.js":187,"./hrtime":15,"_process":216,"blessed":"blessed","lodash.debounce":299,"os":192,"xterm":undefined}],15:[function(require,module,exports){
 (function (process,global){
 // Polyfill for window.performance.now
 const performance = global.performance || {}
