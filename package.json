@@ -15,8 +15,7 @@
     "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
     "bundle": "browserify index.js -o bundle.js -u pty.js -u term.js -u spawn-sync --node",
     "executable": "nexe package.json",
-    "executable-linux": "eval \"$(musl-exports)\" && nexe package.json",
-    "server": "node ./docs/server.js"
+    "executable-linux": "eval \"$(musl-exports)\" && nexe package.json"
   },
   "pkg": {
     "scripts": "node_modules/blessed/lib/widgets/*.js",
@@ -42,7 +41,7 @@
     "moment-duration-format": "~1.3.0",
     "urijs": "~1.18.4",
     "x256": "0.0.2",
-    "xterm": "~3.11.0"
+    "xterm": "~3.13.2"
   },
   "engines": {
     "node": ">=6.0.0"

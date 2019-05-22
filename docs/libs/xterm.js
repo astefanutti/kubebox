@@ -6,7 +6,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -15,7 +15,7 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var Strings = require("./Strings");
-var Platform_1 = require("./core/Platform");
+var Platform_1 = require("./common/Platform");
 var RenderDebouncer_1 = require("./ui/RenderDebouncer");
 var Lifecycle_1 = require("./ui/Lifecycle");
 var Lifecycle_2 = require("./common/Lifecycle");
@@ -42,7 +42,7 @@ var AccessibilityManager = (function (_super) {
         _this._rowElements[_this._rowElements.length - 1].addEventListener('focus', _this._bottomBoundaryFocusListener);
         _this._refreshRowsDimensions();
         _this._accessibilityTreeRoot.appendChild(_this._rowContainer);
-        _this._renderRowsDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._terminal, _this._renderRows.bind(_this));
+        _this._renderRowsDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._renderRows.bind(_this));
         _this._refreshRows();
         _this._liveRegion = document.createElement('div');
         _this._liveRegion.classList.add('live-region');
@@ -50,16 +50,16 @@ var AccessibilityManager = (function (_super) {
         _this._accessibilityTreeRoot.appendChild(_this._liveRegion);
         _this._terminal.element.insertAdjacentElement('afterbegin', _this._accessibilityTreeRoot);
         _this.register(_this._renderRowsDebouncer);
-        _this.register(_this._terminal.addDisposableListener('resize', function (data) { return _this._onResize(data.rows); }));
-        _this.register(_this._terminal.addDisposableListener('refresh', function (data) { return _this._refreshRows(data.start, data.end); }));
-        _this.register(_this._terminal.addDisposableListener('scroll', function (data) { return _this._refreshRows(); }));
+        _this.register(_this._terminal.onResize(function (e) { return _this._onResize(e.rows); }));
+        _this.register(_this._terminal.onRender(function (e) { return _this._refreshRows(e.start, e.end); }));
+        _this.register(_this._terminal.onScroll(function () { return _this._refreshRows(); }));
         _this.register(_this._terminal.addDisposableListener('a11y.char', function (char) { return _this._onChar(char); }));
-        _this.register(_this._terminal.addDisposableListener('linefeed', function () { return _this._onChar('\n'); }));
+        _this.register(_this._terminal.onLineFeed(function () { return _this._onChar('\n'); }));
         _this.register(_this._terminal.addDisposableListener('a11y.tab', function (spaceCount) { return _this._onTab(spaceCount); }));
-        _this.register(_this._terminal.addDisposableListener('key', function (keyChar) { return _this._onKey(keyChar); }));
+        _this.register(_this._terminal.onKey(function (e) { return _this._onKey(e.key); }));
         _this.register(_this._terminal.addDisposableListener('blur', function () { return _this._clearLiveRegion(); }));
         _this.register(_this._terminal.addDisposableListener('dprchange', function () { return _this._refreshRowsDimensions(); }));
-        _this.register(_this._terminal.renderer.addDisposableListener('resize', function () { return _this._refreshRowsDimensions(); }));
+        _this.register(_this._terminal.renderer.onCanvasResize(function () { return _this._refreshRowsDimensions(); }));
         _this.register(Lifecycle_1.addDisposableDomListener(window, 'resize', function () { return _this._refreshRowsDimensions(); }));
         return _this;
     }
@@ -175,7 +175,7 @@ var AccessibilityManager = (function (_super) {
         this._charsToConsume.push(keyChar);
     };
     AccessibilityManager.prototype._refreshRows = function (start, end) {
-        this._renderRowsDebouncer.refresh(start, end);
+        this._renderRowsDebouncer.refresh(start, end, this._terminal.rows);
     };
     AccessibilityManager.prototype._renderRows = function (start, end) {
         var buffer = this._terminal.buffer;
@@ -184,9 +184,11 @@ var AccessibilityManager = (function (_super) {
             var lineData = buffer.translateBufferLineToString(buffer.ydisp + i, true);
             var posInSet = (buffer.ydisp + i + 1).toString();
             var element = this._rowElements[i];
-            element.textContent = lineData.length === 0 ? Strings.blankLine : lineData;
-            element.setAttribute('aria-posinset', posInSet);
-            element.setAttribute('aria-setsize', setSize);
+            if (element) {
+                element.textContent = lineData.length === 0 ? Strings.blankLine : lineData;
+                element.setAttribute('aria-posinset', posInSet);
+                element.setAttribute('aria-setsize', setSize);
+            }
         }
     };
     AccessibilityManager.prototype._refreshRowsDimensions = function () {
@@ -215,7 +217,7 @@ var AccessibilityManager = (function (_super) {
 }(Lifecycle_2.Disposable));
 exports.AccessibilityManager = AccessibilityManager;
 
-},{"./Strings":14,"./common/Lifecycle":20,"./core/Platform":23,"./ui/Lifecycle":51,"./ui/RenderDebouncer":54}],2:[function(require,module,exports){
+},{"./Strings":18,"./common/Lifecycle":26,"./common/Platform":27,"./ui/Lifecycle":55,"./ui/RenderDebouncer":56}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -223,7 +225,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -231,12 +233,14 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+var CircularList_1 = require("./common/CircularList");
 var BufferLine_1 = require("./BufferLine");
 var BufferReflow_1 = require("./BufferReflow");
-var CircularList_1 = require("./common/CircularList");
-var EventEmitter_1 = require("./common/EventEmitter");
 var Types_1 = require("./renderer/atlas/Types");
+var EventEmitter2_1 = require("./common/EventEmitter2");
+var Lifecycle_1 = require("../lib/common/Lifecycle");
 exports.DEFAULT_ATTR = (0 << 18) | (Types_1.DEFAULT_COLOR << 9) | (256 << 0);
+exports.DEFAULT_ATTR_DATA = new BufferLine_1.AttributeData();
 exports.CHAR_DATA_ATTR_INDEX = 0;
 exports.CHAR_DATA_CHAR_INDEX = 1;
 exports.CHAR_DATA_WIDTH_INDEX = 2;
@@ -248,19 +252,42 @@ exports.NULL_CELL_CODE = 0;
 exports.WHITESPACE_CELL_CHAR = ' ';
 exports.WHITESPACE_CELL_WIDTH = 1;
 exports.WHITESPACE_CELL_CODE = 32;
-exports.FILL_CHAR_DATA = [exports.DEFAULT_ATTR, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE];
 var Buffer = (function () {
     function Buffer(_terminal, _hasScrollback) {
         this._terminal = _terminal;
         this._hasScrollback = _hasScrollback;
+        this.savedCurAttrData = exports.DEFAULT_ATTR_DATA.clone();
         this.markers = [];
+        this._nullCell = BufferLine_1.CellData.fromCharData([0, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE]);
+        this._whitespaceCell = BufferLine_1.CellData.fromCharData([0, exports.WHITESPACE_CELL_CHAR, exports.WHITESPACE_CELL_WIDTH, exports.WHITESPACE_CELL_CODE]);
         this._cols = this._terminal.cols;
         this._rows = this._terminal.rows;
         this.clear();
     }
+    Buffer.prototype.getNullCell = function (attr) {
+        if (attr) {
+            this._nullCell.fg = attr.fg;
+            this._nullCell.bg = attr.bg;
+        }
+        else {
+            this._nullCell.fg = 0;
+            this._nullCell.bg = 0;
+        }
+        return this._nullCell;
+    };
+    Buffer.prototype.getWhitespaceCell = function (attr) {
+        if (attr) {
+            this._whitespaceCell.fg = attr.fg;
+            this._whitespaceCell.bg = attr.bg;
+        }
+        else {
+            this._whitespaceCell.fg = 0;
+            this._whitespaceCell.bg = 0;
+        }
+        return this._whitespaceCell;
+    };
     Buffer.prototype.getBlankLine = function (attr, isWrapped) {
-        var fillCharData = [attr, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE];
-        return new BufferLine_1.BufferLine(this._cols, fillCharData, isWrapped);
+        return new BufferLine_1.BufferLine(this._terminal.cols, this.getNullCell(attr), isWrapped);
     };
     Object.defineProperty(Buffer.prototype, "hasScrollback", {
         get: function () {
@@ -288,7 +315,7 @@ var Buffer = (function () {
     Buffer.prototype.fillViewportRows = function (fillAttr) {
         if (this.lines.length === 0) {
             if (fillAttr === undefined) {
-                fillAttr = exports.DEFAULT_ATTR;
+                fillAttr = exports.DEFAULT_ATTR_DATA;
             }
             var i = this._rows;
             while (i--) {
@@ -307,6 +334,7 @@ var Buffer = (function () {
         this.setupTabStops();
     };
     Buffer.prototype.resize = function (newCols, newRows) {
+        var nullCell = this.getNullCell(exports.DEFAULT_ATTR_DATA);
         var newMaxLength = this._getCorrectBufferLength(newRows);
         if (newMaxLength > this.lines.maxLength) {
             this.lines.maxLength = newMaxLength;
@@ -314,7 +342,7 @@ var Buffer = (function () {
         if (this.lines.length > 0) {
             if (this._cols < newCols) {
                 for (var i = 0; i < this.lines.length; i++) {
-                    this.lines.get(i).resize(newCols, exports.FILL_CHAR_DATA);
+                    this.lines.get(i).resize(newCols, nullCell);
                 }
             }
             var addToY = 0;
@@ -329,7 +357,7 @@ var Buffer = (function () {
                             }
                         }
                         else {
-                            this.lines.push(new BufferLine_1.BufferLine(newCols, exports.FILL_CHAR_DATA));
+                            this.lines.push(new BufferLine_1.BufferLine(newCols, nullCell));
                         }
                     }
                 }
@@ -366,45 +394,53 @@ var Buffer = (function () {
             this.scrollTop = 0;
         }
         this.scrollBottom = newRows - 1;
-        if (this._hasScrollback) {
+        if (this._isReflowEnabled) {
             this._reflow(newCols, newRows);
             if (this._cols > newCols) {
                 for (var i = 0; i < this.lines.length; i++) {
-                    this.lines.get(i).resize(newCols, exports.FILL_CHAR_DATA);
+                    this.lines.get(i).resize(newCols, nullCell);
                 }
             }
         }
         this._cols = newCols;
         this._rows = newRows;
     };
+    Object.defineProperty(Buffer.prototype, "_isReflowEnabled", {
+        get: function () {
+            return this._hasScrollback && !this._terminal.options.windowsMode;
+        },
+        enumerable: true,
+        configurable: true
+    });
     Buffer.prototype._reflow = function (newCols, newRows) {
         if (this._cols === newCols) {
             return;
         }
         if (newCols > this._cols) {
-            this._reflowLarger(newCols);
+            this._reflowLarger(newCols, newRows);
         }
         else {
             this._reflowSmaller(newCols, newRows);
         }
     };
-    Buffer.prototype._reflowLarger = function (newCols) {
-        var toRemove = BufferReflow_1.reflowLargerGetLinesToRemove(this.lines, newCols, this.ybase + this.y);
+    Buffer.prototype._reflowLarger = function (newCols, newRows) {
+        var toRemove = BufferReflow_1.reflowLargerGetLinesToRemove(this.lines, this._cols, newCols, this.ybase + this.y, this.getNullCell(exports.DEFAULT_ATTR_DATA));
         if (toRemove.length > 0) {
             var newLayoutResult = BufferReflow_1.reflowLargerCreateNewLayout(this.lines, toRemove);
             BufferReflow_1.reflowLargerApplyNewLayout(this.lines, newLayoutResult.layout);
-            this._reflowLargerAdjustViewport(newCols, newLayoutResult.countRemoved);
+            this._reflowLargerAdjustViewport(newCols, newRows, newLayoutResult.countRemoved);
         }
     };
-    Buffer.prototype._reflowLargerAdjustViewport = function (newCols, countRemoved) {
+    Buffer.prototype._reflowLargerAdjustViewport = function (newCols, newRows, countRemoved) {
+        var nullCell = this.getNullCell(exports.DEFAULT_ATTR_DATA);
         var viewportAdjustments = countRemoved;
         while (viewportAdjustments-- > 0) {
             if (this.ybase === 0) {
                 if (this.y > 0) {
                     this.y--;
                 }
-                if (this.lines.length < this._rows) {
-                    this.lines.push(new BufferLine_1.BufferLine(newCols, exports.FILL_CHAR_DATA));
+                if (this.lines.length < newRows) {
+                    this.lines.push(new BufferLine_1.BufferLine(newCols, nullCell));
                 }
             }
             else {
@@ -416,6 +452,7 @@ var Buffer = (function () {
         }
     };
     Buffer.prototype._reflowSmaller = function (newCols, newRows) {
+        var nullCell = this.getNullCell(exports.DEFAULT_ATTR_DATA);
         var toInsert = [];
         var countToInsert = 0;
         for (var y = this.lines.length - 1; y >= 0; y--) {
@@ -444,7 +481,7 @@ var Buffer = (function () {
             }
             var newLines = [];
             for (var i = 0; i < linesToAdd; i++) {
-                var newLine = this.getBlankLine(exports.DEFAULT_ATTR, true);
+                var newLine = this.getBlankLine(exports.DEFAULT_ATTR_DATA, true);
                 newLines.push(newLine);
             }
             if (newLines.length > 0) {
@@ -474,18 +511,19 @@ var Buffer = (function () {
                 srcCol -= cellsToCopy;
                 if (srcCol === 0) {
                     srcLineIndex--;
-                    srcCol = wrappedLines[Math.max(srcLineIndex, 0)].getTrimmedLength();
+                    var wrappedLinesIndex = Math.max(srcLineIndex, 0);
+                    srcCol = BufferReflow_1.getWrappedLineTrimmedLength(wrappedLines, wrappedLinesIndex, this._cols);
                 }
             }
             for (var i = 0; i < wrappedLines.length; i++) {
                 if (destLineLengths[i] < newCols) {
-                    wrappedLines[i].set(destLineLengths[i], exports.FILL_CHAR_DATA);
+                    wrappedLines[i].setCell(destLineLengths[i], nullCell);
                 }
             }
             var viewportAdjustments = linesToAdd - trimmedLines;
             while (viewportAdjustments-- > 0) {
                 if (this.ybase === 0) {
-                    if (this.y < this._rows - 1) {
+                    if (this.y < newRows - 1) {
                         this.y++;
                         this.lines.pop();
                     }
@@ -536,12 +574,12 @@ var Buffer = (function () {
             var insertCountEmitted = 0;
             for (var i = insertEvents.length - 1; i >= 0; i--) {
                 insertEvents[i].index += insertCountEmitted;
-                this.lines.emit('insert', insertEvents[i]);
+                this.lines.onInsertEmitter.fire(insertEvents[i]);
                 insertCountEmitted += insertEvents[i].amount;
             }
             var amountToTrim = Math.max(0, originalLinesLength + countToInsert - this.lines.maxLength);
             if (amountToTrim > 0) {
-                this.lines.emitMayRemoveListeners('trim', amountToTrim);
+                this.lines.onTrimEmitter.fire(amountToTrim);
             }
         }
     };
@@ -618,18 +656,18 @@ var Buffer = (function () {
         var _this = this;
         var marker = new Marker(y);
         this.markers.push(marker);
-        marker.register(this.lines.addDisposableListener('trim', function (amount) {
+        marker.register(this.lines.onTrim(function (amount) {
             marker.line -= amount;
             if (marker.line < 0) {
                 marker.dispose();
             }
         }));
-        marker.register(this.lines.addDisposableListener('insert', function (event) {
+        marker.register(this.lines.onInsert(function (event) {
             if (marker.line >= event.index) {
                 marker.line += event.amount;
             }
         }));
-        marker.register(this.lines.addDisposableListener('delete', function (event) {
+        marker.register(this.lines.onDelete(function (event) {
             if (marker.line >= event.index && marker.line < event.index + event.amount) {
                 marker.dispose();
             }
@@ -637,7 +675,7 @@ var Buffer = (function () {
                 marker.line -= event.amount;
             }
         }));
-        marker.register(marker.addDisposableListener('dispose', function () { return _this._removeMarker(marker); }));
+        marker.register(marker.onDispose(function () { return _this._removeMarker(marker); }));
         return marker;
     };
     Buffer.prototype._removeMarker = function (marker) {
@@ -656,10 +694,16 @@ var Marker = (function (_super) {
         _this.line = line;
         _this._id = Marker._nextId++;
         _this.isDisposed = false;
+        _this._onDispose = new EventEmitter2_1.EventEmitter2();
         return _this;
     }
     Object.defineProperty(Marker.prototype, "id", {
         get: function () { return this._id; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Marker.prototype, "onDispose", {
+        get: function () { return this._onDispose.event; },
         enumerable: true,
         configurable: true
     });
@@ -668,12 +712,11 @@ var Marker = (function (_super) {
             return;
         }
         this.isDisposed = true;
-        this.emit('dispose');
-        _super.prototype.dispose.call(this);
+        this._onDispose.fire();
     };
     Marker._nextId = 1;
     return Marker;
-}(EventEmitter_1.EventEmitter));
+}(Lifecycle_1.Disposable));
 exports.Marker = Marker;
 var BufferStringIterator = (function () {
     function BufferStringIterator(_buffer, _trimRight, _startIndex, _endIndex, _startOverscan, _endOverscan) {
@@ -719,94 +762,305 @@ var BufferStringIterator = (function () {
 }());
 exports.BufferStringIterator = BufferStringIterator;
 
-},{"./BufferLine":3,"./BufferReflow":4,"./common/CircularList":17,"./common/EventEmitter":19,"./renderer/atlas/Types":46}],3:[function(require,module,exports){
+},{"../lib/common/Lifecycle":26,"./BufferLine":3,"./BufferReflow":4,"./common/CircularList":22,"./common/EventEmitter2":25,"./renderer/atlas/Types":52}],3:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("./Buffer");
+var TextDecoder_1 = require("./core/input/TextDecoder");
 var CELL_SIZE = 3;
-var IS_COMBINED_BIT_MASK = 0x80000000;
+var AttributeData = (function () {
+    function AttributeData() {
+        this.fg = 0;
+        this.bg = 0;
+    }
+    AttributeData.toColorRGB = function (value) {
+        return [
+            value >>> 16 & 255,
+            value >>> 8 & 255,
+            value & 255
+        ];
+    };
+    AttributeData.fromColorRGB = function (value) {
+        return (value[0] & 255) << 16 | (value[1] & 255) << 8 | value[2] & 255;
+    };
+    AttributeData.prototype.clone = function () {
+        var newObj = new AttributeData();
+        newObj.fg = this.fg;
+        newObj.bg = this.bg;
+        return newObj;
+    };
+    AttributeData.prototype.isInverse = function () { return this.fg & 67108864; };
+    AttributeData.prototype.isBold = function () { return this.fg & 134217728; };
+    AttributeData.prototype.isUnderline = function () { return this.fg & 268435456; };
+    AttributeData.prototype.isBlink = function () { return this.fg & 536870912; };
+    AttributeData.prototype.isInvisible = function () { return this.fg & 1073741824; };
+    AttributeData.prototype.isItalic = function () { return this.bg & 67108864; };
+    AttributeData.prototype.isDim = function () { return this.bg & 134217728; };
+    AttributeData.prototype.getFgColorMode = function () { return this.fg & 50331648; };
+    AttributeData.prototype.getBgColorMode = function () { return this.bg & 50331648; };
+    AttributeData.prototype.isFgRGB = function () { return (this.fg & 50331648) === 50331648; };
+    AttributeData.prototype.isBgRGB = function () { return (this.bg & 50331648) === 50331648; };
+    AttributeData.prototype.isFgPalette = function () { return (this.fg & 50331648) === 16777216 || (this.fg & 50331648) === 33554432; };
+    AttributeData.prototype.isBgPalette = function () { return (this.bg & 50331648) === 16777216 || (this.bg & 50331648) === 33554432; };
+    AttributeData.prototype.isFgDefault = function () { return (this.fg & 50331648) === 0; };
+    AttributeData.prototype.isBgDefault = function () { return (this.bg & 50331648) === 0; };
+    AttributeData.prototype.getFgColor = function () {
+        switch (this.fg & 50331648) {
+            case 16777216:
+            case 33554432: return this.fg & 255;
+            case 50331648: return this.fg & 16777215;
+            default: return -1;
+        }
+    };
+    AttributeData.prototype.getBgColor = function () {
+        switch (this.bg & 50331648) {
+            case 16777216:
+            case 33554432: return this.bg & 255;
+            case 50331648: return this.bg & 16777215;
+            default: return -1;
+        }
+    };
+    return AttributeData;
+}());
+exports.AttributeData = AttributeData;
+var CellData = (function (_super) {
+    __extends(CellData, _super);
+    function CellData() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.content = 0;
+        _this.fg = 0;
+        _this.bg = 0;
+        _this.combinedData = '';
+        return _this;
+    }
+    CellData.fromCharData = function (value) {
+        var obj = new CellData();
+        obj.setFromCharData(value);
+        return obj;
+    };
+    CellData.prototype.isCombined = function () {
+        return this.content & 2097152;
+    };
+    CellData.prototype.getWidth = function () {
+        return this.content >> 22;
+    };
+    CellData.prototype.getChars = function () {
+        if (this.content & 2097152) {
+            return this.combinedData;
+        }
+        if (this.content & 2097151) {
+            return TextDecoder_1.stringFromCodePoint(this.content & 2097151);
+        }
+        return '';
+    };
+    CellData.prototype.getCode = function () {
+        return (this.isCombined())
+            ? this.combinedData.charCodeAt(this.combinedData.length - 1)
+            : this.content & 2097151;
+    };
+    CellData.prototype.setFromCharData = function (value) {
+        this.fg = value[Buffer_1.CHAR_DATA_ATTR_INDEX];
+        this.bg = 0;
+        var combined = false;
+        if (value[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 2) {
+            combined = true;
+        }
+        else if (value[Buffer_1.CHAR_DATA_CHAR_INDEX].length === 2) {
+            var code = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(0);
+            if (0xD800 <= code && code <= 0xDBFF) {
+                var second = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(1);
+                if (0xDC00 <= second && second <= 0xDFFF) {
+                    this.content = ((code - 0xD800) * 0x400 + second - 0xDC00 + 0x10000) | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
+                }
+                else {
+                    combined = true;
+                }
+            }
+            else {
+                combined = true;
+            }
+        }
+        else {
+            this.content = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+        if (combined) {
+            this.combinedData = value[Buffer_1.CHAR_DATA_CHAR_INDEX];
+            this.content = 2097152 | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+    };
+    CellData.prototype.getAsCharData = function () {
+        return [this.fg, this.getChars(), this.getWidth(), this.getCode()];
+    };
+    return CellData;
+}(AttributeData));
+exports.CellData = CellData;
 var BufferLine = (function () {
-    function BufferLine(cols, fillCharData, isWrapped) {
+    function BufferLine(cols, fillCellData, isWrapped) {
         if (isWrapped === void 0) { isWrapped = false; }
         this.isWrapped = isWrapped;
         this._data = null;
         this._combined = {};
-        if (!fillCharData) {
-            fillCharData = [0, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE];
-        }
         if (cols) {
             this._data = new Uint32Array(cols * CELL_SIZE);
+            var cell = fillCellData || CellData.fromCharData([0, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
             for (var i = 0; i < cols; ++i) {
-                this.set(i, fillCharData);
+                this.setCell(i, cell);
             }
         }
         this.length = cols;
     }
     BufferLine.prototype.get = function (index) {
-        var stringData = this._data[index * CELL_SIZE + 1];
+        var content = this._data[index * CELL_SIZE + 0];
+        var cp = content & 2097151;
         return [
-            this._data[index * CELL_SIZE + 0],
-            (stringData & IS_COMBINED_BIT_MASK)
+            this._data[index * CELL_SIZE + 1],
+            (content & 2097152)
                 ? this._combined[index]
-                : (stringData) ? String.fromCharCode(stringData) : '',
-            this._data[index * CELL_SIZE + 2],
-            (stringData & IS_COMBINED_BIT_MASK)
+                : (cp) ? TextDecoder_1.stringFromCodePoint(cp) : '',
+            content >> 22,
+            (content & 2097152)
                 ? this._combined[index].charCodeAt(this._combined[index].length - 1)
-                : stringData
+                : cp
         ];
     };
+    BufferLine.prototype.set = function (index, value) {
+        this._data[index * CELL_SIZE + 1] = value[Buffer_1.CHAR_DATA_ATTR_INDEX];
+        if (value[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 1) {
+            this._combined[index] = value[1];
+            this._data[index * CELL_SIZE + 0] = index | 2097152 | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+        else {
+            this._data[index * CELL_SIZE + 0] = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+    };
     BufferLine.prototype.getWidth = function (index) {
+        return this._data[index * CELL_SIZE + 0] >> 22;
+    };
+    BufferLine.prototype.hasWidth = function (index) {
+        return this._data[index * CELL_SIZE + 0] & 12582912;
+    };
+    BufferLine.prototype.getFg = function (index) {
+        return this._data[index * CELL_SIZE + 1];
+    };
+    BufferLine.prototype.getBg = function (index) {
         return this._data[index * CELL_SIZE + 2];
     };
-    BufferLine.prototype.set = function (index, value) {
-        this._data[index * CELL_SIZE + 0] = value[0];
-        if (value[1].length > 1) {
-            this._combined[index] = value[1];
-            this._data[index * CELL_SIZE + 1] = index | IS_COMBINED_BIT_MASK;
+    BufferLine.prototype.hasContent = function (index) {
+        return this._data[index * CELL_SIZE + 0] & 4194303;
+    };
+    BufferLine.prototype.getCodePoint = function (index) {
+        var content = this._data[index * CELL_SIZE + 0];
+        if (content & 2097152) {
+            return this._combined[index].charCodeAt(this._combined[index].length - 1);
+        }
+        return content & 2097151;
+    };
+    BufferLine.prototype.isCombined = function (index) {
+        return this._data[index * CELL_SIZE + 0] & 2097152;
+    };
+    BufferLine.prototype.getString = function (index) {
+        var content = this._data[index * CELL_SIZE + 0];
+        if (content & 2097152) {
+            return this._combined[index];
+        }
+        if (content & 2097151) {
+            return TextDecoder_1.stringFromCodePoint(content & 2097151);
+        }
+        return '';
+    };
+    BufferLine.prototype.loadCell = function (index, cell) {
+        var startIndex = index * CELL_SIZE;
+        cell.content = this._data[startIndex + 0];
+        cell.fg = this._data[startIndex + 1];
+        cell.bg = this._data[startIndex + 2];
+        if (cell.content & 2097152) {
+            cell.combinedData = this._combined[index];
+        }
+        return cell;
+    };
+    BufferLine.prototype.setCell = function (index, cell) {
+        if (cell.content & 2097152) {
+            this._combined[index] = cell.combinedData;
+        }
+        this._data[index * CELL_SIZE + 0] = cell.content;
+        this._data[index * CELL_SIZE + 1] = cell.fg;
+        this._data[index * CELL_SIZE + 2] = cell.bg;
+    };
+    BufferLine.prototype.setCellFromCodePoint = function (index, codePoint, width, fg, bg) {
+        this._data[index * CELL_SIZE + 0] = codePoint | (width << 22);
+        this._data[index * CELL_SIZE + 1] = fg;
+        this._data[index * CELL_SIZE + 2] = bg;
+    };
+    BufferLine.prototype.addCodepointToCell = function (index, codePoint) {
+        var content = this._data[index * CELL_SIZE + 0];
+        if (content & 2097152) {
+            this._combined[index] += TextDecoder_1.stringFromCodePoint(codePoint);
         }
         else {
-            this._data[index * CELL_SIZE + 1] = value[1].charCodeAt(0);
+            if (content & 2097151) {
+                this._combined[index] = TextDecoder_1.stringFromCodePoint(content & 2097151) + TextDecoder_1.stringFromCodePoint(codePoint);
+                content &= ~2097151;
+                content |= 2097152;
+            }
+            else {
+                content = codePoint | (1 << 22);
+            }
+            this._data[index * CELL_SIZE + 0] = content;
         }
-        this._data[index * CELL_SIZE + 2] = value[2];
     };
-    BufferLine.prototype.insertCells = function (pos, n, fillCharData) {
+    BufferLine.prototype.insertCells = function (pos, n, fillCellData) {
         pos %= this.length;
         if (n < this.length - pos) {
+            var cell = new CellData();
             for (var i = this.length - pos - n - 1; i >= 0; --i) {
-                this.set(pos + n + i, this.get(pos + i));
+                this.setCell(pos + n + i, this.loadCell(pos + i, cell));
             }
             for (var i = 0; i < n; ++i) {
-                this.set(pos + i, fillCharData);
+                this.setCell(pos + i, fillCellData);
             }
         }
         else {
             for (var i = pos; i < this.length; ++i) {
-                this.set(i, fillCharData);
+                this.setCell(i, fillCellData);
             }
         }
     };
-    BufferLine.prototype.deleteCells = function (pos, n, fillCharData) {
+    BufferLine.prototype.deleteCells = function (pos, n, fillCellData) {
         pos %= this.length;
         if (n < this.length - pos) {
+            var cell = new CellData();
             for (var i = 0; i < this.length - pos - n; ++i) {
-                this.set(pos + i, this.get(pos + n + i));
+                this.setCell(pos + i, this.loadCell(pos + n + i, cell));
             }
             for (var i = this.length - n; i < this.length; ++i) {
-                this.set(i, fillCharData);
+                this.setCell(i, fillCellData);
             }
         }
         else {
             for (var i = pos; i < this.length; ++i) {
-                this.set(i, fillCharData);
+                this.setCell(i, fillCellData);
             }
         }
     };
-    BufferLine.prototype.replaceCells = function (start, end, fillCharData) {
+    BufferLine.prototype.replaceCells = function (start, end, fillCellData) {
         while (start < end && start < this.length) {
-            this.set(start++, fillCharData);
+            this.setCell(start++, fillCellData);
         }
     };
-    BufferLine.prototype.resize = function (cols, fillCharData) {
+    BufferLine.prototype.resize = function (cols, fillCellData) {
         if (cols === this.length) {
             return;
         }
@@ -822,7 +1076,7 @@ var BufferLine = (function () {
             }
             this._data = data;
             for (var i = this.length; i < cols; ++i) {
-                this.set(i, fillCharData);
+                this.setCell(i, fillCellData);
             }
         }
         else {
@@ -845,10 +1099,10 @@ var BufferLine = (function () {
         }
         this.length = cols;
     };
-    BufferLine.prototype.fill = function (fillCharData) {
+    BufferLine.prototype.fill = function (fillCellData) {
         this._combined = {};
         for (var i = 0; i < this.length; ++i) {
-            this.set(i, fillCharData);
+            this.setCell(i, fillCellData);
         }
     };
     BufferLine.prototype.copyFrom = function (line) {
@@ -877,8 +1131,8 @@ var BufferLine = (function () {
     };
     BufferLine.prototype.getTrimmedLength = function () {
         for (var i = this.length - 1; i >= 0; --i) {
-            if (this._data[i * CELL_SIZE + 1] !== 0) {
-                return i + this._data[i * CELL_SIZE + 2];
+            if ((this._data[i * CELL_SIZE + 0] & 4194303)) {
+                return i + (this._data[i * CELL_SIZE + 0] >> 22);
             }
         }
         return 0;
@@ -916,9 +1170,10 @@ var BufferLine = (function () {
         }
         var result = '';
         while (startCol < endCol) {
-            var stringData = this._data[startCol * CELL_SIZE + 1];
-            result += (stringData & IS_COMBINED_BIT_MASK) ? this._combined[startCol] : (stringData) ? String.fromCharCode(stringData) : Buffer_1.WHITESPACE_CELL_CHAR;
-            startCol += this._data[startCol * CELL_SIZE + 2] || 1;
+            var content = this._data[startCol * CELL_SIZE + 0];
+            var cp = content & 2097151;
+            result += (content & 2097152) ? this._combined[startCol] : (cp) ? TextDecoder_1.stringFromCodePoint(cp) : Buffer_1.WHITESPACE_CELL_CHAR;
+            startCol += (content >> 22) || 1;
         }
         return result;
     };
@@ -926,11 +1181,10 @@ var BufferLine = (function () {
 }());
 exports.BufferLine = BufferLine;
 
-},{"./Buffer":2}],4:[function(require,module,exports){
+},{"./Buffer":2,"./core/input/TextDecoder":32}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Buffer_1 = require("./Buffer");
-function reflowLargerGetLinesToRemove(lines, newCols, bufferAbsoluteY) {
+function reflowLargerGetLinesToRemove(lines, oldCols, newCols, bufferAbsoluteY, nullCell) {
     var toRemove = [];
     for (var y = 0; y < lines.length - 1; y++) {
         var i = y;
@@ -948,11 +1202,11 @@ function reflowLargerGetLinesToRemove(lines, newCols, bufferAbsoluteY) {
             continue;
         }
         var destLineIndex = 0;
-        var destCol = wrappedLines[destLineIndex].getTrimmedLength();
+        var destCol = getWrappedLineTrimmedLength(wrappedLines, destLineIndex, oldCols);
         var srcLineIndex = 1;
         var srcCol = 0;
         while (srcLineIndex < wrappedLines.length) {
-            var srcTrimmedTineLength = wrappedLines[srcLineIndex].getTrimmedLength();
+            var srcTrimmedTineLength = getWrappedLineTrimmedLength(wrappedLines, srcLineIndex, oldCols);
             var srcRemainingCells = srcTrimmedTineLength - srcCol;
             var destRemainingCells = newCols - destCol;
             var cellsToCopy = Math.min(srcRemainingCells, destRemainingCells);
@@ -970,11 +1224,11 @@ function reflowLargerGetLinesToRemove(lines, newCols, bufferAbsoluteY) {
             if (destCol === 0 && destLineIndex !== 0) {
                 if (wrappedLines[destLineIndex - 1].getWidth(newCols - 1) === 2) {
                     wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[destLineIndex - 1], newCols - 1, destCol++, 1, false);
-                    wrappedLines[destLineIndex - 1].set(newCols - 1, Buffer_1.FILL_CHAR_DATA);
+                    wrappedLines[destLineIndex - 1].setCell(newCols - 1, nullCell);
                 }
             }
         }
-        wrappedLines[destLineIndex].replaceCells(destCol, newCols, Buffer_1.FILL_CHAR_DATA);
+        wrappedLines[destLineIndex].replaceCells(destCol, newCols, nullCell);
         var countToRemove = 0;
         for (var i_1 = wrappedLines.length - 1; i_1 > 0; i_1--) {
             if (i_1 > destLineIndex || wrappedLines[i_1].getTrimmedLength() === 0) {
@@ -1001,7 +1255,7 @@ function reflowLargerCreateNewLayout(lines, toRemove) {
     for (var i = 0; i < lines.length; i++) {
         if (nextToRemoveStart === i) {
             var countToRemove = toRemove[++nextToRemoveIndex];
-            lines.emit('delete', {
+            lines.onDeleteEmitter.fire({
                 index: i - countRemovedSoFar,
                 amount: countToRemove
             });
@@ -1032,7 +1286,7 @@ function reflowLargerApplyNewLayout(lines, newLayout) {
 exports.reflowLargerApplyNewLayout = reflowLargerApplyNewLayout;
 function reflowSmallerGetNewLineLengths(wrappedLines, oldCols, newCols) {
     var newLineLengths = [];
-    var cellsNeeded = wrappedLines.map(function (l) { return l.getTrimmedLength(); }).reduce(function (p, c) { return p + c; });
+    var cellsNeeded = wrappedLines.map(function (l, i) { return getWrappedLineTrimmedLength(wrappedLines, i, oldCols); }).reduce(function (p, c) { return p + c; });
     var srcCol = 0;
     var srcLine = 0;
     var cellsAvailable = 0;
@@ -1042,7 +1296,7 @@ function reflowSmallerGetNewLineLengths(wrappedLines, oldCols, newCols) {
             break;
         }
         srcCol += newCols;
-        var oldTrimmedLength = wrappedLines[srcLine].getTrimmedLength();
+        var oldTrimmedLength = getWrappedLineTrimmedLength(wrappedLines, srcLine, oldCols);
         if (srcCol > oldTrimmedLength) {
             srcCol -= oldTrimmedLength;
             srcLine++;
@@ -1058,37 +1312,39 @@ function reflowSmallerGetNewLineLengths(wrappedLines, oldCols, newCols) {
     return newLineLengths;
 }
 exports.reflowSmallerGetNewLineLengths = reflowSmallerGetNewLineLengths;
-
-},{"./Buffer":2}],5:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
+function getWrappedLineTrimmedLength(lines, i, cols) {
+    if (i === lines.length - 1) {
+        return lines[i].getTrimmedLength();
     }
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
+    var endsInNull = !(lines[i].hasContent(cols - 1)) && lines[i].getWidth(cols - 1) === 1;
+    var followingLineStartsWithWide = lines[i + 1].getWidth(0) === 2;
+    if (endsInNull && followingLineStartsWithWide) {
+        return cols - 1;
+    }
+    return cols;
+}
+exports.getWrappedLineTrimmedLength = getWrappedLineTrimmedLength;
+
+},{}],5:[function(require,module,exports){
+"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("./Buffer");
-var EventEmitter_1 = require("./common/EventEmitter");
-var BufferSet = (function (_super) {
-    __extends(BufferSet, _super);
+var EventEmitter2_1 = require("./common/EventEmitter2");
+var BufferSet = (function () {
     function BufferSet(_terminal) {
-        var _this = _super.call(this) || this;
-        _this._terminal = _terminal;
-        _this._normal = new Buffer_1.Buffer(_this._terminal, true);
-        _this._normal.fillViewportRows();
-        _this._alt = new Buffer_1.Buffer(_this._terminal, false);
-        _this._activeBuffer = _this._normal;
-        _this.setupTabStops();
-        return _this;
+        this._terminal = _terminal;
+        this._onBufferActivate = new EventEmitter2_1.EventEmitter2();
+        this._normal = new Buffer_1.Buffer(this._terminal, true);
+        this._normal.fillViewportRows();
+        this._alt = new Buffer_1.Buffer(this._terminal, false);
+        this._activeBuffer = this._normal;
+        this.setupTabStops();
     }
+    Object.defineProperty(BufferSet.prototype, "onBufferActivate", {
+        get: function () { return this._onBufferActivate.event; },
+        enumerable: true,
+        configurable: true
+    });
     Object.defineProperty(BufferSet.prototype, "alt", {
         get: function () {
             return this._alt;
@@ -1118,7 +1374,7 @@ var BufferSet = (function (_super) {
         this._normal.y = this._alt.y;
         this._alt.clear();
         this._activeBuffer = this._normal;
-        this.emit('activate', {
+        this._onBufferActivate.fire({
             activeBuffer: this._normal,
             inactiveBuffer: this._alt
         });
@@ -1131,7 +1387,7 @@ var BufferSet = (function (_super) {
         this._alt.x = this._normal.x;
         this._alt.y = this._normal.y;
         this._activeBuffer = this._alt;
-        this.emit('activate', {
+        this._onBufferActivate.fire({
             activeBuffer: this._alt,
             inactiveBuffer: this._normal
         });
@@ -1145,10 +1401,62 @@ var BufferSet = (function (_super) {
         this._alt.setupTabStops(i);
     };
     return BufferSet;
-}(EventEmitter_1.EventEmitter));
+}());
 exports.BufferSet = BufferSet;
 
-},{"./Buffer":2,"./common/EventEmitter":19}],6:[function(require,module,exports){
+},{"./Buffer":2,"./common/EventEmitter2":25}],6:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter2_1 = require("./common/EventEmitter2");
+var CharMeasure = (function () {
+    function CharMeasure(document, parentElement) {
+        this._onCharSizeChanged = new EventEmitter2_1.EventEmitter2();
+        this._document = document;
+        this._parentElement = parentElement;
+        this._measureElement = this._document.createElement('span');
+        this._measureElement.classList.add('xterm-char-measure-element');
+        this._measureElement.textContent = 'W';
+        this._measureElement.setAttribute('aria-hidden', 'true');
+        this._parentElement.appendChild(this._measureElement);
+    }
+    Object.defineProperty(CharMeasure.prototype, "onCharSizeChanged", {
+        get: function () { return this._onCharSizeChanged.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(CharMeasure.prototype, "width", {
+        get: function () {
+            return this._width;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(CharMeasure.prototype, "height", {
+        get: function () {
+            return this._height;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    CharMeasure.prototype.measure = function (options) {
+        this._measureElement.style.fontFamily = options.fontFamily;
+        this._measureElement.style.fontSize = options.fontSize + "px";
+        var geometry = this._measureElement.getBoundingClientRect();
+        if (geometry.width === 0 || geometry.height === 0) {
+            return;
+        }
+        var adjustedHeight = Math.ceil(geometry.height);
+        if (this._width !== geometry.width || this._height !== adjustedHeight) {
+            this._width = geometry.width;
+            this._height = adjustedHeight;
+            this._onCharSizeChanged.fire();
+        }
+    };
+    return CharMeasure;
+}());
+exports.CharMeasure = CharMeasure;
+
+},{"./common/EventEmitter2":25}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TypedArrayUtils_1 = require("./common/TypedArrayUtils");
@@ -1291,7 +1599,87 @@ function getStringCellWidth(s) {
 }
 exports.getStringCellWidth = getStringCellWidth;
 
-},{"./common/TypedArrayUtils":21}],7:[function(require,module,exports){
+},{"./common/TypedArrayUtils":28}],8:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+function prepareTextForTerminal(text) {
+    return text.replace(/\r?\n/g, '\r');
+}
+exports.prepareTextForTerminal = prepareTextForTerminal;
+function bracketTextForPaste(text, bracketedPasteMode) {
+    if (bracketedPasteMode) {
+        return '\x1b[200~' + text + '\x1b[201~';
+    }
+    return text;
+}
+exports.bracketTextForPaste = bracketTextForPaste;
+function copyHandler(ev, term, selectionManager) {
+    if (term.browser.isMSIE) {
+        window.clipboardData.setData('Text', selectionManager.selectionText);
+    }
+    else {
+        ev.clipboardData.setData('text/plain', selectionManager.selectionText);
+    }
+    ev.preventDefault();
+}
+exports.copyHandler = copyHandler;
+function pasteHandler(ev, term) {
+    ev.stopPropagation();
+    var text;
+    var dispatchPaste = function (text) {
+        text = prepareTextForTerminal(text);
+        text = bracketTextForPaste(text, term.bracketedPasteMode);
+        term.handler(text);
+        term.textarea.value = '';
+        term.emit('paste', text);
+        term.cancel(ev);
+    };
+    if (term.browser.isMSIE) {
+        if (window.clipboardData) {
+            text = window.clipboardData.getData('Text');
+            dispatchPaste(text);
+        }
+    }
+    else {
+        if (ev.clipboardData) {
+            text = ev.clipboardData.getData('text/plain');
+            dispatchPaste(text);
+        }
+    }
+}
+exports.pasteHandler = pasteHandler;
+function moveTextAreaUnderMouseCursor(ev, term) {
+    var pos = term.screenElement.getBoundingClientRect();
+    var left = ev.clientX - pos.left - 10;
+    var top = ev.clientY - pos.top - 10;
+    term.textarea.style.position = 'absolute';
+    term.textarea.style.width = '20px';
+    term.textarea.style.height = '20px';
+    term.textarea.style.left = left + "px";
+    term.textarea.style.top = top + "px";
+    term.textarea.style.zIndex = '1000';
+    term.textarea.focus();
+    setTimeout(function () {
+        term.textarea.style.position = null;
+        term.textarea.style.width = null;
+        term.textarea.style.height = null;
+        term.textarea.style.left = null;
+        term.textarea.style.top = null;
+        term.textarea.style.zIndex = null;
+    }, 200);
+}
+exports.moveTextAreaUnderMouseCursor = moveTextAreaUnderMouseCursor;
+function rightClickHandler(ev, term, selectionManager, shouldSelectWord) {
+    moveTextAreaUnderMouseCursor(ev, term);
+    if (shouldSelectWord && !selectionManager.isClickInSelection(ev)) {
+        selectionManager.selectWordAtCursor(ev);
+    }
+    term.textarea.value = selectionManager.selectionText;
+    term.textarea.select();
+}
+exports.rightClickHandler = rightClickHandler;
+
+},{}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CompositionHelper = (function () {
@@ -1393,6 +1781,8 @@ var CompositionHelper = (function () {
             this._compositionView.style.top = cursorTop + 'px';
             this._compositionView.style.height = cellHeight + 'px';
             this._compositionView.style.lineHeight = cellHeight + 'px';
+            this._compositionView.style.fontFamily = this._terminal.options.fontFamily;
+            this._compositionView.style.fontSize = this._terminal.options.fontSize + 'px';
             var compositionViewBounds = this._compositionView.getBoundingClientRect();
             this._textarea.style.left = cursorLeft + 'px';
             this._textarea.style.top = cursorTop + 'px';
@@ -1412,7 +1802,7 @@ var CompositionHelper = (function () {
 }());
 exports.CompositionHelper = CompositionHelper;
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -1420,7 +1810,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -1814,7 +2204,7 @@ var EscapeSequenceParser = (function (_super) {
                     var handlers = this._csiHandlers[code];
                     var j = handlers ? handlers.length - 1 : -1;
                     for (; j >= 0; j--) {
-                        if (handlers[j](params, collect)) {
+                        if (handlers[j](params, collect) !== false) {
                             break;
                         }
                     }
@@ -1901,7 +2291,7 @@ var EscapeSequenceParser = (function (_super) {
                             var handlers_1 = this._oscHandlers[identifier];
                             var j_2 = handlers_1 ? handlers_1.length - 1 : -1;
                             for (; j_2 >= 0; j_2--) {
-                                if (handlers_1[j_2](content)) {
+                                if (handlers_1[j_2](content) !== false) {
                                     break;
                                 }
                             }
@@ -1936,7 +2326,7 @@ var EscapeSequenceParser = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EscapeSequenceParser = EscapeSequenceParser;
 
-},{"./common/Lifecycle":20,"./core/input/TextDecoder":26}],9:[function(require,module,exports){
+},{"./common/Lifecycle":26,"./core/input/TextDecoder":32}],11:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -1944,7 +2334,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -1960,6 +2350,8 @@ var EscapeSequenceParser_1 = require("./EscapeSequenceParser");
 var Lifecycle_1 = require("./common/Lifecycle");
 var TypedArrayUtils_1 = require("./common/TypedArrayUtils");
 var TextDecoder_1 = require("./core/input/TextDecoder");
+var BufferLine_1 = require("./BufferLine");
+var EventEmitter2_1 = require("./common/EventEmitter2");
 var GLEVEL = { '(': 0, ')': 1, '*': 2, '+': 3, '-': 1, '.': 2 };
 var DECRQSS = (function () {
     function DECRQSS(_terminal) {
@@ -2007,6 +2399,11 @@ var InputHandler = (function (_super) {
         _this._parser = _parser;
         _this._parseBuffer = new Uint32Array(4096);
         _this._stringDecoder = new TextDecoder_1.StringToUtf32();
+        _this._workCell = new BufferLine_1.CellData();
+        _this._onCursorMove = new EventEmitter2_1.EventEmitter2();
+        _this._onData = new EventEmitter2_1.EventEmitter2();
+        _this._onLineFeed = new EventEmitter2_1.EventEmitter2();
+        _this._onScroll = new EventEmitter2_1.EventEmitter2();
         _this.register(_this._parser);
         _this._parser.setCsiHandlerFallback(function (collect, params, flag) {
             _this._terminal.error('Unknown CSI code: ', { collect: collect, params: params, flag: String.fromCharCode(flag) });
@@ -2107,6 +2504,26 @@ var InputHandler = (function (_super) {
         _this._parser.setDcsHandler('$q', new DECRQSS(_this._terminal));
         return _this;
     }
+    Object.defineProperty(InputHandler.prototype, "onCursorMove", {
+        get: function () { return this._onCursorMove.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(InputHandler.prototype, "onData", {
+        get: function () { return this._onData.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(InputHandler.prototype, "onLineFeed", {
+        get: function () { return this._onLineFeed.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(InputHandler.prototype, "onScroll", {
+        get: function () { return this._onScroll.event; },
+        enumerable: true,
+        configurable: true
+    });
     InputHandler.prototype.dispose = function () {
         _super.prototype.dispose.call(this);
         this._terminal = null;
@@ -2124,18 +2541,14 @@ var InputHandler = (function (_super) {
         if (this._parseBuffer.length < data.length) {
             this._parseBuffer = new Uint32Array(data.length);
         }
-        for (var i = 0; i < data.length; ++i) {
-            this._parseBuffer[i] = data.charCodeAt(i);
-        }
         this._parser.parse(this._parseBuffer, this._stringDecoder.decode(data, this._parseBuffer));
         buffer = this._terminal.buffer;
         if (buffer.x !== cursorStartX || buffer.y !== cursorStartY) {
-            this._terminal.emit('cursormove');
+            this._onCursorMove.fire();
         }
     };
     InputHandler.prototype.print = function (data, start, end) {
         var code;
-        var char;
         var chWidth;
         var buffer = this._terminal.buffer;
         var charset = this._terminal.charset;
@@ -2143,39 +2556,27 @@ var InputHandler = (function (_super) {
         var cols = this._terminal.cols;
         var wraparoundMode = this._terminal.wraparoundMode;
         var insertMode = this._terminal.insertMode;
-        var curAttr = this._terminal.curAttr;
+        var curAttr = this._terminal.curAttrData;
         var bufferRow = buffer.lines.get(buffer.y + buffer.ybase);
         this._terminal.updateRange(buffer.y);
         for (var pos = start; pos < end; ++pos) {
             code = data[pos];
-            char = TextDecoder_1.stringFromCodePoint(code);
             chWidth = CharWidth_1.wcwidth(code);
             if (code < 127 && charset) {
-                var ch = charset[char];
+                var ch = charset[String.fromCharCode(code)];
                 if (ch) {
                     code = ch.charCodeAt(0);
-                    char = ch;
                 }
             }
             if (screenReaderMode) {
-                this._terminal.emit('a11y.char', char);
+                this._terminal.emit('a11y.char', TextDecoder_1.stringFromCodePoint(code));
             }
             if (!chWidth && buffer.x) {
-                var chMinusOne = bufferRow.get(buffer.x - 1);
-                if (chMinusOne) {
-                    if (!chMinusOne[Buffer_1.CHAR_DATA_WIDTH_INDEX]) {
-                        var chMinusTwo = bufferRow.get(buffer.x - 2);
-                        if (chMinusTwo) {
-                            chMinusTwo[Buffer_1.CHAR_DATA_CHAR_INDEX] += char;
-                            chMinusTwo[Buffer_1.CHAR_DATA_CODE_INDEX] = code;
-                            bufferRow.set(buffer.x - 2, chMinusTwo);
-                        }
-                    }
-                    else {
-                        chMinusOne[Buffer_1.CHAR_DATA_CHAR_INDEX] += char;
-                        chMinusOne[Buffer_1.CHAR_DATA_CODE_INDEX] = code;
-                        bufferRow.set(buffer.x - 1, chMinusOne);
-                    }
+                if (!bufferRow.getWidth(buffer.x - 1)) {
+                    bufferRow.addCodepointToCell(buffer.x - 2, code);
+                }
+                else {
+                    bufferRow.addCodepointToCell(buffer.x - 1, code);
                 }
                 continue;
             }
@@ -2199,16 +2600,15 @@ var InputHandler = (function (_super) {
                 }
             }
             if (insertMode) {
-                bufferRow.insertCells(buffer.x, chWidth, [curAttr, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
-                var lastCell = bufferRow.get(cols - 1);
-                if (lastCell[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 2) {
-                    bufferRow.set(cols - 1, [curAttr, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
+                bufferRow.insertCells(buffer.x, chWidth, buffer.getNullCell(curAttr));
+                if (bufferRow.getWidth(cols - 1) === 2) {
+                    bufferRow.setCellFromCodePoint(cols - 1, Buffer_1.NULL_CELL_CODE, Buffer_1.NULL_CELL_WIDTH, curAttr.fg, curAttr.bg);
                 }
             }
-            bufferRow.set(buffer.x++, [curAttr, char, chWidth, code]);
+            bufferRow.setCellFromCodePoint(buffer.x++, code, chWidth, curAttr.fg, curAttr.bg);
             if (chWidth > 0) {
                 while (--chWidth) {
-                    bufferRow.set(buffer.x++, [curAttr, '', 0, undefined]);
+                    bufferRow.setCellFromCodePoint(buffer.x++, 0, 0, curAttr.fg, curAttr.bg);
                 }
             }
         }
@@ -2236,7 +2636,7 @@ var InputHandler = (function (_super) {
         if (buffer.x >= this._terminal.cols) {
             buffer.x--;
         }
-        this._terminal.emit('linefeed');
+        this._onLineFeed.fire();
     };
     InputHandler.prototype.carriageReturn = function () {
         this._terminal.buffer.x = 0;
@@ -2260,7 +2660,7 @@ var InputHandler = (function (_super) {
         this._terminal.setgLevel(0);
     };
     InputHandler.prototype.insertChars = function (params) {
-        this._terminal.buffer.lines.get(this._terminal.buffer.y + this._terminal.buffer.ybase).insertCells(this._terminal.buffer.x, params[0] || 1, [this._terminal.eraseAttr(), Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
+        this._terminal.buffer.lines.get(this._terminal.buffer.y + this._terminal.buffer.ybase).insertCells(this._terminal.buffer.x, params[0] || 1, this._terminal.buffer.getNullCell(this._terminal.eraseAttrData()));
         this._terminal.updateRange(this._terminal.buffer.y);
     };
     InputHandler.prototype.cursorUp = function (params) {
@@ -2371,7 +2771,7 @@ var InputHandler = (function (_super) {
     InputHandler.prototype._eraseInBufferLine = function (y, start, end, clearWrap) {
         if (clearWrap === void 0) { clearWrap = false; }
         var line = this._terminal.buffer.lines.get(this._terminal.buffer.ybase + y);
-        line.replaceCells(start, end, [this._terminal.eraseAttr(), Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
+        line.replaceCells(start, end, this._terminal.buffer.getNullCell(this._terminal.eraseAttrData()));
         if (clearWrap) {
             line.isWrapped = false;
         }
@@ -2417,7 +2817,7 @@ var InputHandler = (function (_super) {
                     this._terminal.buffer.lines.trimStart(scrollBackSize);
                     this._terminal.buffer.ybase = Math.max(this._terminal.buffer.ybase - scrollBackSize, 0);
                     this._terminal.buffer.ydisp = Math.max(this._terminal.buffer.ydisp - scrollBackSize, 0);
-                    this._terminal.emit('scroll', 0);
+                    this._onScroll.fire(0);
                 }
                 break;
         }
@@ -2447,7 +2847,7 @@ var InputHandler = (function (_super) {
         var scrollBottomAbsolute = this._terminal.rows - 1 + buffer.ybase - scrollBottomRowsOffset + 1;
         while (param--) {
             buffer.lines.splice(scrollBottomAbsolute - 1, 1);
-            buffer.lines.splice(row, 0, buffer.getBlankLine(this._terminal.eraseAttr()));
+            buffer.lines.splice(row, 0, buffer.getBlankLine(this._terminal.eraseAttrData()));
         }
         this._terminal.updateRange(buffer.y);
         this._terminal.updateRange(buffer.scrollBottom);
@@ -2464,13 +2864,13 @@ var InputHandler = (function (_super) {
         j = this._terminal.rows - 1 + buffer.ybase - j;
         while (param--) {
             buffer.lines.splice(row, 1);
-            buffer.lines.splice(j, 0, buffer.getBlankLine(this._terminal.eraseAttr()));
+            buffer.lines.splice(j, 0, buffer.getBlankLine(this._terminal.eraseAttrData()));
         }
         this._terminal.updateRange(buffer.y);
         this._terminal.updateRange(buffer.scrollBottom);
     };
     InputHandler.prototype.deleteChars = function (params) {
-        this._terminal.buffer.lines.get(this._terminal.buffer.y + this._terminal.buffer.ybase).deleteCells(this._terminal.buffer.x, params[0] || 1, [this._terminal.eraseAttr(), Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
+        this._terminal.buffer.lines.get(this._terminal.buffer.y + this._terminal.buffer.ybase).deleteCells(this._terminal.buffer.x, params[0] || 1, this._terminal.buffer.getNullCell(this._terminal.eraseAttrData()));
         this._terminal.updateRange(this._terminal.buffer.y);
     };
     InputHandler.prototype.scrollUp = function (params) {
@@ -2478,7 +2878,7 @@ var InputHandler = (function (_super) {
         var buffer = this._terminal.buffer;
         while (param--) {
             buffer.lines.splice(buffer.ybase + buffer.scrollTop, 1);
-            buffer.lines.splice(buffer.ybase + buffer.scrollBottom, 0, buffer.getBlankLine(Buffer_1.DEFAULT_ATTR));
+            buffer.lines.splice(buffer.ybase + buffer.scrollBottom, 0, buffer.getBlankLine(Buffer_1.DEFAULT_ATTR_DATA));
         }
         this._terminal.updateRange(buffer.scrollTop);
         this._terminal.updateRange(buffer.scrollBottom);
@@ -2489,14 +2889,14 @@ var InputHandler = (function (_super) {
             var buffer = this._terminal.buffer;
             while (param--) {
                 buffer.lines.splice(buffer.ybase + buffer.scrollBottom, 1);
-                buffer.lines.splice(buffer.ybase + buffer.scrollBottom, 0, buffer.getBlankLine(Buffer_1.DEFAULT_ATTR));
+                buffer.lines.splice(buffer.ybase + buffer.scrollTop, 0, buffer.getBlankLine(Buffer_1.DEFAULT_ATTR_DATA));
             }
             this._terminal.updateRange(buffer.scrollTop);
             this._terminal.updateRange(buffer.scrollBottom);
         }
     };
     InputHandler.prototype.eraseChars = function (params) {
-        this._terminal.buffer.lines.get(this._terminal.buffer.y + this._terminal.buffer.ybase).replaceCells(this._terminal.buffer.x, this._terminal.buffer.x + (params[0] || 1), [this._terminal.eraseAttr(), Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
+        this._terminal.buffer.lines.get(this._terminal.buffer.y + this._terminal.buffer.ybase).replaceCells(this._terminal.buffer.x, this._terminal.buffer.x + (params[0] || 1), this._terminal.buffer.getNullCell(this._terminal.eraseAttrData()));
     };
     InputHandler.prototype.cursorBackwardTab = function (params) {
         var param = params[0] || 1;
@@ -2528,7 +2928,8 @@ var InputHandler = (function (_super) {
     InputHandler.prototype.repeatPrecedingCharacter = function (params) {
         var buffer = this._terminal.buffer;
         var line = buffer.lines.get(buffer.ybase + buffer.y);
-        line.replaceCells(buffer.x, buffer.x + (params[0] || 1), line.get(buffer.x - 1) || [Buffer_1.DEFAULT_ATTR, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
+        line.loadCell(buffer.x - 1, this._workCell);
+        line.replaceCells(buffer.x, buffer.x + (params[0] || 1), (this._workCell.content !== undefined) ? this._workCell : buffer.getNullCell(Buffer_1.DEFAULT_ATTR_DATA));
     };
     InputHandler.prototype.sendDeviceAttributes = function (params, collect) {
         if (params[0] > 0) {
@@ -2660,7 +3061,9 @@ var InputHandler = (function (_super) {
                     if (this._terminal.element) {
                         this._terminal.element.classList.add('enable-mouse-events');
                     }
-                    this._terminal.selectionManager.disable();
+                    if (this._terminal.selectionManager) {
+                        this._terminal.selectionManager.disable();
+                    }
                     this._terminal.log('Binding to mouse events.');
                     break;
                 case 1004:
@@ -2685,7 +3088,7 @@ var InputHandler = (function (_super) {
                     this.saveCursor(params);
                 case 47:
                 case 1047:
-                    this._terminal.buffers.activateAltBuffer(this._terminal.eraseAttr());
+                    this._terminal.buffers.activateAltBuffer(this._terminal.eraseAttrData());
                     this._terminal.refresh(0, this._terminal.rows - 1);
                     if (this._terminal.viewport) {
                         this._terminal.viewport.syncScrollArea();
@@ -2751,7 +3154,9 @@ var InputHandler = (function (_super) {
                     if (this._terminal.element) {
                         this._terminal.element.classList.remove('enable-mouse-events');
                     }
-                    this._terminal.selectionManager.enable();
+                    if (this._terminal.selectionManager) {
+                        this._terminal.selectionManager.enable();
+                    }
                     break;
                 case 1004:
                     this._terminal.sendFocus = false;
@@ -2792,129 +3197,134 @@ var InputHandler = (function (_super) {
     };
     InputHandler.prototype.charAttributes = function (params) {
         if (params.length === 1 && params[0] === 0) {
-            this._terminal.curAttr = Buffer_1.DEFAULT_ATTR;
+            this._terminal.curAttrData.fg = Buffer_1.DEFAULT_ATTR_DATA.fg;
+            this._terminal.curAttrData.bg = Buffer_1.DEFAULT_ATTR_DATA.bg;
             return;
         }
         var l = params.length;
-        var flags = this._terminal.curAttr >> 18;
-        var fg = (this._terminal.curAttr >> 9) & 0x1ff;
-        var bg = this._terminal.curAttr & 0x1ff;
         var p;
+        var attr = this._terminal.curAttrData;
         for (var i = 0; i < l; i++) {
             p = params[i];
             if (p >= 30 && p <= 37) {
-                fg = p - 30;
+                attr.fg &= ~(50331648 | 255);
+                attr.fg |= 16777216 | (p - 30);
             }
             else if (p >= 40 && p <= 47) {
-                bg = p - 40;
+                attr.bg &= ~(50331648 | 255);
+                attr.bg |= 16777216 | (p - 40);
             }
             else if (p >= 90 && p <= 97) {
-                p += 8;
-                fg = p - 90;
+                attr.fg &= ~(50331648 | 255);
+                attr.fg |= 16777216 | (p - 90) | 8;
             }
             else if (p >= 100 && p <= 107) {
-                p += 8;
-                bg = p - 100;
+                attr.bg &= ~(50331648 | 255);
+                attr.bg |= 16777216 | (p - 100) | 8;
             }
             else if (p === 0) {
-                flags = Buffer_1.DEFAULT_ATTR >> 18;
-                fg = (Buffer_1.DEFAULT_ATTR >> 9) & 0x1ff;
-                bg = Buffer_1.DEFAULT_ATTR & 0x1ff;
+                attr.fg = Buffer_1.DEFAULT_ATTR_DATA.fg;
+                attr.bg = Buffer_1.DEFAULT_ATTR_DATA.bg;
             }
             else if (p === 1) {
-                flags |= 1;
+                attr.fg |= 134217728;
             }
             else if (p === 3) {
-                flags |= 64;
+                attr.bg |= 67108864;
             }
             else if (p === 4) {
-                flags |= 2;
+                attr.fg |= 268435456;
             }
             else if (p === 5) {
-                flags |= 4;
+                attr.fg |= 536870912;
             }
             else if (p === 7) {
-                flags |= 8;
+                attr.fg |= 67108864;
             }
             else if (p === 8) {
-                flags |= 16;
+                attr.fg |= 1073741824;
             }
             else if (p === 2) {
-                flags |= 32;
+                attr.bg |= 134217728;
             }
             else if (p === 22) {
-                flags &= ~1;
-                flags &= ~32;
+                attr.fg &= ~134217728;
+                attr.bg &= ~134217728;
             }
             else if (p === 23) {
-                flags &= ~64;
+                attr.bg &= ~67108864;
             }
             else if (p === 24) {
-                flags &= ~2;
+                attr.fg &= ~268435456;
             }
             else if (p === 25) {
-                flags &= ~4;
+                attr.fg &= ~536870912;
             }
             else if (p === 27) {
-                flags &= ~8;
+                attr.fg &= ~67108864;
             }
             else if (p === 28) {
-                flags &= ~16;
+                attr.fg &= ~1073741824;
             }
             else if (p === 39) {
-                fg = (Buffer_1.DEFAULT_ATTR >> 9) & 0x1ff;
+                attr.fg &= ~(50331648 | 16777215);
+                attr.fg |= Buffer_1.DEFAULT_ATTR_DATA.fg & (255 | 16777215);
             }
             else if (p === 49) {
-                bg = Buffer_1.DEFAULT_ATTR & 0x1ff;
+                attr.bg &= ~(50331648 | 16777215);
+                attr.bg |= Buffer_1.DEFAULT_ATTR_DATA.bg & (255 | 16777215);
             }
             else if (p === 38) {
                 if (params[i + 1] === 2) {
                     i += 2;
-                    fg = this._terminal.matchColor(params[i] & 0xff, params[i + 1] & 0xff, params[i + 2] & 0xff);
-                    if (fg === -1)
-                        fg = 0x1ff;
+                    attr.fg |= 50331648;
+                    attr.fg &= ~16777215;
+                    attr.fg |= BufferLine_1.AttributeData.fromColorRGB([params[i], params[i + 1], params[i + 2]]);
                     i += 2;
                 }
                 else if (params[i + 1] === 5) {
                     i += 2;
                     p = params[i] & 0xff;
-                    fg = p;
+                    attr.fg &= ~255;
+                    attr.fg |= 33554432 | p;
                 }
             }
             else if (p === 48) {
                 if (params[i + 1] === 2) {
                     i += 2;
-                    bg = this._terminal.matchColor(params[i] & 0xff, params[i + 1] & 0xff, params[i + 2] & 0xff);
-                    if (bg === -1)
-                        bg = 0x1ff;
+                    attr.bg |= 50331648;
+                    attr.bg &= ~16777215;
+                    attr.bg |= BufferLine_1.AttributeData.fromColorRGB([params[i], params[i + 1], params[i + 2]]);
                     i += 2;
                 }
                 else if (params[i + 1] === 5) {
                     i += 2;
                     p = params[i] & 0xff;
-                    bg = p;
+                    attr.bg &= ~255;
+                    attr.bg |= 33554432 | p;
                 }
             }
             else if (p === 100) {
-                fg = (Buffer_1.DEFAULT_ATTR >> 9) & 0x1ff;
-                bg = Buffer_1.DEFAULT_ATTR & 0x1ff;
+                attr.fg &= ~(50331648 | 16777215);
+                attr.fg |= Buffer_1.DEFAULT_ATTR_DATA.fg & (255 | 16777215);
+                attr.bg &= ~(50331648 | 16777215);
+                attr.bg |= Buffer_1.DEFAULT_ATTR_DATA.bg & (255 | 16777215);
             }
             else {
                 this._terminal.error('Unknown SGR attribute: %d.', p);
             }
         }
-        this._terminal.curAttr = (flags << 18) | (fg << 9) | bg;
     };
     InputHandler.prototype.deviceStatus = function (params, collect) {
         if (!collect) {
             switch (params[0]) {
                 case 5:
-                    this._terminal.emit('data', EscapeSequences_1.C0.ESC + "[0n");
+                    this._onData.fire(EscapeSequences_1.C0.ESC + "[0n");
                     break;
                 case 6:
                     var y = this._terminal.buffer.y + 1;
                     var x = this._terminal.buffer.x + 1;
-                    this._terminal.emit('data', EscapeSequences_1.C0.ESC + "[" + y + ";" + x + "R");
+                    this._onData.fire(EscapeSequences_1.C0.ESC + "[" + y + ";" + x + "R");
                     break;
             }
         }
@@ -2923,7 +3333,7 @@ var InputHandler = (function (_super) {
                 case 6:
                     var y = this._terminal.buffer.y + 1;
                     var x = this._terminal.buffer.x + 1;
-                    this._terminal.emit('data', EscapeSequences_1.C0.ESC + "[?" + y + ";" + x + "R");
+                    this._onData.fire(EscapeSequences_1.C0.ESC + "[?" + y + ";" + x + "R");
                     break;
                 case 15:
                     break;
@@ -2949,7 +3359,7 @@ var InputHandler = (function (_super) {
             this._terminal.applicationCursor = false;
             this._terminal.buffer.scrollTop = 0;
             this._terminal.buffer.scrollBottom = this._terminal.rows - 1;
-            this._terminal.curAttr = Buffer_1.DEFAULT_ATTR;
+            this._terminal.curAttrData = Buffer_1.DEFAULT_ATTR_DATA;
             this._terminal.buffer.x = this._terminal.buffer.y = 0;
             this._terminal.charset = null;
             this._terminal.glevel = 0;
@@ -2978,8 +3388,9 @@ var InputHandler = (function (_super) {
         }
     };
     InputHandler.prototype.setScrollRegion = function (params, collect) {
-        if (collect)
+        if (collect) {
             return;
+        }
         this._terminal.buffer.scrollTop = (params[0] || 1) - 1;
         this._terminal.buffer.scrollBottom = (params[1] && params[1] <= this._terminal.rows ? params[1] : this._terminal.rows) - 1;
         this._terminal.buffer.x = 0;
@@ -2988,12 +3399,14 @@ var InputHandler = (function (_super) {
     InputHandler.prototype.saveCursor = function (params) {
         this._terminal.buffer.savedX = this._terminal.buffer.x;
         this._terminal.buffer.savedY = this._terminal.buffer.y;
-        this._terminal.buffer.savedCurAttr = this._terminal.curAttr;
+        this._terminal.buffer.savedCurAttrData.fg = this._terminal.curAttrData.fg;
+        this._terminal.buffer.savedCurAttrData.bg = this._terminal.curAttrData.bg;
     };
     InputHandler.prototype.restoreCursor = function (params) {
         this._terminal.buffer.x = this._terminal.buffer.savedX || 0;
         this._terminal.buffer.y = this._terminal.buffer.savedY || 0;
-        this._terminal.curAttr = this._terminal.buffer.savedCurAttr || Buffer_1.DEFAULT_ATTR;
+        this._terminal.curAttrData.fg = this._terminal.buffer.savedCurAttrData.fg;
+        this._terminal.curAttrData.bg = this._terminal.buffer.savedCurAttrData.bg;
     };
     InputHandler.prototype.setTitle = function (data) {
         this._terminal.handleTitle(data);
@@ -3021,11 +3434,15 @@ var InputHandler = (function (_super) {
         this._terminal.setgCharset(0, Charsets_1.DEFAULT_CHARSET);
     };
     InputHandler.prototype.selectCharset = function (collectAndFlag) {
-        if (collectAndFlag.length !== 2)
-            return this.selectDefaultCharset();
-        if (collectAndFlag[0] === '/')
+        if (collectAndFlag.length !== 2) {
+            this.selectDefaultCharset();
             return;
+        }
+        if (collectAndFlag[0] === '/') {
+            return;
+        }
         this._terminal.setgCharset(GLEVEL[collectAndFlag[0]], Charsets_1.CHARSETS[collectAndFlag[1]] || Charsets_1.DEFAULT_CHARSET);
+        return;
     };
     InputHandler.prototype.index = function () {
         this._terminal.index();
@@ -3047,39 +3464,40 @@ var InputHandler = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.InputHandler = InputHandler;
 
-},{"./Buffer":2,"./CharWidth":6,"./EscapeSequenceParser":8,"./common/Lifecycle":20,"./common/TypedArrayUtils":21,"./common/data/EscapeSequences":22,"./core/data/Charsets":24,"./core/input/TextDecoder":26}],10:[function(require,module,exports){
+},{"./Buffer":2,"./BufferLine":3,"./CharWidth":7,"./EscapeSequenceParser":10,"./common/EventEmitter2":25,"./common/Lifecycle":26,"./common/TypedArrayUtils":28,"./common/data/EscapeSequences":29,"./core/data/Charsets":30,"./core/input/TextDecoder":32}],12:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    }
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
-var MouseZoneManager_1 = require("./ui/MouseZoneManager");
-var EventEmitter_1 = require("./common/EventEmitter");
-var Buffer_1 = require("./Buffer");
+var MouseZoneManager_1 = require("./MouseZoneManager");
 var CharWidth_1 = require("./CharWidth");
-var Linkifier = (function (_super) {
-    __extends(Linkifier, _super);
+var EventEmitter2_1 = require("./common/EventEmitter2");
+var Linkifier = (function () {
     function Linkifier(_terminal) {
-        var _this = _super.call(this) || this;
-        _this._terminal = _terminal;
-        _this._linkMatchers = [];
-        _this._nextLinkMatcherId = 0;
-        _this._rowsToLinkify = {
+        this._terminal = _terminal;
+        this._linkMatchers = [];
+        this._nextLinkMatcherId = 0;
+        this._onLinkHover = new EventEmitter2_1.EventEmitter2();
+        this._onLinkLeave = new EventEmitter2_1.EventEmitter2();
+        this._onLinkTooltip = new EventEmitter2_1.EventEmitter2();
+        this._rowsToLinkify = {
             start: null,
             end: null
         };
-        return _this;
     }
+    Object.defineProperty(Linkifier.prototype, "onLinkHover", {
+        get: function () { return this._onLinkHover.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Linkifier.prototype, "onLinkLeave", {
+        get: function () { return this._onLinkLeave.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Linkifier.prototype, "onLinkTooltip", {
+        get: function () { return this._onLinkTooltip.event; },
+        enumerable: true,
+        configurable: true
+    });
     Linkifier.prototype.attachToDom = function (mouseZoneManager) {
         this._mouseZoneManager = mouseZoneManager;
     };
@@ -3186,10 +3604,9 @@ var Linkifier = (function (_super) {
                 return "break";
             }
             var line = this_1._terminal.buffer.lines.get(bufferIndex[0]);
-            var char = line.get(bufferIndex[1]);
+            var attr = line.getFg(bufferIndex[1]);
             var fg;
-            if (char) {
-                var attr = char[Buffer_1.CHAR_DATA_ATTR_INDEX];
+            if (attr) {
                 fg = (attr >> 9) & 0x1ff;
             }
             if (matcher.validationCallback) {
@@ -3229,16 +3646,16 @@ var Linkifier = (function (_super) {
                 return matcher.handler(e, uri);
             }
             window.open(uri, '_blank');
-        }, function (e) {
-            _this.emit("linkhover", _this._createLinkHoverEvent(x1, y1, x2, y2, fg));
+        }, function () {
+            _this._onLinkHover.fire(_this._createLinkHoverEvent(x1, y1, x2, y2, fg));
             _this._terminal.element.classList.add('xterm-cursor-pointer');
         }, function (e) {
-            _this.emit("linktooltip", _this._createLinkHoverEvent(x1, y1, x2, y2, fg));
+            _this._onLinkTooltip.fire(_this._createLinkHoverEvent(x1, y1, x2, y2, fg));
             if (matcher.hoverTooltipCallback) {
                 matcher.hoverTooltipCallback(e, uri);
             }
         }, function () {
-            _this.emit("linkleave", _this._createLinkHoverEvent(x1, y1, x2, y2, fg));
+            _this._onLinkLeave.fire(_this._createLinkHoverEvent(x1, y1, x2, y2, fg));
             _this._terminal.element.classList.remove('xterm-cursor-pointer');
             if (matcher.hoverLeaveCallback) {
                 matcher.hoverLeaveCallback();
@@ -3256,10 +3673,50 @@ var Linkifier = (function (_super) {
     Linkifier.TIME_BEFORE_LINKIFY = 200;
     Linkifier.OVERSCAN_CHAR_LIMIT = 2000;
     return Linkifier;
-}(EventEmitter_1.EventEmitter));
+}());
 exports.Linkifier = Linkifier;
 
-},{"./Buffer":2,"./CharWidth":6,"./common/EventEmitter":19,"./ui/MouseZoneManager":53}],11:[function(require,module,exports){
+},{"./CharWidth":7,"./MouseZoneManager":14,"./common/EventEmitter2":25}],13:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var MouseHelper = (function () {
+    function MouseHelper(_renderer) {
+        this._renderer = _renderer;
+    }
+    MouseHelper.prototype.setRenderer = function (renderer) {
+        this._renderer = renderer;
+    };
+    MouseHelper.getCoordsRelativeToElement = function (event, element) {
+        var rect = element.getBoundingClientRect();
+        return [event.clientX - rect.left, event.clientY - rect.top];
+    };
+    MouseHelper.prototype.getCoords = function (event, element, charMeasure, colCount, rowCount, isSelection) {
+        if (!charMeasure.width || !charMeasure.height) {
+            return null;
+        }
+        var coords = MouseHelper.getCoordsRelativeToElement(event, element);
+        if (!coords) {
+            return null;
+        }
+        coords[0] = Math.ceil((coords[0] + (isSelection ? this._renderer.dimensions.actualCellWidth / 2 : 0)) / this._renderer.dimensions.actualCellWidth);
+        coords[1] = Math.ceil(coords[1] / this._renderer.dimensions.actualCellHeight);
+        coords[0] = Math.min(Math.max(coords[0], 1), colCount + (isSelection ? 1 : 0));
+        coords[1] = Math.min(Math.max(coords[1], 1), rowCount);
+        return coords;
+    };
+    MouseHelper.prototype.getRawByteCoords = function (event, element, charMeasure, colCount, rowCount) {
+        var coords = this.getCoords(event, element, charMeasure, colCount, rowCount);
+        var x = coords[0];
+        var y = coords[1];
+        x += 32;
+        y += 32;
+        return { x: x, y: y };
+    };
+    return MouseHelper;
+}());
+exports.MouseHelper = MouseHelper;
+
+},{}],14:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -3267,7 +3724,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -3275,12 +3732,193 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var MouseHelper_1 = require("./ui/MouseHelper");
-var Browser = require("./core/Platform");
-var EventEmitter_1 = require("./common/EventEmitter");
+var Lifecycle_1 = require("./common/Lifecycle");
+var Lifecycle_2 = require("./ui/Lifecycle");
+var HOVER_DURATION = 500;
+var MouseZoneManager = (function (_super) {
+    __extends(MouseZoneManager, _super);
+    function MouseZoneManager(_terminal) {
+        var _this = _super.call(this) || this;
+        _this._terminal = _terminal;
+        _this._zones = [];
+        _this._areZonesActive = false;
+        _this._tooltipTimeout = null;
+        _this._currentZone = null;
+        _this._lastHoverCoords = [null, null];
+        _this.register(Lifecycle_2.addDisposableDomListener(_this._terminal.element, 'mousedown', function (e) { return _this._onMouseDown(e); }));
+        _this._mouseMoveListener = function (e) { return _this._onMouseMove(e); };
+        _this._mouseLeaveListener = function (e) { return _this._onMouseLeave(e); };
+        _this._clickListener = function (e) { return _this._onClick(e); };
+        return _this;
+    }
+    MouseZoneManager.prototype.dispose = function () {
+        _super.prototype.dispose.call(this);
+        this._deactivate();
+    };
+    MouseZoneManager.prototype.add = function (zone) {
+        this._zones.push(zone);
+        if (this._zones.length === 1) {
+            this._activate();
+        }
+    };
+    MouseZoneManager.prototype.clearAll = function (start, end) {
+        if (this._zones.length === 0) {
+            return;
+        }
+        if (!end) {
+            start = 0;
+            end = this._terminal.rows - 1;
+        }
+        for (var i = 0; i < this._zones.length; i++) {
+            var zone = this._zones[i];
+            if ((zone.y1 > start && zone.y1 <= end + 1) ||
+                (zone.y2 > start && zone.y2 <= end + 1) ||
+                (zone.y1 < start && zone.y2 > end + 1)) {
+                if (this._currentZone && this._currentZone === zone) {
+                    this._currentZone.leaveCallback();
+                    this._currentZone = null;
+                }
+                this._zones.splice(i--, 1);
+            }
+        }
+        if (this._zones.length === 0) {
+            this._deactivate();
+        }
+    };
+    MouseZoneManager.prototype._activate = function () {
+        if (!this._areZonesActive) {
+            this._areZonesActive = true;
+            this._terminal.element.addEventListener('mousemove', this._mouseMoveListener);
+            this._terminal.element.addEventListener('mouseleave', this._mouseLeaveListener);
+            this._terminal.element.addEventListener('click', this._clickListener);
+        }
+    };
+    MouseZoneManager.prototype._deactivate = function () {
+        if (this._areZonesActive) {
+            this._areZonesActive = false;
+            this._terminal.element.removeEventListener('mousemove', this._mouseMoveListener);
+            this._terminal.element.removeEventListener('mouseleave', this._mouseLeaveListener);
+            this._terminal.element.removeEventListener('click', this._clickListener);
+        }
+    };
+    MouseZoneManager.prototype._onMouseMove = function (e) {
+        if (this._lastHoverCoords[0] !== e.pageX || this._lastHoverCoords[1] !== e.pageY) {
+            this._onHover(e);
+            this._lastHoverCoords = [e.pageX, e.pageY];
+        }
+    };
+    MouseZoneManager.prototype._onHover = function (e) {
+        var _this = this;
+        var zone = this._findZoneEventAt(e);
+        if (zone === this._currentZone) {
+            return;
+        }
+        if (this._currentZone) {
+            this._currentZone.leaveCallback();
+            this._currentZone = null;
+            if (this._tooltipTimeout) {
+                clearTimeout(this._tooltipTimeout);
+            }
+        }
+        if (!zone) {
+            return;
+        }
+        this._currentZone = zone;
+        if (zone.hoverCallback) {
+            zone.hoverCallback(e);
+        }
+        this._tooltipTimeout = setTimeout(function () { return _this._onTooltip(e); }, HOVER_DURATION);
+    };
+    MouseZoneManager.prototype._onTooltip = function (e) {
+        this._tooltipTimeout = null;
+        var zone = this._findZoneEventAt(e);
+        if (zone && zone.tooltipCallback) {
+            zone.tooltipCallback(e);
+        }
+    };
+    MouseZoneManager.prototype._onMouseDown = function (e) {
+        this._initialSelectionLength = this._terminal.getSelection().length;
+        if (!this._areZonesActive) {
+            return;
+        }
+        var zone = this._findZoneEventAt(e);
+        if (zone) {
+            if (zone.willLinkActivate(e)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }
+        }
+    };
+    MouseZoneManager.prototype._onMouseLeave = function (e) {
+        if (this._currentZone) {
+            this._currentZone.leaveCallback();
+            this._currentZone = null;
+            if (this._tooltipTimeout) {
+                clearTimeout(this._tooltipTimeout);
+            }
+        }
+    };
+    MouseZoneManager.prototype._onClick = function (e) {
+        var zone = this._findZoneEventAt(e);
+        var currentSelectionLength = this._terminal.getSelection().length;
+        if (zone && currentSelectionLength === this._initialSelectionLength) {
+            zone.clickCallback(e);
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    };
+    MouseZoneManager.prototype._findZoneEventAt = function (e) {
+        var coords = this._terminal.mouseHelper.getCoords(e, this._terminal.screenElement, this._terminal.charMeasure, this._terminal.cols, this._terminal.rows);
+        if (!coords) {
+            return null;
+        }
+        var x = coords[0];
+        var y = coords[1];
+        for (var i = 0; i < this._zones.length; i++) {
+            var zone = this._zones[i];
+            if (zone.y1 === zone.y2) {
+                if (y === zone.y1 && x >= zone.x1 && x < zone.x2) {
+                    return zone;
+                }
+            }
+            else {
+                if ((y === zone.y1 && x >= zone.x1) ||
+                    (y === zone.y2 && x < zone.x2) ||
+                    (y > zone.y1 && y < zone.y2)) {
+                    return zone;
+                }
+            }
+        }
+        return null;
+    };
+    return MouseZoneManager;
+}(Lifecycle_1.Disposable));
+exports.MouseZoneManager = MouseZoneManager;
+var MouseZone = (function () {
+    function MouseZone(x1, y1, x2, y2, clickCallback, hoverCallback, tooltipCallback, leaveCallback, willLinkActivate) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.clickCallback = clickCallback;
+        this.hoverCallback = hoverCallback;
+        this.tooltipCallback = tooltipCallback;
+        this.leaveCallback = leaveCallback;
+        this.willLinkActivate = willLinkActivate;
+    }
+    return MouseZone;
+}());
+exports.MouseZone = MouseZone;
+
+},{"./common/Lifecycle":26,"./ui/Lifecycle":55}],15:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var MouseHelper_1 = require("./MouseHelper");
+var Browser = require("./common/Platform");
 var SelectionModel_1 = require("./SelectionModel");
-var Buffer_1 = require("./Buffer");
 var AltClickHandler_1 = require("./handlers/AltClickHandler");
+var BufferLine_1 = require("./BufferLine");
+var EventEmitter2_1 = require("./common/EventEmitter2");
 var DRAG_SCROLL_MAX_THRESHOLD = 50;
 var DRAG_SCROLL_MAX_SPEED = 15;
 var DRAG_SCROLL_INTERVAL = 50;
@@ -3288,21 +3926,36 @@ var ALT_CLICK_MOVE_CURSOR_TIME = 500;
 var WORD_SEPARATORS = ' ()[]{}\'"';
 var NON_BREAKING_SPACE_CHAR = String.fromCharCode(160);
 var ALL_NON_BREAKING_SPACE_REGEX = new RegExp(NON_BREAKING_SPACE_CHAR, 'g');
-var SelectionManager = (function (_super) {
-    __extends(SelectionManager, _super);
+var SelectionManager = (function () {
     function SelectionManager(_terminal, _charMeasure) {
-        var _this = _super.call(this) || this;
-        _this._terminal = _terminal;
-        _this._charMeasure = _charMeasure;
-        _this._enabled = true;
-        _this._initListeners();
-        _this.enable();
-        _this._model = new SelectionModel_1.SelectionModel(_terminal);
-        _this._activeSelectionMode = 0;
-        return _this;
+        this._terminal = _terminal;
+        this._charMeasure = _charMeasure;
+        this._enabled = true;
+        this._workCell = new BufferLine_1.CellData();
+        this._onLinuxMouseSelection = new EventEmitter2_1.EventEmitter2();
+        this._onRedrawRequest = new EventEmitter2_1.EventEmitter2();
+        this._onSelectionChange = new EventEmitter2_1.EventEmitter2();
+        this._initListeners();
+        this.enable();
+        this._model = new SelectionModel_1.SelectionModel(_terminal);
+        this._activeSelectionMode = 0;
     }
+    Object.defineProperty(SelectionManager.prototype, "onLinuxMouseSelection", {
+        get: function () { return this._onLinuxMouseSelection.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(SelectionManager.prototype, "onRedrawRequest", {
+        get: function () { return this._onRedrawRequest.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(SelectionManager.prototype, "onSelectionChange", {
+        get: function () { return this._onSelectionChange.event; },
+        enumerable: true,
+        configurable: true
+    });
     SelectionManager.prototype.dispose = function () {
-        _super.prototype.dispose.call(this);
         this._removeMouseDownListeners();
     };
     Object.defineProperty(SelectionManager.prototype, "_buffer", {
@@ -3316,13 +3969,12 @@ var SelectionManager = (function (_super) {
         var _this = this;
         this._mouseMoveListener = function (event) { return _this._onMouseMove(event); };
         this._mouseUpListener = function (event) { return _this._onMouseUp(event); };
-        this._trimListener = function (amount) { return _this._onTrim(amount); };
         this.initBuffersListeners();
     };
     SelectionManager.prototype.initBuffersListeners = function () {
         var _this = this;
-        this._terminal.buffer.lines.on('trim', this._trimListener);
-        this._terminal.buffers.on('activate', function (e) { return _this._onBufferActivate(e); });
+        this._trimListener = this._terminal.buffer.lines.onTrim(function (amount) { return _this._onTrim(amount); });
+        this._terminal.buffers.onBufferActivate(function (e) { return _this._onBufferActivate(e); });
     };
     SelectionManager.prototype.disable = function () {
         this.clearSelection();
@@ -3407,21 +4059,21 @@ var SelectionManager = (function (_super) {
         this._removeMouseDownListeners();
         this.refresh();
     };
-    SelectionManager.prototype.refresh = function (isNewSelection) {
+    SelectionManager.prototype.refresh = function (isLinuxMouseSelection) {
         var _this = this;
         if (!this._refreshAnimationFrame) {
             this._refreshAnimationFrame = window.requestAnimationFrame(function () { return _this._refresh(); });
         }
-        if (Browser.isLinux && isNewSelection) {
+        if (Browser.isLinux && isLinuxMouseSelection) {
             var selectionText = this.selectionText;
             if (selectionText.length) {
-                this.emit('newselection', this.selectionText);
+                this._onLinuxMouseSelection.fire(this.selectionText);
             }
         }
     };
     SelectionManager.prototype._refresh = function () {
         this._refreshAnimationFrame = null;
-        this.emit('refresh', {
+        this._onRedrawRequest.fire({
             start: this._model.finalSelectionStart,
             end: this._model.finalSelectionEnd,
             columnSelectMode: this._activeSelectionMode === 3
@@ -3453,7 +4105,7 @@ var SelectionManager = (function (_super) {
     SelectionManager.prototype.selectAll = function () {
         this._model.isSelectAllActive = true;
         this.refresh();
-        this._terminal.emit('selection');
+        this._onSelectionChange.fire();
     };
     SelectionManager.prototype.selectLines = function (start, end) {
         this._model.clearSelection();
@@ -3462,7 +4114,7 @@ var SelectionManager = (function (_super) {
         this._model.selectionStart = [0, start];
         this._model.selectionEnd = [this._terminal.cols, end];
         this.refresh();
-        this._terminal.emit('selection');
+        this._onSelectionChange.fire();
     };
     SelectionManager.prototype._onTrim = function (amount) {
         var needsRefresh = this._model.onTrim(amount);
@@ -3567,8 +4219,7 @@ var SelectionManager = (function (_super) {
         if (line.length >= this._model.selectionStart[0]) {
             return;
         }
-        var char = line.get(this._model.selectionStart[0]);
-        if (char[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0) {
+        if (line.hasWidth(this._model.selectionStart[0]) === 0) {
             this._model.selectionStart[0]++;
         }
     };
@@ -3618,8 +4269,7 @@ var SelectionManager = (function (_super) {
             }
         }
         if (this._model.selectionEnd[1] < this._buffer.lines.length) {
-            var char = this._buffer.lines.get(this._model.selectionEnd[1]).get(this._model.selectionEnd[0]);
-            if (char && char[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0) {
+            if (this._buffer.lines.get(this._model.selectionEnd[1]).hasWidth(this._model.selectionEnd[0]) === 0) {
                 this._model.selectionEnd[0]++;
             }
         }
@@ -3654,23 +4304,26 @@ var SelectionManager = (function (_super) {
             (new AltClickHandler_1.AltClickHandler(event, this._terminal)).move();
         }
         else if (this.hasSelection) {
-            this._terminal.emit('selection');
+            this._onSelectionChange.fire();
         }
     };
     SelectionManager.prototype._onBufferActivate = function (e) {
+        var _this = this;
         this.clearSelection();
-        e.inactiveBuffer.lines.off('trim', this._trimListener);
-        e.activeBuffer.lines.on('trim', this._trimListener);
+        if (this._trimListener) {
+            this._trimListener.dispose();
+        }
+        this._trimListener = e.activeBuffer.lines.onTrim(function (amount) { return _this._onTrim(amount); });
     };
     SelectionManager.prototype._convertViewportColToCharacterIndex = function (bufferLine, coords) {
         var charIndex = coords[0];
         for (var i = 0; coords[0] >= i; i++) {
-            var char = bufferLine.get(i);
-            if (char[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0) {
+            var length_1 = bufferLine.loadCell(i, this._workCell).getChars().length;
+            if (this._workCell.getWidth() === 0) {
                 charIndex--;
             }
-            else if (char[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 1 && coords[0] !== i) {
-                charIndex += char[Buffer_1.CHAR_DATA_CHAR_INDEX].length - 1;
+            else if (length_1 > 1 && coords[0] !== i) {
+                charIndex += length_1 - 1;
             }
         }
         return charIndex;
@@ -3711,40 +4364,43 @@ var SelectionManager = (function (_super) {
         else {
             var startCol = coords[0];
             var endCol = coords[0];
-            if (bufferLine.get(startCol)[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0) {
+            if (bufferLine.getWidth(startCol) === 0) {
                 leftWideCharCount++;
                 startCol--;
             }
-            if (bufferLine.get(endCol)[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 2) {
+            if (bufferLine.getWidth(endCol) === 2) {
                 rightWideCharCount++;
                 endCol++;
             }
-            if (bufferLine.get(endCol)[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 1) {
-                rightLongCharOffset += bufferLine.get(endCol)[Buffer_1.CHAR_DATA_CHAR_INDEX].length - 1;
-                endIndex += bufferLine.get(endCol)[Buffer_1.CHAR_DATA_CHAR_INDEX].length - 1;
+            var length_2 = bufferLine.getString(endCol).length;
+            if (length_2 > 1) {
+                rightLongCharOffset += length_2 - 1;
+                endIndex += length_2 - 1;
             }
-            while (startCol > 0 && startIndex > 0 && !this._isCharWordSeparator(bufferLine.get(startCol - 1))) {
-                var char = bufferLine.get(startCol - 1);
-                if (char[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0) {
+            while (startCol > 0 && startIndex > 0 && !this._isCharWordSeparator(bufferLine.loadCell(startCol - 1, this._workCell))) {
+                bufferLine.loadCell(startCol - 1, this._workCell);
+                var length_3 = this._workCell.getChars().length;
+                if (this._workCell.getWidth() === 0) {
                     leftWideCharCount++;
                     startCol--;
                 }
-                else if (char[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 1) {
-                    leftLongCharOffset += char[Buffer_1.CHAR_DATA_CHAR_INDEX].length - 1;
-                    startIndex -= char[Buffer_1.CHAR_DATA_CHAR_INDEX].length - 1;
+                else if (length_3 > 1) {
+                    leftLongCharOffset += length_3 - 1;
+                    startIndex -= length_3 - 1;
                 }
                 startIndex--;
                 startCol--;
             }
-            while (endCol < bufferLine.length && endIndex + 1 < line.length && !this._isCharWordSeparator(bufferLine.get(endCol + 1))) {
-                var char = bufferLine.get(endCol + 1);
-                if (char[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 2) {
+            while (endCol < bufferLine.length && endIndex + 1 < line.length && !this._isCharWordSeparator(bufferLine.loadCell(endCol + 1, this._workCell))) {
+                bufferLine.loadCell(endCol + 1, this._workCell);
+                var length_4 = this._workCell.getChars().length;
+                if (this._workCell.getWidth() === 2) {
                     rightWideCharCount++;
                     endCol++;
                 }
-                else if (char[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 1) {
-                    rightLongCharOffset += char[Buffer_1.CHAR_DATA_CHAR_INDEX].length - 1;
-                    endIndex += char[Buffer_1.CHAR_DATA_CHAR_INDEX].length - 1;
+                else if (length_4 > 1) {
+                    rightLongCharOffset += length_4 - 1;
+                    endIndex += length_4 - 1;
                 }
                 endIndex++;
                 endCol++;
@@ -3765,9 +4421,9 @@ var SelectionManager = (function (_super) {
             return null;
         }
         if (followWrappedLinesAbove) {
-            if (start === 0 && bufferLine.get(0)[Buffer_1.CHAR_DATA_CODE_INDEX] !== 32) {
+            if (start === 0 && bufferLine.getCodePoint(0) !== 32) {
                 var previousBufferLine = this._buffer.lines.get(coords[1] - 1);
-                if (previousBufferLine && bufferLine.isWrapped && previousBufferLine.get(this._terminal.cols - 1)[Buffer_1.CHAR_DATA_CODE_INDEX] !== 32) {
+                if (previousBufferLine && bufferLine.isWrapped && previousBufferLine.getCodePoint(this._terminal.cols - 1) !== 32) {
                     var previousLineWordPosition = this._getWordAt([this._terminal.cols - 1, coords[1] - 1], false, true, false);
                     if (previousLineWordPosition) {
                         var offset = this._terminal.cols - previousLineWordPosition.start;
@@ -3778,9 +4434,9 @@ var SelectionManager = (function (_super) {
             }
         }
         if (followWrappedLinesBelow) {
-            if (start + length === this._terminal.cols && bufferLine.get(this._terminal.cols - 1)[Buffer_1.CHAR_DATA_CODE_INDEX] !== 32) {
+            if (start + length === this._terminal.cols && bufferLine.getCodePoint(this._terminal.cols - 1) !== 32) {
                 var nextBufferLine = this._buffer.lines.get(coords[1] + 1);
-                if (nextBufferLine && nextBufferLine.isWrapped && nextBufferLine.get(0)[Buffer_1.CHAR_DATA_CODE_INDEX] !== 32) {
+                if (nextBufferLine && nextBufferLine.isWrapped && nextBufferLine.getCodePoint(0) !== 32) {
                     var nextLineWordPosition = this._getWordAt([0, coords[1] + 1], false, false, true);
                     if (nextLineWordPosition) {
                         length += nextLineWordPosition.length;
@@ -3818,11 +4474,11 @@ var SelectionManager = (function (_super) {
             this._model.selectionEnd = [this._model.areSelectionValuesReversed() ? wordPosition.start : wordPosition.start + wordPosition.length, endRow];
         }
     };
-    SelectionManager.prototype._isCharWordSeparator = function (charData) {
-        if (charData[Buffer_1.CHAR_DATA_WIDTH_INDEX] === 0) {
+    SelectionManager.prototype._isCharWordSeparator = function (cell) {
+        if (cell.getWidth() === 0) {
             return false;
         }
-        return WORD_SEPARATORS.indexOf(charData[Buffer_1.CHAR_DATA_CHAR_INDEX]) >= 0;
+        return WORD_SEPARATORS.indexOf(cell.getChars()) >= 0;
     };
     SelectionManager.prototype._selectLineAt = function (line) {
         var wrappedRange = this._buffer.getWrappedRangeForLine(line);
@@ -3831,10 +4487,10 @@ var SelectionManager = (function (_super) {
         this._model.selectionStartLength = 0;
     };
     return SelectionManager;
-}(EventEmitter_1.EventEmitter));
+}());
 exports.SelectionManager = SelectionManager;
 
-},{"./Buffer":2,"./SelectionModel":12,"./common/EventEmitter":19,"./core/Platform":23,"./handlers/AltClickHandler":27,"./ui/MouseHelper":52}],12:[function(require,module,exports){
+},{"./BufferLine":3,"./MouseHelper":13,"./SelectionModel":16,"./common/EventEmitter2":25,"./common/Platform":27,"./handlers/AltClickHandler":33}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var SelectionModel = (function () {
@@ -3914,7 +4570,7 @@ var SelectionModel = (function () {
 }());
 exports.SelectionModel = SelectionModel;
 
-},{}],13:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_BELL_SOUND = 'data:audio/wav;base64,UklGRigBAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQBAADpAFgCwAMlBZoG/wdmCcoKRAypDQ8PbRDBEQQTOxRtFYcWlBePGIUZXhoiG88bcBz7HHIdzh0WHlMeZx51HmkeUx4WHs8dah0AHXwc3hs9G4saxRnyGBIYGBcQFv8U4RPAEoYRQBACD70NWwwHC6gJOwjWBloF7gOBAhABkf8b/qv8R/ve+Xf4Ife79W/0JfPZ8Z/wde9N7ijtE+wU6xvqM+lb6H7nw+YX5mrlxuQz5Mzje+Ma49fioeKD4nXiYeJy4pHitOL04j/jn+MN5IPkFOWs5U3mDefM55/ogOl36m7rdOyE7abuyu8D8Unyj/Pg9D/2qfcb+Yn6/vuK/Qj/lAAlAg==';
@@ -3966,14 +4622,14 @@ var SoundManager = (function () {
 }());
 exports.SoundManager = SoundManager;
 
-},{}],14:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.blankLine = 'Blank line';
 exports.promptLabel = 'Terminal input';
 exports.tooMuchOutput = 'Too much output to announce, navigate to rows manually to read';
 
-},{}],15:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -3981,7 +4637,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -3994,29 +4650,30 @@ var Buffer_1 = require("./Buffer");
 var CompositionHelper_1 = require("./CompositionHelper");
 var EventEmitter_1 = require("./common/EventEmitter");
 var Viewport_1 = require("./Viewport");
-var Clipboard_1 = require("./ui/Clipboard");
+var Clipboard_1 = require("./Clipboard");
 var EscapeSequences_1 = require("./common/data/EscapeSequences");
 var InputHandler_1 = require("./InputHandler");
 var Renderer_1 = require("./renderer/Renderer");
 var Linkifier_1 = require("./Linkifier");
 var SelectionManager_1 = require("./SelectionManager");
-var CharMeasure_1 = require("./ui/CharMeasure");
-var Browser = require("./core/Platform");
+var CharMeasure_1 = require("./CharMeasure");
+var Browser = require("./common/Platform");
 var Lifecycle_1 = require("./ui/Lifecycle");
 var Strings = require("./Strings");
-var MouseHelper_1 = require("./ui/MouseHelper");
+var MouseHelper_1 = require("./MouseHelper");
 var SoundManager_1 = require("./SoundManager");
-var ColorManager_1 = require("./renderer/ColorManager");
-var MouseZoneManager_1 = require("./ui/MouseZoneManager");
+var MouseZoneManager_1 = require("./MouseZoneManager");
 var AccessibilityManager_1 = require("./AccessibilityManager");
 var ScreenDprMonitor_1 = require("./ui/ScreenDprMonitor");
 var CharAtlasCache_1 = require("./renderer/atlas/CharAtlasCache");
 var DomRenderer_1 = require("./renderer/dom/DomRenderer");
 var Keyboard_1 = require("./core/input/Keyboard");
 var Clone_1 = require("./common/Clone");
+var EventEmitter2_1 = require("./common/EventEmitter2");
+var WindowsMode_1 = require("./WindowsMode");
 var document = (typeof window !== 'undefined') ? window.document : null;
 var WRITE_BUFFER_PAUSE_THRESHOLD = 5;
-var WRITE_BATCH_SIZE = 300;
+var WRITE_TIMEOUT_MS = 12;
 var MINIMUM_COLS = 2;
 var MINIMUM_ROWS = 1;
 var CONSTRUCTOR_ONLY_OPTIONS = ['cols', 'rows'];
@@ -4051,7 +4708,8 @@ var DEFAULT_OPTIONS = {
     tabStopWidth: 8,
     theme: null,
     rightClickSelectsWord: Browser.isMac,
-    rendererType: 'canvas'
+    rendererType: 'canvas',
+    windowsMode: false
 };
 var Terminal = (function (_super) {
     __extends(Terminal, _super);
@@ -4060,12 +4718,79 @@ var Terminal = (function (_super) {
         var _this = _super.call(this) || this;
         _this.browser = Browser;
         _this._blankLine = null;
+        _this._onCursorMove = new EventEmitter2_1.EventEmitter2();
+        _this._onData = new EventEmitter2_1.EventEmitter2();
+        _this._onKey = new EventEmitter2_1.EventEmitter2();
+        _this._onLineFeed = new EventEmitter2_1.EventEmitter2();
+        _this._onRender = new EventEmitter2_1.EventEmitter2();
+        _this._onResize = new EventEmitter2_1.EventEmitter2();
+        _this._onScroll = new EventEmitter2_1.EventEmitter2();
+        _this._onSelectionChange = new EventEmitter2_1.EventEmitter2();
+        _this._onTitleChange = new EventEmitter2_1.EventEmitter2();
         _this.options = Clone_1.clone(options);
         _this._setup();
+        _this.onCursorMove(function () { return _this.emit('cursormove'); });
+        _this.onData(function (e) { return _this.emit('data', e); });
+        _this.onKey(function (e) { return _this.emit('key', e.key, e.domEvent); });
+        _this.onLineFeed(function () { return _this.emit('linefeed'); });
+        _this.onRender(function (e) { return _this.emit('refresh', e); });
+        _this.onResize(function (e) { return _this.emit('resize', e); });
+        _this.onSelectionChange(function () { return _this.emit('selection'); });
+        _this.onScroll(function (e) { return _this.emit('scroll', e); });
+        _this.onTitleChange(function (e) { return _this.emit('title', e); });
         return _this;
     }
+    Object.defineProperty(Terminal.prototype, "onCursorMove", {
+        get: function () { return this._onCursorMove.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onData", {
+        get: function () { return this._onData.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onKey", {
+        get: function () { return this._onKey.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onLineFeed", {
+        get: function () { return this._onLineFeed.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onRender", {
+        get: function () { return this._onRender.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onResize", {
+        get: function () { return this._onResize.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onScroll", {
+        get: function () { return this._onScroll.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onSelectionChange", {
+        get: function () { return this._onSelectionChange.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onTitleChange", {
+        get: function () { return this._onTitleChange.event; },
+        enumerable: true,
+        configurable: true
+    });
     Terminal.prototype.dispose = function () {
         _super.prototype.dispose.call(this);
+        if (this._windowsMode) {
+            this._windowsMode.dispose();
+            this._windowsMode = undefined;
+        }
         this._customKeyEventHandler = null;
         CharAtlasCache_1.removeTerminalFromCache(this);
         this.handler = function () { };
@@ -4088,7 +4813,7 @@ var Terminal = (function (_super) {
         this.cols = Math.max(this.options.cols, MINIMUM_COLS);
         this.rows = Math.max(this.options.rows, MINIMUM_ROWS);
         if (this.options.handler) {
-            this.on('data', this.options.handler);
+            this.onData(this.options.handler);
         }
         this.cursorState = 0;
         this.cursorHidden = false;
@@ -4103,7 +4828,8 @@ var Terminal = (function (_super) {
         this.gcharset = null;
         this.glevel = 0;
         this.charsets = [null];
-        this.curAttr = Buffer_1.DEFAULT_ATTR;
+        this.curAttrData = Buffer_1.DEFAULT_ATTR_DATA.clone();
+        this._eraseAttrData = Buffer_1.DEFAULT_ATTR_DATA.clone();
         this.params = [];
         this.currentParam = 0;
         this.writeBuffer = [];
@@ -4111,6 +4837,9 @@ var Terminal = (function (_super) {
         this._xoffSentToCatchUp = false;
         this._userScrolling = false;
         this._inputHandler = new InputHandler_1.InputHandler(this);
+        this._inputHandler.onCursorMove(function () { return _this._onCursorMove.fire(); });
+        this._inputHandler.onLineFeed(function () { return _this._onLineFeed.fire(); });
+        this._inputHandler.onData(function (e) { return _this._onData.fire(e); });
         this.register(this._inputHandler);
         this.renderer = this.renderer || null;
         this.selectionManager = this.selectionManager || null;
@@ -4122,6 +4851,9 @@ var Terminal = (function (_super) {
             this.selectionManager.clearSelection();
             this.selectionManager.initBuffersListeners();
         }
+        if (this.options.windowsMode) {
+            this._windowsMode = WindowsMode_1.applyWindowsMode(this);
+        }
     };
     Object.defineProperty(Terminal.prototype, "buffer", {
         get: function () {
@@ -4130,12 +4862,14 @@ var Terminal = (function (_super) {
         enumerable: true,
         configurable: true
     });
-    Terminal.prototype.eraseAttr = function () {
-        return (Buffer_1.DEFAULT_ATTR & ~0x1ff) | (this.curAttr & 0x1ff);
+    Terminal.prototype.eraseAttrData = function () {
+        this._eraseAttrData.bg &= ~(50331648 | 0xFFFFFF);
+        this._eraseAttrData.bg |= this.curAttrData.bg & ~0xFC000000;
+        return this._eraseAttrData;
     };
     Terminal.prototype.focus = function () {
         if (this.textarea) {
-            this.textarea.focus();
+            this.textarea.focus({ preventScroll: true });
         }
     };
     Object.defineProperty(Terminal.prototype, "isFocused", {
@@ -4282,6 +5016,19 @@ var Terminal = (function (_super) {
             case 'tabStopWidth':
                 this.buffers.setupTabStops();
                 break;
+            case 'windowsMode':
+                if (value) {
+                    if (!this._windowsMode) {
+                        this._windowsMode = WindowsMode_1.applyWindowsMode(this);
+                    }
+                }
+                else {
+                    if (this._windowsMode) {
+                        this._windowsMode.dispose();
+                        this._windowsMode = undefined;
+                    }
+                }
+                break;
         }
         if (this.renderer) {
             this.renderer.onOptionsChanged();
@@ -4366,8 +5113,8 @@ var Terminal = (function (_super) {
         this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'compositionstart', function () { return _this._compositionHelper.compositionstart(); }));
         this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'compositionupdate', function (e) { return _this._compositionHelper.compositionupdate(e); }));
         this.register(Lifecycle_1.addDisposableDomListener(this.textarea, 'compositionend', function () { return _this._compositionHelper.compositionend(); }));
-        this.register(this.addDisposableListener('refresh', function () { return _this._compositionHelper.updateCompositionElements(); }));
-        this.register(this.addDisposableListener('refresh', function (data) { return _this._queueLinkification(data.start, data.end); }));
+        this.register(this.onRender(function () { return _this._compositionHelper.updateCompositionElements(); }));
+        this.register(this.onRender(function (e) { return _this._queueLinkification(e.start, e.end); }));
     };
     Terminal.prototype.open = function (parent) {
         var _this = this;
@@ -4401,7 +5148,7 @@ var Terminal = (function (_super) {
         fragment.appendChild(this.screenElement);
         this._mouseZoneManager = new MouseZoneManager_1.MouseZoneManager(this);
         this.register(this._mouseZoneManager);
-        this.register(this.addDisposableListener('scroll', function () { return _this._mouseZoneManager.clearAll(); }));
+        this.register(this.onScroll(function () { return _this._mouseZoneManager.clearAll(); }));
         this.linkifier.attachToDom(this._mouseZoneManager);
         this.textarea = document.createElement('textarea');
         this.textarea.classList.add('xterm-helper-textarea');
@@ -4426,29 +5173,36 @@ var Terminal = (function (_super) {
         this.viewport = new Viewport_1.Viewport(this, this._viewportElement, this._viewportScrollArea, this.charMeasure);
         this.viewport.onThemeChanged(this.renderer.colorManager.colors);
         this.register(this.viewport);
-        this.register(this.addDisposableListener('cursormove', function () { return _this.renderer.onCursorMove(); }));
-        this.register(this.addDisposableListener('resize', function () { return _this.renderer.onResize(_this.cols, _this.rows); }));
+        this.register(this.onCursorMove(function () { return _this.renderer.onCursorMove(); }));
+        this.register(this.onResize(function () { return _this.renderer.onResize(_this.cols, _this.rows); }));
         this.register(this.addDisposableListener('blur', function () { return _this.renderer.onBlur(); }));
         this.register(this.addDisposableListener('focus', function () { return _this.renderer.onFocus(); }));
         this.register(this.addDisposableListener('dprchange', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); }));
         this.register(Lifecycle_1.addDisposableDomListener(window, 'resize', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); }));
-        this.register(this.charMeasure.addDisposableListener('charsizechanged', function () { return _this.renderer.onCharSizeChanged(); }));
-        this.register(this.renderer.addDisposableListener('resize', function (dimensions) { return _this.viewport.syncScrollArea(); }));
+        this.register(this.charMeasure.onCharSizeChanged(function () { return _this.renderer.onCharSizeChanged(); }));
+        this.register(this.renderer.onCanvasResize(function () { return _this.viewport.syncScrollArea(); }));
         this.selectionManager = new SelectionManager_1.SelectionManager(this, this.charMeasure);
+        this.register(this.selectionManager.onSelectionChange(function () { return _this._onSelectionChange.fire(); }));
         this.register(Lifecycle_1.addDisposableDomListener(this.element, 'mousedown', function (e) { return _this.selectionManager.onMouseDown(e); }));
-        this.register(this.selectionManager.addDisposableListener('refresh', function (data) { return _this.renderer.onSelectionChanged(data.start, data.end, data.columnSelectMode); }));
-        this.register(this.selectionManager.addDisposableListener('newselection', function (text) {
+        this.register(this.selectionManager.onRedrawRequest(function (e) { return _this.renderer.onSelectionChanged(e.start, e.end, e.columnSelectMode); }));
+        this.register(this.selectionManager.onLinuxMouseSelection(function (text) {
             _this.textarea.value = text;
             _this.textarea.focus();
             _this.textarea.select();
         }));
-        this.register(this.addDisposableListener('scroll', function () {
+        this.register(this.onScroll(function () {
             _this.viewport.syncScrollArea();
             _this.selectionManager.refresh();
         }));
         this.register(Lifecycle_1.addDisposableDomListener(this._viewportElement, 'scroll', function () { return _this.selectionManager.refresh(); }));
         this.mouseHelper = new MouseHelper_1.MouseHelper(this.renderer);
         this.element.classList.toggle('enable-mouse-events', this.mouseEvents);
+        if (this.mouseEvents) {
+            this.selectionManager.disable();
+        }
+        else {
+            this.selectionManager.enable();
+        }
         if (this.options.screenReaderMode) {
             this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this);
         }
@@ -4458,6 +5212,7 @@ var Terminal = (function (_super) {
         this.bindMouse();
     };
     Terminal.prototype._setupRenderer = function () {
+        var _this = this;
         switch (this.options.rendererType) {
             case 'canvas':
                 this.renderer = new Renderer_1.Renderer(this, this.options.theme);
@@ -4467,6 +5222,7 @@ var Terminal = (function (_super) {
                 break;
             default: throw new Error("Unrecognized rendererType \"" + this.options.rendererType + "\"");
         }
+        this.renderer.onRender(function (e) { return _this._onRender.fire(e); });
         this.register(this.renderer);
     };
     Terminal.prototype._setTheme = function (theme) {
@@ -4519,21 +5275,11 @@ var Terminal = (function (_super) {
                 data.push(ch);
             }
             else {
-                if (ch === 2047) {
-                    data.push(0);
+                if (ch > 2047) {
+                    data.push(2047);
                     return;
                 }
-                // PATCH BEGIN
-                if (ch < 511) {
-                    data.push(ch);
-                }
-                // PATCH END
-                else {
-                    if (ch > 2047)
-                        ch = 2047;
-                    data.push(0xC0 | (ch >> 6));
-                    data.push(0x80 | (ch & 0x3F));
-                }
+                data.push(ch);
             }
         }
         function sendEvent(button, pos) {
@@ -4755,8 +5501,9 @@ var Terminal = (function (_super) {
         if (isWrapped === void 0) { isWrapped = false; }
         var newLine;
         newLine = this._blankLine;
-        if (!newLine || newLine.length !== this.cols || newLine.get(0)[Buffer_1.CHAR_DATA_ATTR_INDEX] !== this.eraseAttr()) {
-            newLine = this.buffer.getBlankLine(this.eraseAttr(), isWrapped);
+        var eraseAttr = this.eraseAttrData();
+        if (!newLine || newLine.length !== this.cols || newLine.getFg(0) !== eraseAttr.fg || newLine.getBg(0) !== eraseAttr.bg) {
+            newLine = this.buffer.getBlankLine(eraseAttr, isWrapped);
             this._blankLine = newLine;
         }
         newLine.isWrapped = isWrapped;
@@ -4797,7 +5544,7 @@ var Terminal = (function (_super) {
         }
         this.updateRange(this.buffer.scrollTop);
         this.updateRange(this.buffer.scrollBottom);
-        this.emit('scroll', this.buffer.ydisp);
+        this._onScroll.fire(this.buffer.ydisp);
     };
     Terminal.prototype.scrollLines = function (disp, suppressScrollEvent) {
         if (disp < 0) {
@@ -4815,7 +5562,7 @@ var Terminal = (function (_super) {
             return;
         }
         if (!suppressScrollEvent) {
-            this.emit('scroll', this.buffer.ydisp);
+            this._onScroll.fire(this.buffer.ydisp);
         }
         this.refresh(0, this.rows - 1);
     };
@@ -4854,15 +5601,17 @@ var Terminal = (function (_super) {
             });
         }
     };
-    Terminal.prototype._innerWrite = function () {
+    Terminal.prototype._innerWrite = function (bufferOffset) {
         var _this = this;
+        if (bufferOffset === void 0) { bufferOffset = 0; }
         if (this._isDisposed) {
             this.writeBuffer = [];
         }
-        var writeBatch = this.writeBuffer.splice(0, WRITE_BATCH_SIZE);
-        while (writeBatch.length > 0) {
-            var data = writeBatch.shift();
-            if (this._xoffSentToCatchUp && writeBatch.length === 0 && this.writeBuffer.length === 0) {
+        var startTime = Date.now();
+        while (this.writeBuffer.length > bufferOffset) {
+            var data = this.writeBuffer[bufferOffset];
+            bufferOffset++;
+            if (this._xoffSentToCatchUp && this.writeBuffer.length === bufferOffset) {
                 this.handler(EscapeSequences_1.C0.DC1);
                 this._xoffSentToCatchUp = false;
             }
@@ -4871,12 +5620,16 @@ var Terminal = (function (_super) {
             this._inputHandler.parse(data);
             this.updateRange(this.buffer.y);
             this.refresh(this._refreshStart, this._refreshEnd);
+            if (Date.now() - startTime >= WRITE_TIMEOUT_MS) {
+                break;
+            }
         }
-        if (this.writeBuffer.length > 0) {
-            setTimeout(function () { return _this._innerWrite(); }, 0);
+        if (this.writeBuffer.length > bufferOffset) {
+            setTimeout(function () { return _this._innerWrite(bufferOffset); }, 0);
         }
         else {
             this._writeInProgress = false;
+            this.writeBuffer = [];
         }
     };
     Terminal.prototype.writeln = function (data) {
@@ -4975,7 +5728,7 @@ var Terminal = (function (_super) {
             return true;
         }
         this.emit('keydown', event);
-        this.emit('key', result.key, event);
+        this._onKey.fire({ key: result.key, domEvent: event });
         this.showCursor();
         this.handler(result.key);
         return this.cancel(event, true);
@@ -5027,7 +5780,7 @@ var Terminal = (function (_super) {
         // work-around Blessed / Xterm interfacing as Blessed emits these events
         // while handling the keypress event
         // this.emit('keypress', key, ev);
-        // this.emit('key', key, ev);
+        // this._onKey.fire({ key: key, domEvent: ev });
         // PATCH END
         this.showCursor();
         this.handler(key);
@@ -5083,7 +5836,7 @@ var Terminal = (function (_super) {
             this.charMeasure.measure(this.options);
         }
         this.refresh(0, this.rows - 1);
-        this.emit('resize', { cols: x, rows: y });
+        this._onResize.fire({ cols: x, rows: y });
     };
     Terminal.prototype.updateRange = function (y) {
         if (y < this._refreshStart)
@@ -5105,16 +5858,10 @@ var Terminal = (function (_super) {
         this.buffer.ybase = 0;
         this.buffer.y = 0;
         for (var i = 1; i < this.rows; i++) {
-            this.buffer.lines.push(this.buffer.getBlankLine(Buffer_1.DEFAULT_ATTR));
+            this.buffer.lines.push(this.buffer.getBlankLine(Buffer_1.DEFAULT_ATTR_DATA));
         }
         this.refresh(0, this.rows - 1);
-        this.emit('scroll', this.buffer.ydisp);
-    };
-    Terminal.prototype.ch = function (cur) {
-        if (cur) {
-            return [this.eraseAttr(), Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE];
-        }
-        return [Buffer_1.DEFAULT_ATTR, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE];
+        this._onScroll.fire(this.buffer.ydisp);
     };
     Terminal.prototype.is = function (term) {
         return (this.options.termName + '').indexOf(term) === 0;
@@ -5129,10 +5876,10 @@ var Terminal = (function (_super) {
         if (this.buffer.ybase !== this.buffer.ydisp) {
             this.scrollToBottom();
         }
-        this.emit('data', data);
+        this._onData.fire(data);
     };
     Terminal.prototype.handleTitle = function (title) {
-        this.emit('title', title);
+        this._onTitleChange.fire(title);
     };
     Terminal.prototype.index = function () {
         this.buffer.y++;
@@ -5148,7 +5895,7 @@ var Terminal = (function (_super) {
         if (this.buffer.y === this.buffer.scrollTop) {
             var scrollRegionHeight = this.buffer.scrollBottom - this.buffer.scrollTop;
             this.buffer.lines.shiftElements(this.buffer.y + this.buffer.ybase, scrollRegionHeight, 1);
-            this.buffer.lines.set(this.buffer.y + this.buffer.ybase, this.buffer.getBlankLine(this.eraseAttr()));
+            this.buffer.lines.set(this.buffer.y + this.buffer.ybase, this.buffer.getBlankLine(this.eraseAttrData()));
             this.updateRange(this.buffer.scrollTop);
             this.updateRange(this.buffer.scrollBottom);
         }
@@ -5182,36 +5929,6 @@ var Terminal = (function (_super) {
         ev.stopPropagation();
         return false;
     };
-    Terminal.prototype.matchColor = function (r1, g1, b1) {
-        var hash = (r1 << 16) | (g1 << 8) | b1;
-        if (matchColorCache[hash] !== null && matchColorCache[hash] !== undefined) {
-            return matchColorCache[hash];
-        }
-        var ldiff = Infinity;
-        var li = -1;
-        var i = 0;
-        var c;
-        var r2;
-        var g2;
-        var b2;
-        var diff;
-        for (; i < ColorManager_1.DEFAULT_ANSI_COLORS.length; i++) {
-            c = ColorManager_1.DEFAULT_ANSI_COLORS[i].rgba;
-            r2 = c >>> 24;
-            g2 = c >>> 16 & 0xFF;
-            b2 = c >>> 8 & 0xFF;
-            diff = matchColorDistance(r1, g1, b1, r2, g2, b2);
-            if (diff === 0) {
-                li = i;
-                break;
-            }
-            if (diff < ldiff) {
-                ldiff = diff;
-                li = i;
-            }
-        }
-        return matchColorCache[hash] = li;
-    };
     Terminal.prototype._visualBell = function () {
         return false;
     };
@@ -5226,14 +5943,8 @@ function wasModifierKeyOnlyEvent(ev) {
         ev.keyCode === 17 ||
         ev.keyCode === 18;
 }
-var matchColorCache = {};
-function matchColorDistance(r1, g1, b1, r2, g2, b2) {
-    return Math.pow(30 * (r1 - r2), 2)
-        + Math.pow(59 * (g1 - g2), 2)
-        + Math.pow(11 * (b1 - b2), 2);
-}
 
-},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":5,"./CompositionHelper":7,"./InputHandler":9,"./Linkifier":10,"./SelectionManager":11,"./SoundManager":13,"./Strings":14,"./Viewport":16,"./common/Clone":18,"./common/EventEmitter":19,"./common/data/EscapeSequences":22,"./core/Platform":23,"./core/input/Keyboard":25,"./renderer/ColorManager":31,"./renderer/Renderer":35,"./renderer/atlas/CharAtlasCache":39,"./renderer/dom/DomRenderer":47,"./ui/CharMeasure":49,"./ui/Clipboard":50,"./ui/Lifecycle":51,"./ui/MouseHelper":52,"./ui/MouseZoneManager":53,"./ui/ScreenDprMonitor":55}],16:[function(require,module,exports){
+},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":5,"./CharMeasure":6,"./Clipboard":8,"./CompositionHelper":9,"./InputHandler":11,"./Linkifier":12,"./MouseHelper":13,"./MouseZoneManager":14,"./SelectionManager":15,"./SoundManager":17,"./Strings":18,"./Viewport":20,"./WindowsMode":21,"./common/Clone":23,"./common/EventEmitter":24,"./common/EventEmitter2":25,"./common/Platform":27,"./common/data/EscapeSequences":29,"./core/input/Keyboard":31,"./renderer/Renderer":41,"./renderer/atlas/CharAtlasCache":45,"./renderer/dom/DomRenderer":53,"./ui/Lifecycle":55,"./ui/ScreenDprMonitor":57}],20:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5241,7 +5952,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -5390,33 +6101,51 @@ var Viewport = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.Viewport = Viewport;
 
-},{"./common/Lifecycle":20,"./ui/Lifecycle":51}],17:[function(require,module,exports){
+},{"./common/Lifecycle":26,"./ui/Lifecycle":55}],21:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    }
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter_1 = require("./EventEmitter");
-var CircularList = (function (_super) {
-    __extends(CircularList, _super);
+var Buffer_1 = require("./Buffer");
+function applyWindowsMode(terminal) {
+    return terminal.onLineFeed(function () {
+        var line = terminal.buffer.lines.get(terminal.buffer.ybase + terminal.buffer.y - 1);
+        var lastChar = line.get(terminal.cols - 1);
+        if (lastChar[Buffer_1.CHAR_DATA_CODE_INDEX] !== Buffer_1.NULL_CELL_CODE && lastChar[Buffer_1.CHAR_DATA_CODE_INDEX] !== Buffer_1.WHITESPACE_CELL_CODE) {
+            var nextLine = terminal.buffer.lines.get(terminal.buffer.ybase + terminal.buffer.y);
+            nextLine.isWrapped = true;
+        }
+    });
+}
+exports.applyWindowsMode = applyWindowsMode;
+
+},{"./Buffer":2}],22:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter2_1 = require("./EventEmitter2");
+var CircularList = (function () {
     function CircularList(_maxLength) {
-        var _this = _super.call(this) || this;
-        _this._maxLength = _maxLength;
-        _this._array = new Array(_this._maxLength);
-        _this._startIndex = 0;
-        _this._length = 0;
-        return _this;
+        this._maxLength = _maxLength;
+        this.onDeleteEmitter = new EventEmitter2_1.EventEmitter2();
+        this.onInsertEmitter = new EventEmitter2_1.EventEmitter2();
+        this.onTrimEmitter = new EventEmitter2_1.EventEmitter2();
+        this._array = new Array(this._maxLength);
+        this._startIndex = 0;
+        this._length = 0;
     }
+    Object.defineProperty(CircularList.prototype, "onDelete", {
+        get: function () { return this.onDeleteEmitter.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(CircularList.prototype, "onInsert", {
+        get: function () { return this.onInsertEmitter.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(CircularList.prototype, "onTrim", {
+        get: function () { return this.onTrimEmitter.event; },
+        enumerable: true,
+        configurable: true
+    });
     Object.defineProperty(CircularList.prototype, "maxLength", {
         get: function () {
             return this._maxLength;
@@ -5461,7 +6190,7 @@ var CircularList = (function (_super) {
         this._array[this._getCyclicIndex(this._length)] = value;
         if (this._length === this._maxLength) {
             this._startIndex = ++this._startIndex % this._maxLength;
-            this.emitMayRemoveListeners('trim', 1);
+            this.onTrimEmitter.fire(1);
         }
         else {
             this._length++;
@@ -5472,7 +6201,7 @@ var CircularList = (function (_super) {
             throw new Error('Can only recycle when the buffer is full');
         }
         this._startIndex = ++this._startIndex % this._maxLength;
-        this.emitMayRemoveListeners('trim', 1);
+        this.onTrimEmitter.fire(1);
         return this._array[this._getCyclicIndex(this._length - 1)];
     };
     Object.defineProperty(CircularList.prototype, "isFull", {
@@ -5506,7 +6235,7 @@ var CircularList = (function (_super) {
             var countToTrim = (this._length + items.length) - this._maxLength;
             this._startIndex += countToTrim;
             this._length = this._maxLength;
-            this.emitMayRemoveListeners('trim', countToTrim);
+            this.onTrimEmitter.fire(countToTrim);
         }
         else {
             this._length += items.length;
@@ -5518,7 +6247,7 @@ var CircularList = (function (_super) {
         }
         this._startIndex += count;
         this._length -= count;
-        this.emitMayRemoveListeners('trim', count);
+        this.onTrimEmitter.fire(count);
     };
     CircularList.prototype.shiftElements = function (start, count, offset) {
         if (count <= 0) {
@@ -5540,7 +6269,7 @@ var CircularList = (function (_super) {
                 while (this._length > this._maxLength) {
                     this._length--;
                     this._startIndex++;
-                    this.emitMayRemoveListeners('trim', 1);
+                    this.onTrimEmitter.fire(1);
                 }
             }
         }
@@ -5554,10 +6283,10 @@ var CircularList = (function (_super) {
         return (this._startIndex + index) % this._maxLength;
     };
     return CircularList;
-}(EventEmitter_1.EventEmitter));
+}());
 exports.CircularList = CircularList;
 
-},{"./EventEmitter":19}],18:[function(require,module,exports){
+},{"./EventEmitter2":25}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function clone(val, depth) {
@@ -5576,7 +6305,7 @@ function clone(val, depth) {
 }
 exports.clone = clone;
 
-},{}],19:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5584,7 +6313,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -5676,7 +6405,51 @@ var EventEmitter = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EventEmitter = EventEmitter;
 
-},{"./Lifecycle":20}],20:[function(require,module,exports){
+},{"./Lifecycle":26}],25:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter2 = (function () {
+    function EventEmitter2() {
+        this._listeners = [];
+    }
+    Object.defineProperty(EventEmitter2.prototype, "event", {
+        get: function () {
+            var _this = this;
+            if (!this._event) {
+                this._event = function (listener) {
+                    _this._listeners.push(listener);
+                    var disposable = {
+                        dispose: function () {
+                            for (var i = 0; i < _this._listeners.length; i++) {
+                                if (_this._listeners[i] === listener) {
+                                    _this._listeners.splice(i, 1);
+                                    return;
+                                }
+                            }
+                        }
+                    };
+                    return disposable;
+                };
+            }
+            return this._event;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    EventEmitter2.prototype.fire = function (data) {
+        var queue = [];
+        for (var i = 0; i < this._listeners.length; i++) {
+            queue.push(this._listeners[i]);
+        }
+        for (var i = 0; i < queue.length; i++) {
+            queue[i].call(undefined, data);
+        }
+    };
+    return EventEmitter2;
+}());
+exports.EventEmitter2 = EventEmitter2;
+
+},{}],26:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Disposable = (function () {
@@ -5702,7 +6475,25 @@ var Disposable = (function () {
 }());
 exports.Disposable = Disposable;
 
-},{}],21:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var isNode = (typeof navigator === 'undefined') ? true : false;
+var userAgent = (isNode) ? 'node' : navigator.userAgent;
+var platform = (isNode) ? 'node' : navigator.platform;
+exports.isFirefox = !!~userAgent.indexOf('Firefox');
+exports.isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
+exports.isMSIE = !!~userAgent.indexOf('MSIE') || !!~userAgent.indexOf('Trident');
+exports.isMac = contains(['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'], platform);
+exports.isIpad = platform === 'iPad';
+exports.isIphone = platform === 'iPhone';
+exports.isMSWindows = contains(['Windows', 'Win16', 'Win32', 'WinCE'], platform);
+exports.isLinux = platform.indexOf('Linux') >= 0;
+function contains(arr, el) {
+    return arr.indexOf(el) >= 0;
+}
+
+},{}],28:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function fill(array, value, start, end) {
@@ -5739,7 +6530,7 @@ function concat(a, b) {
 }
 exports.concat = concat;
 
-},{}],22:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var C0;
@@ -5815,25 +6606,7 @@ var C1;
     C1.APC = '\x9f';
 })(C1 = exports.C1 || (exports.C1 = {}));
 
-},{}],23:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var isNode = (typeof navigator === 'undefined') ? true : false;
-var userAgent = (isNode) ? 'node' : navigator.userAgent;
-var platform = (isNode) ? 'node' : navigator.platform;
-exports.isFirefox = !!~userAgent.indexOf('Firefox');
-exports.isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
-exports.isMSIE = !!~userAgent.indexOf('MSIE') || !!~userAgent.indexOf('Trident');
-exports.isMac = contains(['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'], platform);
-exports.isIpad = platform === 'iPad';
-exports.isIphone = platform === 'iPhone';
-exports.isMSWindows = contains(['Windows', 'Win16', 'Win32', 'WinCE'], platform);
-exports.isLinux = platform.indexOf('Linux') >= 0;
-function contains(arr, el) {
-    return arr.indexOf(el) >= 0;
-}
-
-},{}],24:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHARSETS = {};
@@ -5994,7 +6767,7 @@ exports.CHARSETS['='] = {
     '~': 'û'
 };
 
-},{}],25:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../../common/data/EscapeSequences");
@@ -6336,13 +7109,18 @@ function evaluateKeyboardEvent(ev, applicationCursorMode, isMac, macOptionIsMeta
             else if (ev.key && !ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.keyCode >= 48 && ev.key.length === 1) {
                 result.key = ev.key;
             }
+            else if (ev.key && ev.ctrlKey) {
+                if (ev.key === '_') {
+                    result.key = EscapeSequences_1.C0.US;
+                }
+            }
             break;
     }
     return result;
 }
 exports.evaluateKeyboardEvent = evaluateKeyboardEvent;
 
-},{"../../common/data/EscapeSequences":22}],26:[function(require,module,exports){
+},{"../../common/data/EscapeSequences":29}],32:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var StringToUtf32 = (function () {
@@ -6420,7 +7198,7 @@ function utf32ToString(data, start, end) {
 }
 exports.utf32ToString = utf32ToString;
 
-},{}],27:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../common/data/EscapeSequences");
@@ -6559,7 +7337,7 @@ function repeat(count, str) {
     return rpt;
 }
 
-},{"../common/data/EscapeSequences":22}],28:[function(require,module,exports){
+},{"../common/data/EscapeSequences":29}],34:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("../Terminal");
@@ -6568,6 +7346,51 @@ var Terminal = (function () {
     function Terminal(options) {
         this._core = new Terminal_1.Terminal(options);
     }
+    Object.defineProperty(Terminal.prototype, "onCursorMove", {
+        get: function () { return this._core.onCursorMove; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onLineFeed", {
+        get: function () { return this._core.onLineFeed; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onSelectionChange", {
+        get: function () { return this._core.onSelectionChange; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onData", {
+        get: function () { return this._core.onData; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onTitleChange", {
+        get: function () { return this._core.onTitleChange; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onScroll", {
+        get: function () { return this._core.onScroll; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onKey", {
+        get: function () { return this._core.onKey; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onRender", {
+        get: function () { return this._core.onRender; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Terminal.prototype, "onResize", {
+        get: function () { return this._core.onResize; },
+        enumerable: true,
+        configurable: true
+    });
     Object.defineProperty(Terminal.prototype, "element", {
         get: function () { return this._core.element; },
         enumerable: true,
@@ -6712,13 +7535,14 @@ var Terminal = (function () {
 }());
 exports.Terminal = Terminal;
 
-},{"../Strings":14,"../Terminal":15}],29:[function(require,module,exports){
+},{"../Strings":18,"../Terminal":19}],35:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./atlas/Types");
 var CharAtlasCache_1 = require("./atlas/CharAtlasCache");
+var BufferLine_1 = require("../BufferLine");
 var Buffer_1 = require("../Buffer");
-var CharAtlasUtils_1 = require("./atlas/CharAtlasUtils");
+var CharacterJoinerRegistry_1 = require("./CharacterJoinerRegistry");
 var BaseRenderLayer = (function () {
     function BaseRenderLayer(_container, id, zIndex, _alpha, _colors) {
         this._container = _container;
@@ -6835,45 +7659,76 @@ var BaseRenderLayer = (function () {
             this._ctx.fillRect(x * this._scaledCellWidth, y * this._scaledCellHeight, width * this._scaledCellWidth, height * this._scaledCellHeight);
         }
     };
-    BaseRenderLayer.prototype.fillCharTrueColor = function (terminal, charData, x, y) {
+    BaseRenderLayer.prototype.fillCharTrueColor = function (terminal, cell, x, y) {
         this._ctx.font = this._getFont(terminal, false, false);
         this._ctx.textBaseline = 'middle';
         this._clipRow(terminal, y);
-        this._ctx.fillText(charData[Buffer_1.CHAR_DATA_CHAR_INDEX], x * this._scaledCellWidth + this._scaledCharLeft, (y + 0.5) * this._scaledCellHeight + this._scaledCharTop);
+        this._ctx.fillText(cell.getChars(), x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop + this._scaledCharHeight / 2);
     };
-    BaseRenderLayer.prototype.drawChars = function (terminal, chars, code, width, x, y, fg, bg, bold, dim, italic) {
-        var drawInBrightColor = terminal.options.drawBoldTextInBrightColors && bold && fg < 8 && fg !== Types_1.INVERTED_DEFAULT_COLOR;
-        fg += drawInBrightColor ? 8 : 0;
-        this._currentGlyphIdentifier.chars = chars;
-        this._currentGlyphIdentifier.code = code;
-        this._currentGlyphIdentifier.bg = bg;
-        this._currentGlyphIdentifier.fg = fg;
-        this._currentGlyphIdentifier.bold = bold && terminal.options.enableBold;
-        this._currentGlyphIdentifier.dim = dim;
-        this._currentGlyphIdentifier.italic = italic;
-        var atlasDidDraw = this._charAtlas && this._charAtlas.draw(this._ctx, this._currentGlyphIdentifier, x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop);
-        if (!atlasDidDraw) {
-            this._drawUncachedChars(terminal, chars, width, fg, x, y, bold && terminal.options.enableBold, dim, italic);
+    BaseRenderLayer.prototype.drawChars = function (terminal, cell, x, y) {
+        if (cell.isFgRGB() || cell.isBgRGB() || cell instanceof CharacterJoinerRegistry_1.JoinedCellData) {
+            this._drawUncachedChars(terminal, cell, x, y);
+            return;
         }
-    };
-    BaseRenderLayer.prototype._drawUncachedChars = function (terminal, chars, width, fg, x, y, bold, dim, italic) {
-        this._ctx.save();
-        this._ctx.font = this._getFont(terminal, bold, italic);
-        this._ctx.textBaseline = 'middle';
-        if (fg === Types_1.INVERTED_DEFAULT_COLOR) {
-            this._ctx.fillStyle = this._colors.background.css;
-        }
-        else if (CharAtlasUtils_1.is256Color(fg)) {
-            this._ctx.fillStyle = this._colors.ansi[fg].css;
+        var fg;
+        var bg;
+        if (cell.isInverse()) {
+            fg = (cell.isBgDefault()) ? Types_1.INVERTED_DEFAULT_COLOR : cell.getBgColor();
+            bg = (cell.isFgDefault()) ? Types_1.INVERTED_DEFAULT_COLOR : cell.getFgColor();
         }
         else {
-            this._ctx.fillStyle = this._colors.foreground.css;
+            bg = (cell.isBgDefault()) ? Types_1.DEFAULT_COLOR : cell.getBgColor();
+            fg = (cell.isFgDefault()) ? Types_1.DEFAULT_COLOR : cell.getFgColor();
+        }
+        var drawInBrightColor = terminal.options.drawBoldTextInBrightColors && cell.isBold() && fg < 8 && fg !== Types_1.INVERTED_DEFAULT_COLOR;
+        fg += drawInBrightColor ? 8 : 0;
+        this._currentGlyphIdentifier.chars = cell.getChars() || Buffer_1.WHITESPACE_CELL_CHAR;
+        this._currentGlyphIdentifier.code = cell.getCode() || Buffer_1.WHITESPACE_CELL_CODE;
+        this._currentGlyphIdentifier.bg = bg;
+        this._currentGlyphIdentifier.fg = fg;
+        this._currentGlyphIdentifier.bold = cell.isBold() && terminal.options.enableBold;
+        this._currentGlyphIdentifier.dim = !!cell.isDim();
+        this._currentGlyphIdentifier.italic = !!cell.isItalic();
+        var atlasDidDraw = this._charAtlas && this._charAtlas.draw(this._ctx, this._currentGlyphIdentifier, x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop);
+        if (!atlasDidDraw) {
+            this._drawUncachedChars(terminal, cell, x, y);
+        }
+    };
+    BaseRenderLayer.prototype._drawUncachedChars = function (terminal, cell, x, y) {
+        this._ctx.save();
+        this._ctx.font = this._getFont(terminal, cell.isBold() && terminal.options.enableBold, !!cell.isItalic());
+        this._ctx.textBaseline = 'middle';
+        if (cell.isInverse()) {
+            if (cell.isBgDefault()) {
+                this._ctx.fillStyle = this._colors.background.css;
+            }
+            else if (cell.isBgRGB()) {
+                this._ctx.fillStyle = "rgb(" + BufferLine_1.AttributeData.toColorRGB(cell.getBgColor()).join(',') + ")";
+            }
+            else {
+                this._ctx.fillStyle = this._colors.ansi[cell.getBgColor()].css;
+            }
+        }
+        else {
+            if (cell.isFgDefault()) {
+                this._ctx.fillStyle = this._colors.foreground.css;
+            }
+            else if (cell.isFgRGB()) {
+                this._ctx.fillStyle = "rgb(" + BufferLine_1.AttributeData.toColorRGB(cell.getFgColor()).join(',') + ")";
+            }
+            else {
+                var fg = cell.getFgColor();
+                if (terminal.options.drawBoldTextInBrightColors && cell.isBold() && fg < 8) {
+                    fg += 8;
+                }
+                this._ctx.fillStyle = this._colors.ansi[fg].css;
+            }
         }
         this._clipRow(terminal, y);
-        if (dim) {
+        if (cell.isDim()) {
             this._ctx.globalAlpha = Types_1.DIM_OPACITY;
         }
-        this._ctx.fillText(chars, x * this._scaledCellWidth + this._scaledCharLeft, (y + 0.5) * this._scaledCellHeight + this._scaledCharTop);
+        this._ctx.fillText(cell.getChars(), x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop + this._scaledCharHeight / 2);
         this._ctx.restore();
     };
     BaseRenderLayer.prototype._clipRow = function (terminal, y) {
@@ -6890,15 +7745,63 @@ var BaseRenderLayer = (function () {
 }());
 exports.BaseRenderLayer = BaseRenderLayer;
 
-},{"../Buffer":2,"./atlas/CharAtlasCache":39,"./atlas/CharAtlasUtils":41,"./atlas/Types":46}],30:[function(require,module,exports){
+},{"../Buffer":2,"../BufferLine":3,"./CharacterJoinerRegistry":36,"./atlas/CharAtlasCache":45,"./atlas/Types":52}],36:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
+var BufferLine_1 = require("../BufferLine");
 var Buffer_1 = require("../Buffer");
+var JoinedCellData = (function (_super) {
+    __extends(JoinedCellData, _super);
+    function JoinedCellData(firstCell, chars, width) {
+        var _this = _super.call(this) || this;
+        _this.content = 0;
+        _this.combinedData = '';
+        _this.fg = firstCell.fg;
+        _this.bg = firstCell.bg;
+        _this.combinedData = chars;
+        _this._width = width;
+        return _this;
+    }
+    JoinedCellData.prototype.isCombined = function () {
+        return 2097152;
+    };
+    JoinedCellData.prototype.getWidth = function () {
+        return this._width;
+    };
+    JoinedCellData.prototype.getChars = function () {
+        return this.combinedData;
+    };
+    JoinedCellData.prototype.getCode = function () {
+        return 0x1FFFFF;
+    };
+    JoinedCellData.prototype.setFromCharData = function (value) {
+        throw new Error('not implemented');
+    };
+    JoinedCellData.prototype.getAsCharData = function () {
+        return [this.fg, this.getChars(), this.getWidth(), this.getCode()];
+    };
+    return JoinedCellData;
+}(BufferLine_1.AttributeData));
+exports.JoinedCellData = JoinedCellData;
 var CharacterJoinerRegistry = (function () {
     function CharacterJoinerRegistry(_terminal) {
         this._terminal = _terminal;
         this._characterJoiners = [];
         this._nextCharacterJoinerId = 0;
+        this._workCell = new BufferLine_1.CellData();
     }
     CharacterJoinerRegistry.prototype.registerCharacterJoiner = function (handler) {
         var joiner = {
@@ -6926,20 +7829,18 @@ var CharacterJoinerRegistry = (function () {
             return [];
         }
         var ranges = [];
-        var lineStr = this._terminal.buffer.translateBufferLineToString(row, true);
+        var lineStr = line.translateToString(true);
         var rangeStartColumn = 0;
         var currentStringIndex = 0;
         var rangeStartStringIndex = 0;
-        var rangeAttr = line.get(0)[Buffer_1.CHAR_DATA_ATTR_INDEX] >> 9;
-        for (var x = 0; x < this._terminal.cols; x++) {
-            var charData = line.get(x);
-            var chars = charData[Buffer_1.CHAR_DATA_CHAR_INDEX];
-            var width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
-            var attr = charData[Buffer_1.CHAR_DATA_ATTR_INDEX] >> 9;
-            if (width === 0) {
+        var rangeAttrFG = line.getFg(0);
+        var rangeAttrBG = line.getBg(0);
+        for (var x = 0; x < line.getTrimmedLength(); x++) {
+            line.loadCell(x, this._workCell);
+            if (this._workCell.getWidth() === 0) {
                 continue;
             }
-            if (attr !== rangeAttr) {
+            if (this._workCell.fg !== rangeAttrFG || this._workCell.bg !== rangeAttrBG) {
                 if (x - rangeStartColumn > 1) {
                     var joinedRanges = this._getJoinedRanges(lineStr, rangeStartStringIndex, currentStringIndex, line, rangeStartColumn);
                     for (var i = 0; i < joinedRanges.length; i++) {
@@ -6948,9 +7849,10 @@ var CharacterJoinerRegistry = (function () {
                 }
                 rangeStartColumn = x;
                 rangeStartStringIndex = currentStringIndex;
-                rangeAttr = attr;
+                rangeAttrFG = this._workCell.fg;
+                rangeAttrBG = this._workCell.bg;
             }
-            currentStringIndex += chars.length;
+            currentStringIndex += this._workCell.getChars().length || Buffer_1.WHITESPACE_CELL_CHAR.length;
         }
         if (this._terminal.cols - rangeStartColumn > 1) {
             var joinedRanges = this._getJoinedRanges(lineStr, rangeStartStringIndex, currentStringIndex, line, rangeStartColumn);
@@ -6981,9 +7883,8 @@ var CharacterJoinerRegistry = (function () {
             return;
         }
         for (var x = startCol; x < this._terminal.cols; x++) {
-            var charData = line.get(x);
-            var width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
-            var length_1 = charData[Buffer_1.CHAR_DATA_CHAR_INDEX].length;
+            var width = line.getWidth(x);
+            var length_1 = line.getString(x).length || Buffer_1.WHITESPACE_CELL_CHAR.length;
             if (width === 0) {
                 continue;
             }
@@ -7057,7 +7958,7 @@ var CharacterJoinerRegistry = (function () {
 }());
 exports.CharacterJoinerRegistry = CharacterJoinerRegistry;
 
-},{"../Buffer":2}],31:[function(require,module,exports){
+},{"../Buffer":2,"../BufferLine":3}],37:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var DEFAULT_FOREGROUND = fromHex('#ffffff');
@@ -7185,7 +8086,7 @@ var ColorManager = (function () {
 }());
 exports.ColorManager = ColorManager;
 
-},{}],32:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7193,7 +8094,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -7201,13 +8102,14 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var Buffer_1 = require("../Buffer");
 var BaseRenderLayer_1 = require("./BaseRenderLayer");
+var BufferLine_1 = require("../BufferLine");
 var BLINK_INTERVAL = 600;
 var CursorRenderLayer = (function (_super) {
     __extends(CursorRenderLayer, _super);
     function CursorRenderLayer(container, zIndex, colors) {
         var _this = _super.call(this, container, 'cursor', zIndex, true, colors) || this;
+        _this._cell = new BufferLine_1.CellData();
         _this._state = {
             x: null,
             y: null,
@@ -7295,21 +8197,21 @@ var CursorRenderLayer = (function (_super) {
             this._clearCursor();
             return;
         }
-        var charData = terminal.buffer.lines.get(cursorY).get(terminal.buffer.x);
-        if (!charData) {
+        terminal.buffer.lines.get(cursorY).loadCell(terminal.buffer.x, this._cell);
+        if (this._cell.content === undefined) {
             return;
         }
         if (!terminal.isFocused) {
             this._clearCursor();
             this._ctx.save();
             this._ctx.fillStyle = this._colors.cursor.css;
-            this._renderBlurCursor(terminal, terminal.buffer.x, viewportRelativeCursorY, charData);
+            this._renderBlurCursor(terminal, terminal.buffer.x, viewportRelativeCursorY, this._cell);
             this._ctx.restore();
             this._state.x = terminal.buffer.x;
             this._state.y = viewportRelativeCursorY;
             this._state.isFocused = false;
             this._state.style = terminal.options.cursorStyle;
-            this._state.width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
+            this._state.width = this._cell.getWidth();
             return;
         }
         if (this._cursorBlinkStateManager && !this._cursorBlinkStateManager.isCursorVisible) {
@@ -7321,19 +8223,19 @@ var CursorRenderLayer = (function (_super) {
                 this._state.y === viewportRelativeCursorY &&
                 this._state.isFocused === terminal.isFocused &&
                 this._state.style === terminal.options.cursorStyle &&
-                this._state.width === charData[Buffer_1.CHAR_DATA_WIDTH_INDEX]) {
+                this._state.width === this._cell.getWidth()) {
                 return;
             }
             this._clearCursor();
         }
         this._ctx.save();
-        this._cursorRenderers[terminal.options.cursorStyle || 'block'](terminal, terminal.buffer.x, viewportRelativeCursorY, charData);
+        this._cursorRenderers[terminal.options.cursorStyle || 'block'](terminal, terminal.buffer.x, viewportRelativeCursorY, this._cell);
         this._ctx.restore();
         this._state.x = terminal.buffer.x;
         this._state.y = viewportRelativeCursorY;
         this._state.isFocused = false;
         this._state.style = terminal.options.cursorStyle;
-        this._state.width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
+        this._state.width = this._cell.getWidth();
     };
     CursorRenderLayer.prototype._clearCursor = function () {
         if (this._state) {
@@ -7347,30 +8249,30 @@ var CursorRenderLayer = (function (_super) {
             };
         }
     };
-    CursorRenderLayer.prototype._renderBarCursor = function (terminal, x, y, charData) {
+    CursorRenderLayer.prototype._renderBarCursor = function (terminal, x, y, cell) {
         this._ctx.save();
         this._ctx.fillStyle = this._colors.cursor.css;
         this.fillLeftLineAtCell(x, y);
         this._ctx.restore();
     };
-    CursorRenderLayer.prototype._renderBlockCursor = function (terminal, x, y, charData) {
+    CursorRenderLayer.prototype._renderBlockCursor = function (terminal, x, y, cell) {
         this._ctx.save();
         this._ctx.fillStyle = this._colors.cursor.css;
-        this.fillCells(x, y, charData[Buffer_1.CHAR_DATA_WIDTH_INDEX], 1);
+        this.fillCells(x, y, cell.getWidth(), 1);
         this._ctx.fillStyle = this._colors.cursorAccent.css;
-        this.fillCharTrueColor(terminal, charData, x, y);
+        this.fillCharTrueColor(terminal, cell, x, y);
         this._ctx.restore();
     };
-    CursorRenderLayer.prototype._renderUnderlineCursor = function (terminal, x, y, charData) {
+    CursorRenderLayer.prototype._renderUnderlineCursor = function (terminal, x, y, cell) {
         this._ctx.save();
         this._ctx.fillStyle = this._colors.cursor.css;
         this.fillBottomLineAtCells(x, y);
         this._ctx.restore();
     };
-    CursorRenderLayer.prototype._renderBlurCursor = function (terminal, x, y, charData) {
+    CursorRenderLayer.prototype._renderBlurCursor = function (terminal, x, y, cell) {
         this._ctx.save();
         this._ctx.strokeStyle = this._colors.cursor.css;
-        this.strokeRectAtCell(x, y, charData[Buffer_1.CHAR_DATA_WIDTH_INDEX], 1);
+        this.strokeRectAtCell(x, y, cell.getWidth(), 1);
         this._ctx.restore();
     };
     return CursorRenderLayer;
@@ -7475,7 +8377,7 @@ var CursorBlinkStateManager = (function () {
     return CursorBlinkStateManager;
 }());
 
-},{"../Buffer":2,"./BaseRenderLayer":29}],33:[function(require,module,exports){
+},{"../BufferLine":3,"./BaseRenderLayer":35}],39:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var GridCache = (function () {
@@ -7505,7 +8407,7 @@ var GridCache = (function () {
 }());
 exports.GridCache = GridCache;
 
-},{}],34:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7513,7 +8415,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -7529,8 +8431,8 @@ var LinkRenderLayer = (function (_super) {
     function LinkRenderLayer(container, zIndex, colors, terminal) {
         var _this = _super.call(this, container, 'link', zIndex, true, colors) || this;
         _this._state = null;
-        terminal.linkifier.on("linkhover", function (e) { return _this._onLinkHover(e); });
-        terminal.linkifier.on("linkleave", function (e) { return _this._onLinkLeave(e); });
+        terminal.linkifier.onLinkHover(function (e) { return _this._onLinkHover(e); });
+        terminal.linkifier.onLinkLeave(function (e) { return _this._onLinkLeave(e); });
         return _this;
     }
     LinkRenderLayer.prototype.resize = function (terminal, dim) {
@@ -7580,7 +8482,7 @@ var LinkRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.LinkRenderLayer = LinkRenderLayer;
 
-},{"./BaseRenderLayer":29,"./atlas/CharAtlasUtils":41,"./atlas/Types":46}],35:[function(require,module,exports){
+},{"./BaseRenderLayer":35,"./atlas/CharAtlasUtils":47,"./atlas/Types":52}],41:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7588,7 +8490,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -7601,10 +8503,11 @@ var SelectionRenderLayer_1 = require("./SelectionRenderLayer");
 var CursorRenderLayer_1 = require("./CursorRenderLayer");
 var ColorManager_1 = require("./ColorManager");
 var LinkRenderLayer_1 = require("./LinkRenderLayer");
-var EventEmitter_1 = require("../common/EventEmitter");
 var RenderDebouncer_1 = require("../ui/RenderDebouncer");
 var ScreenDprMonitor_1 = require("../ui/ScreenDprMonitor");
 var CharacterJoinerRegistry_1 = require("../renderer/CharacterJoinerRegistry");
+var EventEmitter2_1 = require("../common/EventEmitter2");
+var Lifecycle_1 = require("../common/Lifecycle");
 var Renderer = (function (_super) {
     __extends(Renderer, _super);
     function Renderer(_terminal, theme) {
@@ -7612,6 +8515,8 @@ var Renderer = (function (_super) {
         _this._terminal = _terminal;
         _this._isPaused = false;
         _this._needsFullRefresh = false;
+        _this._onCanvasResize = new EventEmitter2_1.EventEmitter2();
+        _this._onRender = new EventEmitter2_1.EventEmitter2();
         var allowTransparency = _this._terminal.options.allowTransparency;
         _this.colorManager = new ColorManager_1.ColorManager(document, allowTransparency);
         _this._characterJoinerRegistry = new CharacterJoinerRegistry_1.CharacterJoinerRegistry(_terminal);
@@ -7641,17 +8546,27 @@ var Renderer = (function (_super) {
         _this._devicePixelRatio = window.devicePixelRatio;
         _this._updateDimensions();
         _this.onOptionsChanged();
-        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._terminal, _this._renderRows.bind(_this));
+        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._renderRows.bind(_this));
         _this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
         _this._screenDprMonitor.setListener(function () { return _this.onWindowResize(window.devicePixelRatio); });
         _this.register(_this._screenDprMonitor);
         if ('IntersectionObserver' in window) {
-            var observer_1 = new IntersectionObserver(function (e) { return _this.onIntersectionChange(e[0]); }, { threshold: 0 });
+            var observer_1 = new IntersectionObserver(function (e) { return _this.onIntersectionChange(e[e.length - 1]); }, { threshold: 0 });
             observer_1.observe(_this._terminal.element);
             _this.register({ dispose: function () { return observer_1.disconnect(); } });
         }
         return _this;
     }
+    Object.defineProperty(Renderer.prototype, "onCanvasResize", {
+        get: function () { return this._onCanvasResize.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Renderer.prototype, "onRender", {
+        get: function () { return this._onRender.event; },
+        enumerable: true,
+        configurable: true
+    });
     Renderer.prototype.dispose = function () {
         _super.prototype.dispose.call(this);
         this._renderLayers.forEach(function (l) { return l.dispose(); });
@@ -7660,6 +8575,7 @@ var Renderer = (function (_super) {
         this._isPaused = entry.intersectionRatio === 0;
         if (!this._isPaused && this._needsFullRefresh) {
             this._terminal.refresh(0, this._terminal.rows - 1);
+            this._needsFullRefresh = false;
         }
     };
     Renderer.prototype.onWindowResize = function (devicePixelRatio) {
@@ -7695,7 +8611,7 @@ var Renderer = (function (_super) {
         }
         this._terminal.screenElement.style.width = this.dimensions.canvasWidth + "px";
         this._terminal.screenElement.style.height = this.dimensions.canvasHeight + "px";
-        this.emit('resize', {
+        this._onCanvasResize.fire({
             width: this.dimensions.canvasWidth,
             height: this.dimensions.canvasHeight
         });
@@ -7742,12 +8658,12 @@ var Renderer = (function (_super) {
             this._needsFullRefresh = true;
             return;
         }
-        this._renderDebouncer.refresh(start, end);
+        this._renderDebouncer.refresh(start, end, this._terminal.rows);
     };
     Renderer.prototype._renderRows = function (start, end) {
         var _this = this;
         this._renderLayers.forEach(function (l) { return l.onGridChanged(_this._terminal, start, end); });
-        this._terminal.emit('refresh', { start: start, end: end });
+        this._onRender.fire({ start: start, end: end });
     };
     Renderer.prototype._updateDimensions = function () {
         if (!this._terminal.charMeasure.width || !this._terminal.charMeasure.height) {
@@ -7773,10 +8689,10 @@ var Renderer = (function (_super) {
         return this._characterJoinerRegistry.deregisterCharacterJoiner(joinerId);
     };
     return Renderer;
-}(EventEmitter_1.EventEmitter));
+}(Lifecycle_1.Disposable));
 exports.Renderer = Renderer;
 
-},{"../common/EventEmitter":19,"../renderer/CharacterJoinerRegistry":30,"../ui/RenderDebouncer":54,"../ui/ScreenDprMonitor":55,"./ColorManager":31,"./CursorRenderLayer":32,"./LinkRenderLayer":34,"./SelectionRenderLayer":36,"./TextRenderLayer":37}],36:[function(require,module,exports){
+},{"../common/EventEmitter2":25,"../common/Lifecycle":26,"../renderer/CharacterJoinerRegistry":36,"../ui/RenderDebouncer":56,"../ui/ScreenDprMonitor":57,"./ColorManager":37,"./CursorRenderLayer":38,"./LinkRenderLayer":40,"./SelectionRenderLayer":42,"./TextRenderLayer":43}],42:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7784,7 +8700,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -7824,6 +8740,7 @@ var SelectionRenderLayer = (function (_super) {
         }
         this.clearAll();
         if (!start || !end) {
+            this._clearState();
             return;
         }
         var viewportStartRow = start[1] - terminal.buffer.ydisp;
@@ -7872,7 +8789,7 @@ var SelectionRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.SelectionRenderLayer = SelectionRenderLayer;
 
-},{"./BaseRenderLayer":29}],37:[function(require,module,exports){
+},{"./BaseRenderLayer":35}],43:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7880,7 +8797,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -7889,15 +8806,16 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("../Buffer");
-var Types_1 = require("./atlas/Types");
 var GridCache_1 = require("./GridCache");
 var BaseRenderLayer_1 = require("./BaseRenderLayer");
-var CharAtlasUtils_1 = require("./atlas/CharAtlasUtils");
+var BufferLine_1 = require("../BufferLine");
+var CharacterJoinerRegistry_1 = require("./CharacterJoinerRegistry");
 var TextRenderLayer = (function (_super) {
     __extends(TextRenderLayer, _super);
     function TextRenderLayer(container, zIndex, colors, characterJoinerRegistry, alpha) {
         var _this = _super.call(this, container, 'text', zIndex, alpha, colors) || this;
         _this._characterOverlapCache = {};
+        _this._workCell = new BufferLine_1.CellData();
         _this._state = new GridCache_1.GridCache();
         _this._characterJoinerRegistry = characterJoinerRegistry;
         return _this;
@@ -7923,44 +8841,26 @@ var TextRenderLayer = (function (_super) {
             var line = terminal.buffer.lines.get(row);
             var joinedRanges = joinerRegistry ? joinerRegistry.getJoinedCharacters(row) : [];
             for (var x = 0; x < terminal.cols; x++) {
-                var charData = line.get(x);
-                var code = charData[Buffer_1.CHAR_DATA_CODE_INDEX] || Buffer_1.WHITESPACE_CELL_CODE;
-                var chars = charData[Buffer_1.CHAR_DATA_CHAR_INDEX] || Buffer_1.WHITESPACE_CELL_CHAR;
-                var attr = charData[Buffer_1.CHAR_DATA_ATTR_INDEX];
-                var width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
+                line.loadCell(x, this._workCell);
+                var cell = this._workCell;
                 var isJoined = false;
                 var lastCharX = x;
-                if (width === 0) {
+                if (cell.getWidth() === 0) {
                     continue;
                 }
                 if (joinedRanges.length > 0 && x === joinedRanges[0][0]) {
                     isJoined = true;
                     var range = joinedRanges.shift();
-                    chars = terminal.buffer.translateBufferLineToString(row, true, range[0], range[1]);
-                    width = range[1] - range[0];
-                    code = Infinity;
+                    cell = new CharacterJoinerRegistry_1.JoinedCellData(this._workCell, line.translateToString(true, range[0], range[1]), range[1] - range[0]);
                     lastCharX = range[1] - 1;
                 }
-                if (!isJoined && this._isOverlapping(charData)) {
-                    if (lastCharX < line.length - 1 && line.get(lastCharX + 1)[Buffer_1.CHAR_DATA_CODE_INDEX] === Buffer_1.NULL_CELL_CODE) {
-                        width = 2;
+                if (!isJoined && this._isOverlapping(cell)) {
+                    if (lastCharX < line.length - 1 && line.getCodePoint(lastCharX + 1) === Buffer_1.NULL_CELL_CODE) {
+                        cell.content &= ~12582912;
+                        cell.content |= 2 << 22;
                     }
                 }
-                var flags = attr >> 18;
-                var bg = attr & 0x1ff;
-                var fg = (attr >> 9) & 0x1ff;
-                if (flags & 8) {
-                    var temp = bg;
-                    bg = fg;
-                    fg = temp;
-                    if (fg === Types_1.DEFAULT_COLOR) {
-                        fg = Types_1.INVERTED_DEFAULT_COLOR;
-                    }
-                    if (bg === Types_1.DEFAULT_COLOR) {
-                        bg = Types_1.INVERTED_DEFAULT_COLOR;
-                    }
-                }
-                callback(code, chars, width, x, y, fg, bg, flags);
+                callback(cell, x, y);
                 x = lastCharX;
             }
         }
@@ -7973,13 +8873,24 @@ var TextRenderLayer = (function (_super) {
         var startY = 0;
         var prevFillStyle = null;
         ctx.save();
-        this._forEachCell(terminal, firstRow, lastRow, null, function (code, chars, width, x, y, fg, bg, flags) {
+        this._forEachCell(terminal, firstRow, lastRow, null, function (cell, x, y) {
             var nextFillStyle = null;
-            if (bg === Types_1.INVERTED_DEFAULT_COLOR) {
-                nextFillStyle = _this._colors.foreground.css;
+            if (cell.isInverse()) {
+                if (cell.isFgDefault()) {
+                    nextFillStyle = _this._colors.foreground.css;
+                }
+                else if (cell.isFgRGB()) {
+                    nextFillStyle = "rgb(" + BufferLine_1.AttributeData.toColorRGB(cell.getFgColor()).join(',') + ")";
+                }
+                else {
+                    nextFillStyle = _this._colors.ansi[cell.getFgColor()].css;
+                }
             }
-            else if (CharAtlasUtils_1.is256Color(bg)) {
-                nextFillStyle = _this._colors.ansi[bg].css;
+            else if (cell.isBgRGB()) {
+                nextFillStyle = "rgb(" + BufferLine_1.AttributeData.toColorRGB(cell.getBgColor()).join(',') + ")";
+            }
+            else if (cell.isBgPalette()) {
+                nextFillStyle = _this._colors.ansi[cell.getBgColor()].css;
             }
             if (prevFillStyle === null) {
                 startX = x;
@@ -8007,25 +8918,42 @@ var TextRenderLayer = (function (_super) {
     };
     TextRenderLayer.prototype._drawForeground = function (terminal, firstRow, lastRow) {
         var _this = this;
-        this._forEachCell(terminal, firstRow, lastRow, this._characterJoinerRegistry, function (code, chars, width, x, y, fg, bg, flags) {
-            if (flags & 16) {
+        this._forEachCell(terminal, firstRow, lastRow, this._characterJoinerRegistry, function (cell, x, y) {
+            if (cell.isInvisible()) {
                 return;
             }
-            if (flags & 2) {
+            if (cell.isUnderline()) {
                 _this._ctx.save();
-                if (fg === Types_1.INVERTED_DEFAULT_COLOR) {
-                    _this._ctx.fillStyle = _this._colors.background.css;
-                }
-                else if (CharAtlasUtils_1.is256Color(fg)) {
-                    _this._ctx.fillStyle = _this._colors.ansi[fg].css;
+                if (cell.isInverse()) {
+                    if (cell.isBgDefault()) {
+                        _this._ctx.fillStyle = _this._colors.background.css;
+                    }
+                    else if (cell.isBgRGB()) {
+                        _this._ctx.fillStyle = "rgb(" + BufferLine_1.AttributeData.toColorRGB(cell.getBgColor()).join(',') + ")";
+                    }
+                    else {
+                        _this._ctx.fillStyle = _this._colors.ansi[cell.getBgColor()].css;
+                    }
                 }
                 else {
-                    _this._ctx.fillStyle = _this._colors.foreground.css;
+                    if (cell.isFgDefault()) {
+                        _this._ctx.fillStyle = _this._colors.foreground.css;
+                    }
+                    else if (cell.isFgRGB()) {
+                        _this._ctx.fillStyle = "rgb(" + BufferLine_1.AttributeData.toColorRGB(cell.getFgColor()).join(',') + ")";
+                    }
+                    else {
+                        var fg = cell.getFgColor();
+                        if (terminal.options.drawBoldTextInBrightColors && cell.isBold() && fg < 8) {
+                            fg += 8;
+                        }
+                        _this._ctx.fillStyle = _this._colors.ansi[fg].css;
+                    }
                 }
-                _this.fillBottomLineAtCells(x, y, width);
+                _this.fillBottomLineAtCells(x, y, cell.getWidth());
                 _this._ctx.restore();
             }
-            _this.drawChars(terminal, chars, code, width, x, y, fg, bg, !!(flags & 1), !!(flags & 32), !!(flags & 64));
+            _this.drawChars(terminal, cell, x, y);
         });
     };
     TextRenderLayer.prototype.onGridChanged = function (terminal, firstRow, lastRow) {
@@ -8042,30 +8970,29 @@ var TextRenderLayer = (function (_super) {
     TextRenderLayer.prototype.onOptionsChanged = function (terminal) {
         this.setTransparency(terminal, terminal.options.allowTransparency);
     };
-    TextRenderLayer.prototype._isOverlapping = function (charData) {
-        if (charData[Buffer_1.CHAR_DATA_WIDTH_INDEX] !== 1) {
+    TextRenderLayer.prototype._isOverlapping = function (cell) {
+        if (cell.getWidth() !== 1) {
             return false;
         }
-        var code = charData[Buffer_1.CHAR_DATA_CODE_INDEX];
-        if (code < 256) {
+        if (cell.getCode() < 256) {
             return false;
         }
-        var char = charData[Buffer_1.CHAR_DATA_CHAR_INDEX];
-        if (this._characterOverlapCache.hasOwnProperty(char)) {
-            return this._characterOverlapCache[char];
+        var chars = cell.getChars();
+        if (this._characterOverlapCache.hasOwnProperty(chars)) {
+            return this._characterOverlapCache[chars];
         }
         this._ctx.save();
         this._ctx.font = this._characterFont;
-        var overlaps = Math.floor(this._ctx.measureText(char).width) > this._characterWidth;
+        var overlaps = Math.floor(this._ctx.measureText(chars).width) > this._characterWidth;
         this._ctx.restore();
-        this._characterOverlapCache[char] = overlaps;
+        this._characterOverlapCache[chars] = overlaps;
         return overlaps;
     };
     return TextRenderLayer;
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.TextRenderLayer = TextRenderLayer;
 
-},{"../Buffer":2,"./BaseRenderLayer":29,"./GridCache":33,"./atlas/CharAtlasUtils":41,"./atlas/Types":46}],38:[function(require,module,exports){
+},{"../Buffer":2,"../BufferLine":3,"./BaseRenderLayer":35,"./CharacterJoinerRegistry":36,"./GridCache":39}],44:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var BaseCharAtlas = (function () {
@@ -8085,7 +9012,7 @@ var BaseCharAtlas = (function () {
 }());
 exports.default = BaseCharAtlas;
 
-},{}],39:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CharAtlasUtils_1 = require("./CharAtlasUtils");
@@ -8150,10 +9077,10 @@ function removeTerminalFromCache(terminal) {
 }
 exports.removeTerminalFromCache = removeTerminalFromCache;
 
-},{"./CharAtlasUtils":41,"./DynamicCharAtlas":42,"./NoneCharAtlas":44,"./StaticCharAtlas":45}],40:[function(require,module,exports){
+},{"./CharAtlasUtils":47,"./DynamicCharAtlas":48,"./NoneCharAtlas":50,"./StaticCharAtlas":51}],46:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Platform_1 = require("../../core/Platform");
+var Platform_1 = require("../../common/Platform");
 var Types_1 = require("./Types");
 function generateStaticCharAtlasTexture(context, canvasFactory, config) {
     var cellWidth = config.scaledCharWidth + Types_1.CHAR_ATLAS_CELL_SPACING;
@@ -8242,7 +9169,7 @@ function getFont(fontWeight, config) {
     return fontWeight + " " + config.fontSize * config.devicePixelRatio + "px " + config.fontFamily;
 }
 
-},{"../../core/Platform":23,"./Types":46}],41:[function(require,module,exports){
+},{"../../common/Platform":27,"./Types":52}],47:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./Types");
@@ -8293,7 +9220,7 @@ function is256Color(colorCode) {
 }
 exports.is256Color = is256Color;
 
-},{"./Types":46}],42:[function(require,module,exports){
+},{"./Types":52}],48:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8301,7 +9228,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -8314,7 +9241,7 @@ var BaseCharAtlas_1 = require("./BaseCharAtlas");
 var ColorManager_1 = require("../ColorManager");
 var CharAtlasGenerator_1 = require("./CharAtlasGenerator");
 var LRUMap_1 = require("./LRUMap");
-var Platform_1 = require("../../core/Platform");
+var Platform_1 = require("../../common/Platform");
 var TEXTURE_WIDTH = 1024;
 var TEXTURE_HEIGHT = 1024;
 var TRANSPARENT_COLOR = {
@@ -8495,7 +9422,7 @@ var DynamicCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = DynamicCharAtlas;
 
-},{"../../core/Platform":23,"../ColorManager":31,"./BaseCharAtlas":38,"./CharAtlasGenerator":40,"./LRUMap":43,"./Types":46}],43:[function(require,module,exports){
+},{"../../common/Platform":27,"../ColorManager":37,"./BaseCharAtlas":44,"./CharAtlasGenerator":46,"./LRUMap":49,"./Types":52}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var LRUMap = (function () {
@@ -8605,7 +9532,7 @@ var LRUMap = (function () {
 }());
 exports.default = LRUMap;
 
-},{}],44:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8613,7 +9540,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -8634,7 +9561,7 @@ var NoneCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = NoneCharAtlas;
 
-},{"./BaseCharAtlas":38}],45:[function(require,module,exports){
+},{"./BaseCharAtlas":44}],51:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8642,7 +9569,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -8717,7 +9644,7 @@ var StaticCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = StaticCharAtlas;
 
-},{"./BaseCharAtlas":38,"./CharAtlasGenerator":40,"./CharAtlasUtils":41,"./Types":46}],46:[function(require,module,exports){
+},{"./BaseCharAtlas":44,"./CharAtlasGenerator":46,"./CharAtlasUtils":47,"./Types":52}],52:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_COLOR = 256;
@@ -8725,7 +9652,7 @@ exports.INVERTED_DEFAULT_COLOR = 257;
 exports.DIM_OPACITY = 0.5;
 exports.CHAR_ATLAS_CELL_SPACING = 1;
 
-},{}],47:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8733,7 +9660,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -8741,11 +9668,12 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter_1 = require("../../common/EventEmitter");
 var ColorManager_1 = require("../ColorManager");
 var RenderDebouncer_1 = require("../../ui/RenderDebouncer");
 var DomRendererRowFactory_1 = require("./DomRendererRowFactory");
 var Types_1 = require("../atlas/Types");
+var EventEmitter2_1 = require("../../common/EventEmitter2");
+var Lifecycle_1 = require("../../common/Lifecycle");
 var TERMINAL_CLASS_PREFIX = 'xterm-dom-renderer-owner-';
 var ROW_CONTAINER_CLASS = 'xterm-rows';
 var FG_CLASS_PREFIX = 'xterm-fg-';
@@ -8760,6 +9688,8 @@ var DomRenderer = (function (_super) {
         _this._terminal = _terminal;
         _this._terminalClass = nextTerminalId++;
         _this._rowElements = [];
+        _this._onCanvasResize = new EventEmitter2_1.EventEmitter2();
+        _this._onRender = new EventEmitter2_1.EventEmitter2();
         var allowTransparency = _this._terminal.options.allowTransparency;
         _this.colorManager = new ColorManager_1.ColorManager(document, allowTransparency);
         _this.setTheme(theme);
@@ -8786,15 +9716,25 @@ var DomRenderer = (function (_super) {
             actualCellHeight: null
         };
         _this._updateDimensions();
-        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._terminal, _this._renderRows.bind(_this));
-        _this._rowFactory = new DomRendererRowFactory_1.DomRendererRowFactory(document);
+        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._renderRows.bind(_this));
+        _this._rowFactory = new DomRendererRowFactory_1.DomRendererRowFactory(_terminal.options, document);
         _this._terminal.element.classList.add(TERMINAL_CLASS_PREFIX + _this._terminalClass);
         _this._terminal.screenElement.appendChild(_this._rowContainer);
         _this._terminal.screenElement.appendChild(_this._selectionContainer);
-        _this._terminal.linkifier.on("linkhover", function (e) { return _this._onLinkHover(e); });
-        _this._terminal.linkifier.on("linkleave", function (e) { return _this._onLinkLeave(e); });
+        _this._terminal.linkifier.onLinkHover(function (e) { return _this._onLinkHover(e); });
+        _this._terminal.linkifier.onLinkLeave(function (e) { return _this._onLinkLeave(e); });
         return _this;
     }
+    Object.defineProperty(DomRenderer.prototype, "onCanvasResize", {
+        get: function () { return this._onCanvasResize.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(DomRenderer.prototype, "onRender", {
+        get: function () { return this._onRender.event; },
+        enumerable: true,
+        configurable: true
+    });
     DomRenderer.prototype.dispose = function () {
         this._terminal.element.classList.remove(TERMINAL_CLASS_PREFIX + this._terminalClass);
         this._terminal.screenElement.removeChild(this._rowContainer);
@@ -8864,9 +9804,18 @@ var DomRenderer = (function (_super) {
                 " font-style: italic;" +
                 "}";
         styles +=
+            "@keyframes blink {" +
+                " 0% { opacity: 1.0; }" +
+                " 50% { opacity: 0.0; }" +
+                " 100% { opacity: 1.0; }" +
+                "}";
+        styles +=
             this._terminalSelector + " ." + ROW_CONTAINER_CLASS + ":not(." + FOCUS_CLASS + ") ." + DomRendererRowFactory_1.CURSOR_CLASS + " {" +
                 (" outline: 1px solid " + this.colorManager.colors.cursor.css + ";") +
                 " outline-offset: -1px;" +
+                "}" +
+                (this._terminalSelector + " ." + ROW_CONTAINER_CLASS + "." + FOCUS_CLASS + " ." + DomRendererRowFactory_1.CURSOR_CLASS + "." + DomRendererRowFactory_1.CURSOR_BLINK_CLASS + " {") +
+                " animation: blink 1s step-end infinite;" +
                 "}" +
                 (this._terminalSelector + " ." + ROW_CONTAINER_CLASS + "." + FOCUS_CLASS + " ." + DomRendererRowFactory_1.CURSOR_CLASS + "." + DomRendererRowFactory_1.CURSOR_STYLE_BLOCK_CLASS + " {") +
                 (" background-color: " + this.colorManager.colors.cursor.css + ";") +
@@ -8917,6 +9866,10 @@ var DomRenderer = (function (_super) {
     DomRenderer.prototype.onResize = function (cols, rows) {
         this._refreshRowElements(cols, rows);
         this._updateDimensions();
+        this._onCanvasResize.fire({
+            width: this.dimensions.canvasWidth,
+            height: this.dimensions.canvasHeight
+        });
     };
     DomRenderer.prototype.onCharSizeChanged = function () {
         this._updateDimensions();
@@ -8978,21 +9931,22 @@ var DomRenderer = (function (_super) {
         this._rowElements.forEach(function (e) { return e.innerHTML = ''; });
     };
     DomRenderer.prototype.refreshRows = function (start, end) {
-        this._renderDebouncer.refresh(start, end);
+        this._renderDebouncer.refresh(start, end, this._terminal.rows);
     };
     DomRenderer.prototype._renderRows = function (start, end) {
         var terminal = this._terminal;
         var cursorAbsoluteY = terminal.buffer.ybase + terminal.buffer.y;
         var cursorX = this._terminal.buffer.x;
+        var cursorBlink = this._terminal.options.cursorBlink;
         for (var y = start; y <= end; y++) {
             var rowElement = this._rowElements[y];
             rowElement.innerHTML = '';
             var row = y + terminal.buffer.ydisp;
             var lineData = terminal.buffer.lines.get(row);
             var cursorStyle = terminal.options.cursorStyle;
-            rowElement.appendChild(this._rowFactory.createRow(lineData, row === cursorAbsoluteY, cursorStyle, cursorX, this.dimensions.actualCellWidth, terminal.cols));
+            rowElement.appendChild(this._rowFactory.createRow(lineData, row === cursorAbsoluteY, cursorStyle, cursorX, cursorBlink, this.dimensions.actualCellWidth, terminal.cols));
         }
-        this._terminal.emit('refresh', { start: start, end: end });
+        this._onRender.fire({ start: start, end: end });
     };
     Object.defineProperty(DomRenderer.prototype, "_terminalSelector", {
         get: function () {
@@ -9026,40 +9980,42 @@ var DomRenderer = (function (_super) {
         }
     };
     return DomRenderer;
-}(EventEmitter_1.EventEmitter));
+}(Lifecycle_1.Disposable));
 exports.DomRenderer = DomRenderer;
 
-},{"../../common/EventEmitter":19,"../../ui/RenderDebouncer":54,"../ColorManager":31,"../atlas/Types":46,"./DomRendererRowFactory":48}],48:[function(require,module,exports){
+},{"../../common/EventEmitter2":25,"../../common/Lifecycle":26,"../../ui/RenderDebouncer":56,"../ColorManager":37,"../atlas/Types":52,"./DomRendererRowFactory":54}],54:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("../../Buffer");
 var Types_1 = require("../atlas/Types");
+var BufferLine_1 = require("../../BufferLine");
 exports.BOLD_CLASS = 'xterm-bold';
+exports.DIM_CLASS = 'xterm-dim';
 exports.ITALIC_CLASS = 'xterm-italic';
+exports.UNDERLINE_CLASS = 'xterm-underline';
 exports.CURSOR_CLASS = 'xterm-cursor';
+exports.CURSOR_BLINK_CLASS = 'xterm-cursor-blink';
 exports.CURSOR_STYLE_BLOCK_CLASS = 'xterm-cursor-block';
 exports.CURSOR_STYLE_BAR_CLASS = 'xterm-cursor-bar';
 exports.CURSOR_STYLE_UNDERLINE_CLASS = 'xterm-cursor-underline';
 var DomRendererRowFactory = (function () {
-    function DomRendererRowFactory(_document) {
+    function DomRendererRowFactory(_terminalOptions, _document) {
+        this._terminalOptions = _terminalOptions;
         this._document = _document;
+        this._workCell = new BufferLine_1.CellData();
     }
-    DomRendererRowFactory.prototype.createRow = function (lineData, isCursorRow, cursorStyle, cursorX, cellWidth, cols) {
+    DomRendererRowFactory.prototype.createRow = function (lineData, isCursorRow, cursorStyle, cursorX, cursorBlink, cellWidth, cols) {
         var fragment = this._document.createDocumentFragment();
         var lineLength = 0;
         for (var x = Math.min(lineData.length, cols) - 1; x >= 0; x--) {
-            var charData = lineData.get(x);
-            var code = charData[Buffer_1.CHAR_DATA_CODE_INDEX];
-            if (code !== Buffer_1.NULL_CELL_CODE || (isCursorRow && x === cursorX)) {
+            if (lineData.loadCell(x, this._workCell).getCode() !== Buffer_1.NULL_CELL_CODE || (isCursorRow && x === cursorX)) {
                 lineLength = x + 1;
                 break;
             }
         }
         for (var x = 0; x < lineLength; x++) {
-            var charData = lineData.get(x);
-            var char = charData[Buffer_1.CHAR_DATA_CHAR_INDEX] || Buffer_1.WHITESPACE_CELL_CHAR;
-            var attr = charData[Buffer_1.CHAR_DATA_ATTR_INDEX];
-            var width = charData[Buffer_1.CHAR_DATA_WIDTH_INDEX];
+            lineData.loadCell(x, this._workCell);
+            var width = this._workCell.getWidth();
             if (width === 0) {
                 continue;
             }
@@ -9067,11 +10023,11 @@ var DomRendererRowFactory = (function () {
             if (width > 1) {
                 charElement.style.width = cellWidth * width + "px";
             }
-            var flags = attr >> 18;
-            var bg = attr & 0x1ff;
-            var fg = (attr >> 9) & 0x1ff;
             if (isCursorRow && x === cursorX) {
                 charElement.classList.add(exports.CURSOR_CLASS);
+                if (cursorBlink) {
+                    charElement.classList.add(exports.CURSOR_BLINK_CLASS);
+                }
                 switch (cursorStyle) {
                     case 'bar':
                         charElement.classList.add(exports.CURSOR_STYLE_BAR_CLASS);
@@ -9084,32 +10040,46 @@ var DomRendererRowFactory = (function () {
                         break;
                 }
             }
-            if (flags & 8) {
-                var temp = bg;
-                bg = fg;
-                fg = temp;
-                if (fg === Types_1.DEFAULT_COLOR) {
-                    fg = Types_1.INVERTED_DEFAULT_COLOR;
-                }
-                if (bg === Types_1.DEFAULT_COLOR) {
-                    bg = Types_1.INVERTED_DEFAULT_COLOR;
-                }
-            }
-            if (flags & 1) {
-                if (fg < 8) {
-                    fg += 8;
-                }
+            if (this._workCell.isBold() && this._terminalOptions.enableBold) {
                 charElement.classList.add(exports.BOLD_CLASS);
             }
-            if (flags & 64) {
+            if (this._workCell.isItalic()) {
                 charElement.classList.add(exports.ITALIC_CLASS);
             }
-            charElement.textContent = char;
-            if (fg !== Types_1.DEFAULT_COLOR) {
-                charElement.classList.add("xterm-fg-" + fg);
+            if (this._workCell.isDim()) {
+                charElement.classList.add(exports.DIM_CLASS);
             }
-            if (bg !== Types_1.DEFAULT_COLOR) {
-                charElement.classList.add("xterm-bg-" + bg);
+            if (this._workCell.isUnderline()) {
+                charElement.classList.add(exports.UNDERLINE_CLASS);
+            }
+            charElement.textContent = this._workCell.getChars() || Buffer_1.WHITESPACE_CELL_CHAR;
+            var swapColor = this._workCell.isInverse();
+            if (this._workCell.isFgRGB()) {
+                var style = charElement.getAttribute('style') || '';
+                style += (swapColor ? 'background-' : '') + "color:rgb(" + (BufferLine_1.AttributeData.toColorRGB(this._workCell.getFgColor())).join(',') + ");";
+                charElement.setAttribute('style', style);
+            }
+            else if (this._workCell.isFgPalette()) {
+                var fg = this._workCell.getFgColor();
+                if (this._workCell.isBold() && fg < 8 && !swapColor &&
+                    this._terminalOptions.enableBold && this._terminalOptions.drawBoldTextInBrightColors) {
+                    fg += 8;
+                }
+                charElement.classList.add("xterm-" + (swapColor ? 'b' : 'f') + "g-" + fg);
+            }
+            else if (swapColor) {
+                charElement.classList.add("xterm-bg-" + Types_1.INVERTED_DEFAULT_COLOR);
+            }
+            if (this._workCell.isBgRGB()) {
+                var style = charElement.getAttribute('style') || '';
+                style += (swapColor ? '' : 'background-') + "color:rgb(" + (BufferLine_1.AttributeData.toColorRGB(this._workCell.getBgColor())).join(',') + ");";
+                charElement.setAttribute('style', style);
+            }
+            else if (this._workCell.isBgPalette()) {
+                charElement.classList.add("xterm-" + (swapColor ? 'f' : 'b') + "g-" + this._workCell.getBgColor());
+            }
+            else if (swapColor) {
+                charElement.classList.add("xterm-fg-" + Types_1.INVERTED_DEFAULT_COLOR);
             }
             fragment.appendChild(charElement);
         }
@@ -9119,149 +10089,7 @@ var DomRendererRowFactory = (function () {
 }());
 exports.DomRendererRowFactory = DomRendererRowFactory;
 
-},{"../../Buffer":2,"../atlas/Types":46}],49:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    }
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter_1 = require("../common/EventEmitter");
-var CharMeasure = (function (_super) {
-    __extends(CharMeasure, _super);
-    function CharMeasure(document, parentElement) {
-        var _this = _super.call(this) || this;
-        _this._document = document;
-        _this._parentElement = parentElement;
-        _this._measureElement = _this._document.createElement('span');
-        _this._measureElement.classList.add('xterm-char-measure-element');
-        _this._measureElement.textContent = 'W';
-        _this._measureElement.setAttribute('aria-hidden', 'true');
-        _this._parentElement.appendChild(_this._measureElement);
-        return _this;
-    }
-    Object.defineProperty(CharMeasure.prototype, "width", {
-        get: function () {
-            return this._width;
-        },
-        enumerable: true,
-        configurable: true
-    });
-    Object.defineProperty(CharMeasure.prototype, "height", {
-        get: function () {
-            return this._height;
-        },
-        enumerable: true,
-        configurable: true
-    });
-    CharMeasure.prototype.measure = function (options) {
-        this._measureElement.style.fontFamily = options.fontFamily;
-        this._measureElement.style.fontSize = options.fontSize + "px";
-        var geometry = this._measureElement.getBoundingClientRect();
-        if (geometry.width === 0 || geometry.height === 0) {
-            return;
-        }
-        var adjustedHeight = Math.ceil(geometry.height);
-        if (this._width !== geometry.width || this._height !== adjustedHeight) {
-            this._width = geometry.width;
-            this._height = adjustedHeight;
-            this.emit('charsizechanged');
-        }
-    };
-    return CharMeasure;
-}(EventEmitter_1.EventEmitter));
-exports.CharMeasure = CharMeasure;
-
-},{"../common/EventEmitter":19}],50:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-function prepareTextForTerminal(text) {
-    return text.replace(/\r?\n/g, '\r');
-}
-exports.prepareTextForTerminal = prepareTextForTerminal;
-function bracketTextForPaste(text, bracketedPasteMode) {
-    if (bracketedPasteMode) {
-        return '\x1b[200~' + text + '\x1b[201~';
-    }
-    return text;
-}
-exports.bracketTextForPaste = bracketTextForPaste;
-function copyHandler(ev, term, selectionManager) {
-    if (term.browser.isMSIE) {
-        window.clipboardData.setData('Text', selectionManager.selectionText);
-    }
-    else {
-        ev.clipboardData.setData('text/plain', selectionManager.selectionText);
-    }
-    ev.preventDefault();
-}
-exports.copyHandler = copyHandler;
-function pasteHandler(ev, term) {
-    ev.stopPropagation();
-    var text;
-    var dispatchPaste = function (text) {
-        text = prepareTextForTerminal(text);
-        text = bracketTextForPaste(text, term.bracketedPasteMode);
-        term.handler(text);
-        term.textarea.value = '';
-        term.emit('paste', text);
-        term.cancel(ev);
-    };
-    if (term.browser.isMSIE) {
-        if (window.clipboardData) {
-            text = window.clipboardData.getData('Text');
-            dispatchPaste(text);
-        }
-    }
-    else {
-        if (ev.clipboardData) {
-            text = ev.clipboardData.getData('text/plain');
-            dispatchPaste(text);
-        }
-    }
-}
-exports.pasteHandler = pasteHandler;
-function moveTextAreaUnderMouseCursor(ev, term) {
-    var pos = term.screenElement.getBoundingClientRect();
-    var left = ev.clientX - pos.left - 10;
-    var top = ev.clientY - pos.top - 10;
-    term.textarea.style.position = 'absolute';
-    term.textarea.style.width = '20px';
-    term.textarea.style.height = '20px';
-    term.textarea.style.left = left + "px";
-    term.textarea.style.top = top + "px";
-    term.textarea.style.zIndex = '1000';
-    term.textarea.focus();
-    setTimeout(function () {
-        term.textarea.style.position = null;
-        term.textarea.style.width = null;
-        term.textarea.style.height = null;
-        term.textarea.style.left = null;
-        term.textarea.style.top = null;
-        term.textarea.style.zIndex = null;
-    }, 200);
-}
-exports.moveTextAreaUnderMouseCursor = moveTextAreaUnderMouseCursor;
-function rightClickHandler(ev, term, selectionManager, shouldSelectWord) {
-    moveTextAreaUnderMouseCursor(ev, term);
-    if (shouldSelectWord && !selectionManager.isClickInSelection(ev)) {
-        selectionManager.selectWordAtCursor(ev);
-    }
-    term.textarea.value = selectionManager.selectionText;
-    term.textarea.select();
-}
-exports.rightClickHandler = rightClickHandler;
-
-},{}],51:[function(require,module,exports){
+},{"../../Buffer":2,"../../BufferLine":3,"../atlas/Types":52}],55:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function addDisposableDomListener(node, type, handler, useCapture) {
@@ -9272,274 +10100,52 @@ function addDisposableDomListener(node, type, handler, useCapture) {
                 return;
             }
             node.removeEventListener(type, handler, useCapture);
-            node = null;
-            handler = null;
         }
     };
 }
 exports.addDisposableDomListener = addDisposableDomListener;
 
-},{}],52:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var MouseHelper = (function () {
-    function MouseHelper(_renderer) {
-        this._renderer = _renderer;
-    }
-    MouseHelper.prototype.setRenderer = function (renderer) {
-        this._renderer = renderer;
-    };
-    MouseHelper.getCoordsRelativeToElement = function (event, element) {
-        var rect = element.getBoundingClientRect();
-        return [event.clientX - rect.left, event.clientY - rect.top];
-    };
-    MouseHelper.prototype.getCoords = function (event, element, charMeasure, colCount, rowCount, isSelection) {
-        if (!charMeasure.width || !charMeasure.height) {
-            return null;
-        }
-        var coords = MouseHelper.getCoordsRelativeToElement(event, element);
-        if (!coords) {
-            return null;
-        }
-        coords[0] = Math.ceil((coords[0] + (isSelection ? this._renderer.dimensions.actualCellWidth / 2 : 0)) / this._renderer.dimensions.actualCellWidth);
-        coords[1] = Math.ceil(coords[1] / this._renderer.dimensions.actualCellHeight);
-        coords[0] = Math.min(Math.max(coords[0], 1), colCount + (isSelection ? 1 : 0));
-        coords[1] = Math.min(Math.max(coords[1], 1), rowCount);
-        return coords;
-    };
-    MouseHelper.prototype.getRawByteCoords = function (event, element, charMeasure, colCount, rowCount) {
-        var coords = this.getCoords(event, element, charMeasure, colCount, rowCount);
-        var x = coords[0];
-        var y = coords[1];
-        x += 32;
-        y += 32;
-        return { x: x, y: y };
-    };
-    return MouseHelper;
-}());
-exports.MouseHelper = MouseHelper;
-
-},{}],53:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    }
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-var Lifecycle_1 = require("../common/Lifecycle");
-var Lifecycle_2 = require("./Lifecycle");
-var HOVER_DURATION = 500;
-var MouseZoneManager = (function (_super) {
-    __extends(MouseZoneManager, _super);
-    function MouseZoneManager(_terminal) {
-        var _this = _super.call(this) || this;
-        _this._terminal = _terminal;
-        _this._zones = [];
-        _this._areZonesActive = false;
-        _this._tooltipTimeout = null;
-        _this._currentZone = null;
-        _this._lastHoverCoords = [null, null];
-        _this.register(Lifecycle_2.addDisposableDomListener(_this._terminal.element, 'mousedown', function (e) { return _this._onMouseDown(e); }));
-        _this._mouseMoveListener = function (e) { return _this._onMouseMove(e); };
-        _this._clickListener = function (e) { return _this._onClick(e); };
-        return _this;
-    }
-    MouseZoneManager.prototype.dispose = function () {
-        _super.prototype.dispose.call(this);
-        this._deactivate();
-    };
-    MouseZoneManager.prototype.add = function (zone) {
-        this._zones.push(zone);
-        if (this._zones.length === 1) {
-            this._activate();
-        }
-    };
-    MouseZoneManager.prototype.clearAll = function (start, end) {
-        if (this._zones.length === 0) {
-            return;
-        }
-        if (!end) {
-            start = 0;
-            end = this._terminal.rows - 1;
-        }
-        for (var i = 0; i < this._zones.length; i++) {
-            var zone = this._zones[i];
-            if ((zone.y1 > start && zone.y1 <= end + 1) ||
-                (zone.y2 > start && zone.y2 <= end + 1) ||
-                (zone.y1 < start && zone.y2 > end + 1)) {
-                if (this._currentZone && this._currentZone === zone) {
-                    this._currentZone.leaveCallback();
-                    this._currentZone = null;
-                }
-                this._zones.splice(i--, 1);
-            }
-        }
-        if (this._zones.length === 0) {
-            this._deactivate();
-        }
-    };
-    MouseZoneManager.prototype._activate = function () {
-        if (!this._areZonesActive) {
-            this._areZonesActive = true;
-            this._terminal.element.addEventListener('mousemove', this._mouseMoveListener);
-            this._terminal.element.addEventListener('click', this._clickListener);
-        }
-    };
-    MouseZoneManager.prototype._deactivate = function () {
-        if (this._areZonesActive) {
-            this._areZonesActive = false;
-            this._terminal.element.removeEventListener('mousemove', this._mouseMoveListener);
-            this._terminal.element.removeEventListener('click', this._clickListener);
-        }
-    };
-    MouseZoneManager.prototype._onMouseMove = function (e) {
-        if (this._lastHoverCoords[0] !== e.pageX || this._lastHoverCoords[1] !== e.pageY) {
-            this._onHover(e);
-            this._lastHoverCoords = [e.pageX, e.pageY];
-        }
-    };
-    MouseZoneManager.prototype._onHover = function (e) {
-        var _this = this;
-        var zone = this._findZoneEventAt(e);
-        if (zone === this._currentZone) {
-            return;
-        }
-        if (this._currentZone) {
-            this._currentZone.leaveCallback();
-            this._currentZone = null;
-            if (this._tooltipTimeout) {
-                clearTimeout(this._tooltipTimeout);
-            }
-        }
-        if (!zone) {
-            return;
-        }
-        this._currentZone = zone;
-        if (zone.hoverCallback) {
-            zone.hoverCallback(e);
-        }
-        this._tooltipTimeout = setTimeout(function () { return _this._onTooltip(e); }, HOVER_DURATION);
-    };
-    MouseZoneManager.prototype._onTooltip = function (e) {
-        this._tooltipTimeout = null;
-        var zone = this._findZoneEventAt(e);
-        if (zone && zone.tooltipCallback) {
-            zone.tooltipCallback(e);
-        }
-    };
-    MouseZoneManager.prototype._onMouseDown = function (e) {
-        if (!this._areZonesActive) {
-            return;
-        }
-        var zone = this._findZoneEventAt(e);
-        if (zone) {
-            if (zone.willLinkActivate(e)) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-            }
-        }
-    };
-    MouseZoneManager.prototype._onClick = function (e) {
-        var zone = this._findZoneEventAt(e);
-        if (zone) {
-            zone.clickCallback(e);
-            e.preventDefault();
-            e.stopImmediatePropagation();
-        }
-    };
-    MouseZoneManager.prototype._findZoneEventAt = function (e) {
-        var coords = this._terminal.mouseHelper.getCoords(e, this._terminal.screenElement, this._terminal.charMeasure, this._terminal.cols, this._terminal.rows);
-        if (!coords) {
-            return null;
-        }
-        var x = coords[0];
-        var y = coords[1];
-        for (var i = 0; i < this._zones.length; i++) {
-            var zone = this._zones[i];
-            if (zone.y1 === zone.y2) {
-                if (y === zone.y1 && x >= zone.x1 && x < zone.x2) {
-                    return zone;
-                }
-            }
-            else {
-                if ((y === zone.y1 && x >= zone.x1) ||
-                    (y === zone.y2 && x < zone.x2) ||
-                    (y > zone.y1 && y < zone.y2)) {
-                    return zone;
-                }
-            }
-        }
-        return null;
-    };
-    return MouseZoneManager;
-}(Lifecycle_1.Disposable));
-exports.MouseZoneManager = MouseZoneManager;
-var MouseZone = (function () {
-    function MouseZone(x1, y1, x2, y2, clickCallback, hoverCallback, tooltipCallback, leaveCallback, willLinkActivate) {
-        this.x1 = x1;
-        this.y1 = y1;
-        this.x2 = x2;
-        this.y2 = y2;
-        this.clickCallback = clickCallback;
-        this.hoverCallback = hoverCallback;
-        this.tooltipCallback = tooltipCallback;
-        this.leaveCallback = leaveCallback;
-        this.willLinkActivate = willLinkActivate;
-    }
-    return MouseZone;
-}());
-exports.MouseZone = MouseZone;
-
-},{"../common/Lifecycle":20,"./Lifecycle":51}],54:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var RenderDebouncer = (function () {
-    function RenderDebouncer(_terminal, _callback) {
-        this._terminal = _terminal;
-        this._callback = _callback;
-        this._animationFrame = null;
+    function RenderDebouncer(_renderCallback) {
+        this._renderCallback = _renderCallback;
     }
     RenderDebouncer.prototype.dispose = function () {
         if (this._animationFrame) {
             window.cancelAnimationFrame(this._animationFrame);
-            this._animationFrame = null;
+            this._animationFrame = undefined;
         }
     };
-    RenderDebouncer.prototype.refresh = function (rowStart, rowEnd) {
+    RenderDebouncer.prototype.refresh = function (rowStart, rowEnd, rowCount) {
         var _this = this;
-        rowStart = rowStart !== null && rowStart !== undefined ? rowStart : 0;
-        rowEnd = rowEnd !== null && rowEnd !== undefined ? rowEnd : this._terminal.rows - 1;
-        var isRowStartSet = this._rowStart !== undefined && this._rowStart !== null;
-        var isRowEndSet = this._rowEnd !== undefined && this._rowEnd !== null;
-        this._rowStart = isRowStartSet ? Math.min(this._rowStart, rowStart) : rowStart;
-        this._rowEnd = isRowEndSet ? Math.max(this._rowEnd, rowEnd) : rowEnd;
+        this._rowCount = rowCount;
+        rowStart = rowStart !== undefined ? rowStart : 0;
+        rowEnd = rowEnd !== undefined ? rowEnd : this._rowCount - 1;
+        this._rowStart = this._rowStart !== undefined ? Math.min(this._rowStart, rowStart) : rowStart;
+        this._rowEnd = this._rowEnd !== undefined ? Math.max(this._rowEnd, rowEnd) : rowEnd;
         if (this._animationFrame) {
             return;
         }
         this._animationFrame = window.requestAnimationFrame(function () { return _this._innerRefresh(); });
     };
     RenderDebouncer.prototype._innerRefresh = function () {
+        if (this._rowStart === undefined || this._rowEnd === undefined || this._rowCount === undefined) {
+            return;
+        }
         this._rowStart = Math.max(this._rowStart, 0);
-        this._rowEnd = Math.min(this._rowEnd, this._terminal.rows - 1);
-        this._callback(this._rowStart, this._rowEnd);
-        this._rowStart = null;
-        this._rowEnd = null;
-        this._animationFrame = null;
+        this._rowEnd = Math.min(this._rowEnd, this._rowCount - 1);
+        this._renderCallback(this._rowStart, this._rowEnd);
+        this._rowStart = undefined;
+        this._rowEnd = undefined;
+        this._animationFrame = undefined;
     };
     return RenderDebouncer;
 }());
 exports.RenderDebouncer = RenderDebouncer;
 
-},{}],55:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9547,7 +10153,7 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -9559,7 +10165,9 @@ var Lifecycle_1 = require("../common/Lifecycle");
 var ScreenDprMonitor = (function (_super) {
     __extends(ScreenDprMonitor, _super);
     function ScreenDprMonitor() {
-        return _super !== null && _super.apply(this, arguments) || this;
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this._currentDevicePixelRatio = window.devicePixelRatio;
+        return _this;
     }
     ScreenDprMonitor.prototype.setListener = function (listener) {
         var _this = this;
@@ -9568,6 +10176,9 @@ var ScreenDprMonitor = (function (_super) {
         }
         this._listener = listener;
         this._outerListener = function () {
+            if (!_this._listener) {
+                return;
+            }
             _this._listener(window.devicePixelRatio, _this._currentDevicePixelRatio);
             _this._updateDpr();
         };
@@ -9578,31 +10189,33 @@ var ScreenDprMonitor = (function (_super) {
         this.clearListener();
     };
     ScreenDprMonitor.prototype._updateDpr = function () {
-        if (this._resolutionMediaMatchList) {
-            this._resolutionMediaMatchList.removeListener(this._outerListener);
+        if (!this._resolutionMediaMatchList || !this._outerListener) {
+            return;
         }
+        this._resolutionMediaMatchList.removeListener(this._outerListener);
         this._currentDevicePixelRatio = window.devicePixelRatio;
         this._resolutionMediaMatchList = window.matchMedia("screen and (resolution: " + window.devicePixelRatio + "dppx)");
         this._resolutionMediaMatchList.addListener(this._outerListener);
     };
     ScreenDprMonitor.prototype.clearListener = function () {
-        if (!this._listener) {
+        if (!this._resolutionMediaMatchList || !this._listener || !this._outerListener) {
             return;
         }
         this._resolutionMediaMatchList.removeListener(this._outerListener);
-        this._listener = null;
-        this._outerListener = null;
+        this._resolutionMediaMatchList = undefined;
+        this._listener = undefined;
+        this._outerListener = undefined;
     };
     return ScreenDprMonitor;
 }(Lifecycle_1.Disposable));
 exports.ScreenDprMonitor = ScreenDprMonitor;
 
-},{"../common/Lifecycle":20}],56:[function(require,module,exports){
+},{"../common/Lifecycle":26}],58:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("./public/Terminal");
 module.exports = Terminal_1.Terminal;
 
-},{"./public/Terminal":28}]},{},[56])(56)
+},{"./public/Terminal":34}]},{},[58])(58)
 });
 //# sourceMappingURL=xterm.js.map
