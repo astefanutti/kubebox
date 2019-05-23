@@ -24,7 +24,6 @@ endif::[]
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 :uri-xterm-js: https://github.com/xtermjs/xterm.js
 
-image::https://img.shields.io/badge/%40kubebox-00ACEE.svg?style=flat-square&logo=twitter&colorA=555&logoColor=fff[link={uri-kubebox-twitter}]
 {description}
 
 //image::https://astefanutti.github.io/kubebox/kubebox.svg[align="center"]
@@ -50,9 +49,11 @@ image::https://img.shields.io/badge/%40kubebox-00ACEE.svg?style=flat-square&logo
 * [ ] Port proxying and interactive HTTP client
 * [ ] ...
 
+Follow image:https://img.shields.io/badge/%40kubebox-00ACEE.svg?&logo=twitter&colorA=555&logoColor=fff[link={uri-kubebox-twitter}] for some updates.
+
 == Run
 
-The following alternatives are available for you to use Kubebox, depending on your preferences and constraints.
+The following alternatives are available for you to use Kubebox, depending on your preferences and constraints:
 
 === Executable
 
@@ -190,9 +191,19 @@ $ kube-apiserver --cors-allowed-origins .*
 
 |===
 
-== Usage
+== FAQ
 
-{icon-edit}
+* *_Resources usage metrics are unavailable!_*
++
+** You may face issue https://github.com/kubernetes/kubernetes/issues/56297[#56297] that still affects Kubernetes versions from 1.8.0 to 1.11.x
+
+** The metrics are retrieved from the embedded cAdvisor `/stats` endpoints, that are accessed by creating a proxy on the node Kubelets, and which requires proper RBAC permission, e.g.:
++
+[source,console]
+----
+$ kubectl auth can-i get nodes/proxy
+yes
+----
 
 == Development
 
@@ -203,7 +214,7 @@ $ npm install
 $ node index.js
 ```
 
-== Terminal forever
+== Terminal 🚀
 
 //image::https://astefanutti.github.io/kubebox/terminal-forever.jpg[align="center", link={uri-terminal-forever}]
 ++++
