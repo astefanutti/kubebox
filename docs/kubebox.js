@@ -142,7 +142,7 @@ class Client {
   }
 
   get openshift() {
-    return this._paths.some(path => path === '/oapi' || path === '/oapi/v1');
+    return this._paths.some(path => path === '/apis/apps.openshift.io');
   }
 
   api() {
@@ -183,7 +183,7 @@ class Client {
 
   // token can be passed to test authentication
   user(token) {
-    return new Request({ path: '/oapi/v1/users/~' }, { client: this, token });
+    return new Request({ path: '/apis/user.openshift.io/v1/users/~' }, { client: this, token });
   }
 
   namespaces() {
@@ -191,7 +191,7 @@ class Client {
  }
 
   projects() {
-    return new Request({ path: '/oapi/v1/projects' }, { client: this });
+    return new Request({ path: '/apis/project.openshift.io/v1/projects' }, { client: this });
   }
 
   pods(namespace) {
