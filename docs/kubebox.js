@@ -2613,7 +2613,7 @@ const blessed  = require('blessed'),
       task     = require('../task'),
       util     = require('../util');
 
-const { isNotEmpty, humanBytes, humanCores } = util;
+const { humanBytes, humanCores } = util;
 
 const { pause } = require('../promise');
 
@@ -2877,20 +2877,24 @@ class Dashboard {
         }, 100, { trailing: true });
         cancellations.add('dashboard.pod.logs', () => log.cancel());
         try {
+          let line = '';
           while (data = yield) {
             // an initial ping frame with 0-length data is being sent
             if (data.length === 0) continue;
             data = data.toString('utf8');
-            data.split(/\r\n|\r|\n/).filter(isNotEmpty).forEach(line => {
-              const i = line.indexOf(' ');
-              timestamp = line.substring(0, i);
-              const l = line.substring(i + 1);
-              // avoid scanning the whole buffer if the timestamp differs from the since time
-              if (!timestamp.startsWith(sinceTime) || !pod_log._clines.fake.includes(l)) {
-                lines.push(l);
-                log();
-              }
-            });
+            const i = data.indexOf(' ');
+            timestamp = data.substring(0, i);
+            const l = data.substring(i + 1);
+            // avoid scanning the whole buffer if the timestamp differs from the since time
+            if (timestamp.startsWith(sinceTime) && pod_log._clines.fake.includes(l)) continue;
+            const n = l.indexOf('\n');
+            if (n < 0) {
+              line += l;
+            } else {
+              lines.push(line + l.substring(0, n));
+              line = '';
+              log();
+            }
           }
         } catch (e) {
           // HTTP chunked transfer-encoding / streaming requests abort on timeout instead of being ended.
