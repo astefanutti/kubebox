@@ -19,14 +19,17 @@ var Platform_1 = require("./common/Platform");
 var RenderDebouncer_1 = require("./ui/RenderDebouncer");
 var Lifecycle_1 = require("./ui/Lifecycle");
 var Lifecycle_2 = require("./common/Lifecycle");
+var ScreenDprMonitor_1 = require("./ui/ScreenDprMonitor");
 var MAX_ROWS_TO_READ = 20;
 var AccessibilityManager = (function (_super) {
     __extends(AccessibilityManager, _super);
-    function AccessibilityManager(_terminal) {
+    function AccessibilityManager(_terminal, _dimensions) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
+        _this._dimensions = _dimensions;
         _this._liveRegionLineCount = 0;
         _this._charsToConsume = [];
+        _this._charsToAnnounce = '';
         _this._accessibilityTreeRoot = document.createElement('div');
         _this._accessibilityTreeRoot.classList.add('xterm-accessibility');
         _this._rowContainer = document.createElement('div');
@@ -58,8 +61,9 @@ var AccessibilityManager = (function (_super) {
         _this.register(_this._terminal.addDisposableListener('a11y.tab', function (spaceCount) { return _this._onTab(spaceCount); }));
         _this.register(_this._terminal.onKey(function (e) { return _this._onKey(e.key); }));
         _this.register(_this._terminal.addDisposableListener('blur', function () { return _this._clearLiveRegion(); }));
-        _this.register(_this._terminal.addDisposableListener('dprchange', function () { return _this._refreshRowsDimensions(); }));
-        _this.register(_this._terminal.renderer.onCanvasResize(function () { return _this._refreshRowsDimensions(); }));
+        _this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
+        _this.register(_this._screenDprMonitor);
+        _this._screenDprMonitor.setListener(function () { return _this._refreshRowsDimensions(); });
         _this.register(Lifecycle_1.addDisposableDomListener(window, 'resize', function () { return _this._refreshRowsDimensions(); }));
         return _this;
     }
@@ -140,11 +144,11 @@ var AccessibilityManager = (function (_super) {
             if (this._charsToConsume.length > 0) {
                 var shiftedChar = this._charsToConsume.shift();
                 if (shiftedChar !== char) {
-                    this._announceCharacter(char);
+                    this._charsToAnnounce += char;
                 }
             }
             else {
-                this._announceCharacter(char);
+                this._charsToAnnounce += char;
             }
             if (char === '\n') {
                 this._liveRegionLineCount++;
@@ -190,9 +194,10 @@ var AccessibilityManager = (function (_super) {
                 element.setAttribute('aria-setsize', setSize);
             }
         }
+        this._announceCharacters();
     };
     AccessibilityManager.prototype._refreshRowsDimensions = function () {
-        if (!this._terminal.renderer.dimensions.actualCellHeight) {
+        if (!this._dimensions.actualCellHeight) {
             return;
         }
         if (this._rowElements.length !== this._terminal.rows) {
@@ -202,64 +207,40 @@ var AccessibilityManager = (function (_super) {
             this._refreshRowDimensions(this._rowElements[i]);
         }
     };
-    AccessibilityManager.prototype._refreshRowDimensions = function (element) {
-        element.style.height = this._terminal.renderer.dimensions.actualCellHeight + "px";
+    AccessibilityManager.prototype.setDimensions = function (dimensions) {
+        this._dimensions = dimensions;
+        this._refreshRowsDimensions();
     };
-    AccessibilityManager.prototype._announceCharacter = function (char) {
-        if (char === ' ') {
-            this._liveRegion.innerHTML += '&nbsp;';
+    AccessibilityManager.prototype._refreshRowDimensions = function (element) {
+        element.style.height = this._dimensions.actualCellHeight + "px";
+    };
+    AccessibilityManager.prototype._announceCharacters = function () {
+        if (this._charsToAnnounce.length === 0) {
+            return;
         }
-        else {
-            this._liveRegion.textContent += char;
-        }
+        this._liveRegion.textContent += this._charsToAnnounce;
+        this._charsToAnnounce = '';
     };
     return AccessibilityManager;
 }(Lifecycle_2.Disposable));
 exports.AccessibilityManager = AccessibilityManager;
 
-},{"./Strings":18,"./common/Lifecycle":26,"./common/Platform":27,"./ui/Lifecycle":55,"./ui/RenderDebouncer":56}],2:[function(require,module,exports){
+},{"./Strings":16,"./common/Lifecycle":24,"./common/Platform":25,"./ui/Lifecycle":59,"./ui/RenderDebouncer":60,"./ui/ScreenDprMonitor":61}],2:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 var CircularList_1 = require("./common/CircularList");
-var BufferLine_1 = require("./BufferLine");
-var BufferReflow_1 = require("./BufferReflow");
-var Types_1 = require("./renderer/atlas/Types");
-var EventEmitter2_1 = require("./common/EventEmitter2");
-var Lifecycle_1 = require("../lib/common/Lifecycle");
-exports.DEFAULT_ATTR = (0 << 18) | (Types_1.DEFAULT_COLOR << 9) | (256 << 0);
-exports.DEFAULT_ATTR_DATA = new BufferLine_1.AttributeData();
-exports.CHAR_DATA_ATTR_INDEX = 0;
-exports.CHAR_DATA_CHAR_INDEX = 1;
-exports.CHAR_DATA_WIDTH_INDEX = 2;
-exports.CHAR_DATA_CODE_INDEX = 3;
+var BufferLine_1 = require("./core/buffer/BufferLine");
+var BufferReflow_1 = require("./core/buffer/BufferReflow");
+var Marker_1 = require("./core/buffer/Marker");
 exports.MAX_BUFFER_SIZE = 4294967295;
-exports.NULL_CELL_CHAR = '';
-exports.NULL_CELL_WIDTH = 1;
-exports.NULL_CELL_CODE = 0;
-exports.WHITESPACE_CELL_CHAR = ' ';
-exports.WHITESPACE_CELL_WIDTH = 1;
-exports.WHITESPACE_CELL_CODE = 32;
 var Buffer = (function () {
     function Buffer(_terminal, _hasScrollback) {
         this._terminal = _terminal;
         this._hasScrollback = _hasScrollback;
-        this.savedCurAttrData = exports.DEFAULT_ATTR_DATA.clone();
+        this.savedCurAttrData = BufferLine_1.DEFAULT_ATTR_DATA.clone();
         this.markers = [];
-        this._nullCell = BufferLine_1.CellData.fromCharData([0, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE]);
-        this._whitespaceCell = BufferLine_1.CellData.fromCharData([0, exports.WHITESPACE_CELL_CHAR, exports.WHITESPACE_CELL_WIDTH, exports.WHITESPACE_CELL_CODE]);
+        this._nullCell = BufferLine_1.CellData.fromCharData([0, BufferLine_1.NULL_CELL_CHAR, BufferLine_1.NULL_CELL_WIDTH, BufferLine_1.NULL_CELL_CODE]);
+        this._whitespaceCell = BufferLine_1.CellData.fromCharData([0, BufferLine_1.WHITESPACE_CELL_CHAR, BufferLine_1.WHITESPACE_CELL_WIDTH, BufferLine_1.WHITESPACE_CELL_CODE]);
         this._cols = this._terminal.cols;
         this._rows = this._terminal.rows;
         this.clear();
@@ -315,7 +296,7 @@ var Buffer = (function () {
     Buffer.prototype.fillViewportRows = function (fillAttr) {
         if (this.lines.length === 0) {
             if (fillAttr === undefined) {
-                fillAttr = exports.DEFAULT_ATTR_DATA;
+                fillAttr = BufferLine_1.DEFAULT_ATTR_DATA;
             }
             var i = this._rows;
             while (i--) {
@@ -334,7 +315,7 @@ var Buffer = (function () {
         this.setupTabStops();
     };
     Buffer.prototype.resize = function (newCols, newRows) {
-        var nullCell = this.getNullCell(exports.DEFAULT_ATTR_DATA);
+        var nullCell = this.getNullCell(BufferLine_1.DEFAULT_ATTR_DATA);
         var newMaxLength = this._getCorrectBufferLength(newRows);
         if (newMaxLength > this.lines.maxLength) {
             this.lines.maxLength = newMaxLength;
@@ -424,7 +405,7 @@ var Buffer = (function () {
         }
     };
     Buffer.prototype._reflowLarger = function (newCols, newRows) {
-        var toRemove = BufferReflow_1.reflowLargerGetLinesToRemove(this.lines, this._cols, newCols, this.ybase + this.y, this.getNullCell(exports.DEFAULT_ATTR_DATA));
+        var toRemove = BufferReflow_1.reflowLargerGetLinesToRemove(this.lines, this._cols, newCols, this.ybase + this.y, this.getNullCell(BufferLine_1.DEFAULT_ATTR_DATA));
         if (toRemove.length > 0) {
             var newLayoutResult = BufferReflow_1.reflowLargerCreateNewLayout(this.lines, toRemove);
             BufferReflow_1.reflowLargerApplyNewLayout(this.lines, newLayoutResult.layout);
@@ -432,7 +413,7 @@ var Buffer = (function () {
         }
     };
     Buffer.prototype._reflowLargerAdjustViewport = function (newCols, newRows, countRemoved) {
-        var nullCell = this.getNullCell(exports.DEFAULT_ATTR_DATA);
+        var nullCell = this.getNullCell(BufferLine_1.DEFAULT_ATTR_DATA);
         var viewportAdjustments = countRemoved;
         while (viewportAdjustments-- > 0) {
             if (this.ybase === 0) {
@@ -452,12 +433,12 @@ var Buffer = (function () {
         }
     };
     Buffer.prototype._reflowSmaller = function (newCols, newRows) {
-        var nullCell = this.getNullCell(exports.DEFAULT_ATTR_DATA);
+        var nullCell = this.getNullCell(BufferLine_1.DEFAULT_ATTR_DATA);
         var toInsert = [];
         var countToInsert = 0;
         for (var y = this.lines.length - 1; y >= 0; y--) {
             var nextLine = this.lines.get(y);
-            if (!nextLine.isWrapped && nextLine.getTrimmedLength() <= newCols) {
+            if (!nextLine || !nextLine.isWrapped && nextLine.getTrimmedLength() <= newCols) {
                 continue;
             }
             var wrappedLines = [nextLine];
@@ -481,7 +462,7 @@ var Buffer = (function () {
             }
             var newLines = [];
             for (var i = 0; i < linesToAdd; i++) {
-                var newLine = this.getBlankLine(exports.DEFAULT_ATTR_DATA, true);
+                var newLine = this.getBlankLine(BufferLine_1.DEFAULT_ATTR_DATA, true);
                 newLines.push(newLine);
             }
             if (newLines.length > 0) {
@@ -592,8 +573,8 @@ var Buffer = (function () {
             }
             var length_1 = (trimRight) ? line.getTrimmedLength() : line.length;
             for (var i = 0; i < length_1; ++i) {
-                if (line.get(i)[exports.CHAR_DATA_WIDTH_INDEX]) {
-                    stringIndex -= line.get(i)[exports.CHAR_DATA_CHAR_INDEX].length || 1;
+                if (line.get(i)[BufferLine_1.CHAR_DATA_WIDTH_INDEX]) {
+                    stringIndex -= line.get(i)[BufferLine_1.CHAR_DATA_CHAR_INDEX].length || 1;
                 }
                 if (stringIndex < 0) {
                     return [lineIndex, i];
@@ -654,7 +635,7 @@ var Buffer = (function () {
     };
     Buffer.prototype.addMarker = function (y) {
         var _this = this;
-        var marker = new Marker(y);
+        var marker = new Marker_1.Marker(y);
         this.markers.push(marker);
         marker.register(this.lines.onTrim(function (amount) {
             marker.line -= amount;
@@ -687,37 +668,6 @@ var Buffer = (function () {
     return Buffer;
 }());
 exports.Buffer = Buffer;
-var Marker = (function (_super) {
-    __extends(Marker, _super);
-    function Marker(line) {
-        var _this = _super.call(this) || this;
-        _this.line = line;
-        _this._id = Marker._nextId++;
-        _this.isDisposed = false;
-        _this._onDispose = new EventEmitter2_1.EventEmitter2();
-        return _this;
-    }
-    Object.defineProperty(Marker.prototype, "id", {
-        get: function () { return this._id; },
-        enumerable: true,
-        configurable: true
-    });
-    Object.defineProperty(Marker.prototype, "onDispose", {
-        get: function () { return this._onDispose.event; },
-        enumerable: true,
-        configurable: true
-    });
-    Marker.prototype.dispose = function () {
-        if (this.isDisposed) {
-            return;
-        }
-        this.isDisposed = true;
-        this._onDispose.fire();
-    };
-    Marker._nextId = 1;
-    return Marker;
-}(Lifecycle_1.Disposable));
-exports.Marker = Marker;
 var BufferStringIterator = (function () {
     function BufferStringIterator(_buffer, _trimRight, _startIndex, _endIndex, _startOverscan, _endOverscan) {
         if (_startIndex === void 0) { _startIndex = 0; }
@@ -762,570 +712,7 @@ var BufferStringIterator = (function () {
 }());
 exports.BufferStringIterator = BufferStringIterator;
 
-},{"../lib/common/Lifecycle":26,"./BufferLine":3,"./BufferReflow":4,"./common/CircularList":22,"./common/EventEmitter2":25,"./renderer/atlas/Types":52}],3:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-var Buffer_1 = require("./Buffer");
-var TextDecoder_1 = require("./core/input/TextDecoder");
-var CELL_SIZE = 3;
-var AttributeData = (function () {
-    function AttributeData() {
-        this.fg = 0;
-        this.bg = 0;
-    }
-    AttributeData.toColorRGB = function (value) {
-        return [
-            value >>> 16 & 255,
-            value >>> 8 & 255,
-            value & 255
-        ];
-    };
-    AttributeData.fromColorRGB = function (value) {
-        return (value[0] & 255) << 16 | (value[1] & 255) << 8 | value[2] & 255;
-    };
-    AttributeData.prototype.clone = function () {
-        var newObj = new AttributeData();
-        newObj.fg = this.fg;
-        newObj.bg = this.bg;
-        return newObj;
-    };
-    AttributeData.prototype.isInverse = function () { return this.fg & 67108864; };
-    AttributeData.prototype.isBold = function () { return this.fg & 134217728; };
-    AttributeData.prototype.isUnderline = function () { return this.fg & 268435456; };
-    AttributeData.prototype.isBlink = function () { return this.fg & 536870912; };
-    AttributeData.prototype.isInvisible = function () { return this.fg & 1073741824; };
-    AttributeData.prototype.isItalic = function () { return this.bg & 67108864; };
-    AttributeData.prototype.isDim = function () { return this.bg & 134217728; };
-    AttributeData.prototype.getFgColorMode = function () { return this.fg & 50331648; };
-    AttributeData.prototype.getBgColorMode = function () { return this.bg & 50331648; };
-    AttributeData.prototype.isFgRGB = function () { return (this.fg & 50331648) === 50331648; };
-    AttributeData.prototype.isBgRGB = function () { return (this.bg & 50331648) === 50331648; };
-    AttributeData.prototype.isFgPalette = function () { return (this.fg & 50331648) === 16777216 || (this.fg & 50331648) === 33554432; };
-    AttributeData.prototype.isBgPalette = function () { return (this.bg & 50331648) === 16777216 || (this.bg & 50331648) === 33554432; };
-    AttributeData.prototype.isFgDefault = function () { return (this.fg & 50331648) === 0; };
-    AttributeData.prototype.isBgDefault = function () { return (this.bg & 50331648) === 0; };
-    AttributeData.prototype.getFgColor = function () {
-        switch (this.fg & 50331648) {
-            case 16777216:
-            case 33554432: return this.fg & 255;
-            case 50331648: return this.fg & 16777215;
-            default: return -1;
-        }
-    };
-    AttributeData.prototype.getBgColor = function () {
-        switch (this.bg & 50331648) {
-            case 16777216:
-            case 33554432: return this.bg & 255;
-            case 50331648: return this.bg & 16777215;
-            default: return -1;
-        }
-    };
-    return AttributeData;
-}());
-exports.AttributeData = AttributeData;
-var CellData = (function (_super) {
-    __extends(CellData, _super);
-    function CellData() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this.content = 0;
-        _this.fg = 0;
-        _this.bg = 0;
-        _this.combinedData = '';
-        return _this;
-    }
-    CellData.fromCharData = function (value) {
-        var obj = new CellData();
-        obj.setFromCharData(value);
-        return obj;
-    };
-    CellData.prototype.isCombined = function () {
-        return this.content & 2097152;
-    };
-    CellData.prototype.getWidth = function () {
-        return this.content >> 22;
-    };
-    CellData.prototype.getChars = function () {
-        if (this.content & 2097152) {
-            return this.combinedData;
-        }
-        if (this.content & 2097151) {
-            return TextDecoder_1.stringFromCodePoint(this.content & 2097151);
-        }
-        return '';
-    };
-    CellData.prototype.getCode = function () {
-        return (this.isCombined())
-            ? this.combinedData.charCodeAt(this.combinedData.length - 1)
-            : this.content & 2097151;
-    };
-    CellData.prototype.setFromCharData = function (value) {
-        this.fg = value[Buffer_1.CHAR_DATA_ATTR_INDEX];
-        this.bg = 0;
-        var combined = false;
-        if (value[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 2) {
-            combined = true;
-        }
-        else if (value[Buffer_1.CHAR_DATA_CHAR_INDEX].length === 2) {
-            var code = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(0);
-            if (0xD800 <= code && code <= 0xDBFF) {
-                var second = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(1);
-                if (0xDC00 <= second && second <= 0xDFFF) {
-                    this.content = ((code - 0xD800) * 0x400 + second - 0xDC00 + 0x10000) | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
-                }
-                else {
-                    combined = true;
-                }
-            }
-            else {
-                combined = true;
-            }
-        }
-        else {
-            this.content = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
-        }
-        if (combined) {
-            this.combinedData = value[Buffer_1.CHAR_DATA_CHAR_INDEX];
-            this.content = 2097152 | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
-        }
-    };
-    CellData.prototype.getAsCharData = function () {
-        return [this.fg, this.getChars(), this.getWidth(), this.getCode()];
-    };
-    return CellData;
-}(AttributeData));
-exports.CellData = CellData;
-var BufferLine = (function () {
-    function BufferLine(cols, fillCellData, isWrapped) {
-        if (isWrapped === void 0) { isWrapped = false; }
-        this.isWrapped = isWrapped;
-        this._data = null;
-        this._combined = {};
-        if (cols) {
-            this._data = new Uint32Array(cols * CELL_SIZE);
-            var cell = fillCellData || CellData.fromCharData([0, Buffer_1.NULL_CELL_CHAR, Buffer_1.NULL_CELL_WIDTH, Buffer_1.NULL_CELL_CODE]);
-            for (var i = 0; i < cols; ++i) {
-                this.setCell(i, cell);
-            }
-        }
-        this.length = cols;
-    }
-    BufferLine.prototype.get = function (index) {
-        var content = this._data[index * CELL_SIZE + 0];
-        var cp = content & 2097151;
-        return [
-            this._data[index * CELL_SIZE + 1],
-            (content & 2097152)
-                ? this._combined[index]
-                : (cp) ? TextDecoder_1.stringFromCodePoint(cp) : '',
-            content >> 22,
-            (content & 2097152)
-                ? this._combined[index].charCodeAt(this._combined[index].length - 1)
-                : cp
-        ];
-    };
-    BufferLine.prototype.set = function (index, value) {
-        this._data[index * CELL_SIZE + 1] = value[Buffer_1.CHAR_DATA_ATTR_INDEX];
-        if (value[Buffer_1.CHAR_DATA_CHAR_INDEX].length > 1) {
-            this._combined[index] = value[1];
-            this._data[index * CELL_SIZE + 0] = index | 2097152 | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
-        }
-        else {
-            this._data[index * CELL_SIZE + 0] = value[Buffer_1.CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[Buffer_1.CHAR_DATA_WIDTH_INDEX] << 22);
-        }
-    };
-    BufferLine.prototype.getWidth = function (index) {
-        return this._data[index * CELL_SIZE + 0] >> 22;
-    };
-    BufferLine.prototype.hasWidth = function (index) {
-        return this._data[index * CELL_SIZE + 0] & 12582912;
-    };
-    BufferLine.prototype.getFg = function (index) {
-        return this._data[index * CELL_SIZE + 1];
-    };
-    BufferLine.prototype.getBg = function (index) {
-        return this._data[index * CELL_SIZE + 2];
-    };
-    BufferLine.prototype.hasContent = function (index) {
-        return this._data[index * CELL_SIZE + 0] & 4194303;
-    };
-    BufferLine.prototype.getCodePoint = function (index) {
-        var content = this._data[index * CELL_SIZE + 0];
-        if (content & 2097152) {
-            return this._combined[index].charCodeAt(this._combined[index].length - 1);
-        }
-        return content & 2097151;
-    };
-    BufferLine.prototype.isCombined = function (index) {
-        return this._data[index * CELL_SIZE + 0] & 2097152;
-    };
-    BufferLine.prototype.getString = function (index) {
-        var content = this._data[index * CELL_SIZE + 0];
-        if (content & 2097152) {
-            return this._combined[index];
-        }
-        if (content & 2097151) {
-            return TextDecoder_1.stringFromCodePoint(content & 2097151);
-        }
-        return '';
-    };
-    BufferLine.prototype.loadCell = function (index, cell) {
-        var startIndex = index * CELL_SIZE;
-        cell.content = this._data[startIndex + 0];
-        cell.fg = this._data[startIndex + 1];
-        cell.bg = this._data[startIndex + 2];
-        if (cell.content & 2097152) {
-            cell.combinedData = this._combined[index];
-        }
-        return cell;
-    };
-    BufferLine.prototype.setCell = function (index, cell) {
-        if (cell.content & 2097152) {
-            this._combined[index] = cell.combinedData;
-        }
-        this._data[index * CELL_SIZE + 0] = cell.content;
-        this._data[index * CELL_SIZE + 1] = cell.fg;
-        this._data[index * CELL_SIZE + 2] = cell.bg;
-    };
-    BufferLine.prototype.setCellFromCodePoint = function (index, codePoint, width, fg, bg) {
-        this._data[index * CELL_SIZE + 0] = codePoint | (width << 22);
-        this._data[index * CELL_SIZE + 1] = fg;
-        this._data[index * CELL_SIZE + 2] = bg;
-    };
-    BufferLine.prototype.addCodepointToCell = function (index, codePoint) {
-        var content = this._data[index * CELL_SIZE + 0];
-        if (content & 2097152) {
-            this._combined[index] += TextDecoder_1.stringFromCodePoint(codePoint);
-        }
-        else {
-            if (content & 2097151) {
-                this._combined[index] = TextDecoder_1.stringFromCodePoint(content & 2097151) + TextDecoder_1.stringFromCodePoint(codePoint);
-                content &= ~2097151;
-                content |= 2097152;
-            }
-            else {
-                content = codePoint | (1 << 22);
-            }
-            this._data[index * CELL_SIZE + 0] = content;
-        }
-    };
-    BufferLine.prototype.insertCells = function (pos, n, fillCellData) {
-        pos %= this.length;
-        if (n < this.length - pos) {
-            var cell = new CellData();
-            for (var i = this.length - pos - n - 1; i >= 0; --i) {
-                this.setCell(pos + n + i, this.loadCell(pos + i, cell));
-            }
-            for (var i = 0; i < n; ++i) {
-                this.setCell(pos + i, fillCellData);
-            }
-        }
-        else {
-            for (var i = pos; i < this.length; ++i) {
-                this.setCell(i, fillCellData);
-            }
-        }
-    };
-    BufferLine.prototype.deleteCells = function (pos, n, fillCellData) {
-        pos %= this.length;
-        if (n < this.length - pos) {
-            var cell = new CellData();
-            for (var i = 0; i < this.length - pos - n; ++i) {
-                this.setCell(pos + i, this.loadCell(pos + n + i, cell));
-            }
-            for (var i = this.length - n; i < this.length; ++i) {
-                this.setCell(i, fillCellData);
-            }
-        }
-        else {
-            for (var i = pos; i < this.length; ++i) {
-                this.setCell(i, fillCellData);
-            }
-        }
-    };
-    BufferLine.prototype.replaceCells = function (start, end, fillCellData) {
-        while (start < end && start < this.length) {
-            this.setCell(start++, fillCellData);
-        }
-    };
-    BufferLine.prototype.resize = function (cols, fillCellData) {
-        if (cols === this.length) {
-            return;
-        }
-        if (cols > this.length) {
-            var data = new Uint32Array(cols * CELL_SIZE);
-            if (this.length) {
-                if (cols * CELL_SIZE < this._data.length) {
-                    data.set(this._data.subarray(0, cols * CELL_SIZE));
-                }
-                else {
-                    data.set(this._data);
-                }
-            }
-            this._data = data;
-            for (var i = this.length; i < cols; ++i) {
-                this.setCell(i, fillCellData);
-            }
-        }
-        else {
-            if (cols) {
-                var data = new Uint32Array(cols * CELL_SIZE);
-                data.set(this._data.subarray(0, cols * CELL_SIZE));
-                this._data = data;
-                var keys = Object.keys(this._combined);
-                for (var i = 0; i < keys.length; i++) {
-                    var key = parseInt(keys[i], 10);
-                    if (key >= cols) {
-                        delete this._combined[key];
-                    }
-                }
-            }
-            else {
-                this._data = null;
-                this._combined = {};
-            }
-        }
-        this.length = cols;
-    };
-    BufferLine.prototype.fill = function (fillCellData) {
-        this._combined = {};
-        for (var i = 0; i < this.length; ++i) {
-            this.setCell(i, fillCellData);
-        }
-    };
-    BufferLine.prototype.copyFrom = function (line) {
-        if (this.length !== line.length) {
-            this._data = new Uint32Array(line._data);
-        }
-        else {
-            this._data.set(line._data);
-        }
-        this.length = line.length;
-        this._combined = {};
-        for (var el in line._combined) {
-            this._combined[el] = line._combined[el];
-        }
-        this.isWrapped = line.isWrapped;
-    };
-    BufferLine.prototype.clone = function () {
-        var newLine = new BufferLine(0);
-        newLine._data = new Uint32Array(this._data);
-        newLine.length = this.length;
-        for (var el in this._combined) {
-            newLine._combined[el] = this._combined[el];
-        }
-        newLine.isWrapped = this.isWrapped;
-        return newLine;
-    };
-    BufferLine.prototype.getTrimmedLength = function () {
-        for (var i = this.length - 1; i >= 0; --i) {
-            if ((this._data[i * CELL_SIZE + 0] & 4194303)) {
-                return i + (this._data[i * CELL_SIZE + 0] >> 22);
-            }
-        }
-        return 0;
-    };
-    BufferLine.prototype.copyCellsFrom = function (src, srcCol, destCol, length, applyInReverse) {
-        var srcData = src._data;
-        if (applyInReverse) {
-            for (var cell = length - 1; cell >= 0; cell--) {
-                for (var i = 0; i < CELL_SIZE; i++) {
-                    this._data[(destCol + cell) * CELL_SIZE + i] = srcData[(srcCol + cell) * CELL_SIZE + i];
-                }
-            }
-        }
-        else {
-            for (var cell = 0; cell < length; cell++) {
-                for (var i = 0; i < CELL_SIZE; i++) {
-                    this._data[(destCol + cell) * CELL_SIZE + i] = srcData[(srcCol + cell) * CELL_SIZE + i];
-                }
-            }
-        }
-        var srcCombinedKeys = Object.keys(src._combined);
-        for (var i = 0; i < srcCombinedKeys.length; i++) {
-            var key = parseInt(srcCombinedKeys[i], 10);
-            if (key >= srcCol) {
-                this._combined[key - srcCol + destCol] = src._combined[key];
-            }
-        }
-    };
-    BufferLine.prototype.translateToString = function (trimRight, startCol, endCol) {
-        if (trimRight === void 0) { trimRight = false; }
-        if (startCol === void 0) { startCol = 0; }
-        if (endCol === void 0) { endCol = this.length; }
-        if (trimRight) {
-            endCol = Math.min(endCol, this.getTrimmedLength());
-        }
-        var result = '';
-        while (startCol < endCol) {
-            var content = this._data[startCol * CELL_SIZE + 0];
-            var cp = content & 2097151;
-            result += (content & 2097152) ? this._combined[startCol] : (cp) ? TextDecoder_1.stringFromCodePoint(cp) : Buffer_1.WHITESPACE_CELL_CHAR;
-            startCol += (content >> 22) || 1;
-        }
-        return result;
-    };
-    return BufferLine;
-}());
-exports.BufferLine = BufferLine;
-
-},{"./Buffer":2,"./core/input/TextDecoder":32}],4:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-function reflowLargerGetLinesToRemove(lines, oldCols, newCols, bufferAbsoluteY, nullCell) {
-    var toRemove = [];
-    for (var y = 0; y < lines.length - 1; y++) {
-        var i = y;
-        var nextLine = lines.get(++i);
-        if (!nextLine.isWrapped) {
-            continue;
-        }
-        var wrappedLines = [lines.get(y)];
-        while (i < lines.length && nextLine.isWrapped) {
-            wrappedLines.push(nextLine);
-            nextLine = lines.get(++i);
-        }
-        if (bufferAbsoluteY >= y && bufferAbsoluteY < i) {
-            y += wrappedLines.length - 1;
-            continue;
-        }
-        var destLineIndex = 0;
-        var destCol = getWrappedLineTrimmedLength(wrappedLines, destLineIndex, oldCols);
-        var srcLineIndex = 1;
-        var srcCol = 0;
-        while (srcLineIndex < wrappedLines.length) {
-            var srcTrimmedTineLength = getWrappedLineTrimmedLength(wrappedLines, srcLineIndex, oldCols);
-            var srcRemainingCells = srcTrimmedTineLength - srcCol;
-            var destRemainingCells = newCols - destCol;
-            var cellsToCopy = Math.min(srcRemainingCells, destRemainingCells);
-            wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[srcLineIndex], srcCol, destCol, cellsToCopy, false);
-            destCol += cellsToCopy;
-            if (destCol === newCols) {
-                destLineIndex++;
-                destCol = 0;
-            }
-            srcCol += cellsToCopy;
-            if (srcCol === srcTrimmedTineLength) {
-                srcLineIndex++;
-                srcCol = 0;
-            }
-            if (destCol === 0 && destLineIndex !== 0) {
-                if (wrappedLines[destLineIndex - 1].getWidth(newCols - 1) === 2) {
-                    wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[destLineIndex - 1], newCols - 1, destCol++, 1, false);
-                    wrappedLines[destLineIndex - 1].setCell(newCols - 1, nullCell);
-                }
-            }
-        }
-        wrappedLines[destLineIndex].replaceCells(destCol, newCols, nullCell);
-        var countToRemove = 0;
-        for (var i_1 = wrappedLines.length - 1; i_1 > 0; i_1--) {
-            if (i_1 > destLineIndex || wrappedLines[i_1].getTrimmedLength() === 0) {
-                countToRemove++;
-            }
-            else {
-                break;
-            }
-        }
-        if (countToRemove > 0) {
-            toRemove.push(y + wrappedLines.length - countToRemove);
-            toRemove.push(countToRemove);
-        }
-        y += wrappedLines.length - 1;
-    }
-    return toRemove;
-}
-exports.reflowLargerGetLinesToRemove = reflowLargerGetLinesToRemove;
-function reflowLargerCreateNewLayout(lines, toRemove) {
-    var layout = [];
-    var nextToRemoveIndex = 0;
-    var nextToRemoveStart = toRemove[nextToRemoveIndex];
-    var countRemovedSoFar = 0;
-    for (var i = 0; i < lines.length; i++) {
-        if (nextToRemoveStart === i) {
-            var countToRemove = toRemove[++nextToRemoveIndex];
-            lines.onDeleteEmitter.fire({
-                index: i - countRemovedSoFar,
-                amount: countToRemove
-            });
-            i += countToRemove - 1;
-            countRemovedSoFar += countToRemove;
-            nextToRemoveStart = toRemove[++nextToRemoveIndex];
-        }
-        else {
-            layout.push(i);
-        }
-    }
-    return {
-        layout: layout,
-        countRemoved: countRemovedSoFar
-    };
-}
-exports.reflowLargerCreateNewLayout = reflowLargerCreateNewLayout;
-function reflowLargerApplyNewLayout(lines, newLayout) {
-    var newLayoutLines = [];
-    for (var i = 0; i < newLayout.length; i++) {
-        newLayoutLines.push(lines.get(newLayout[i]));
-    }
-    for (var i = 0; i < newLayoutLines.length; i++) {
-        lines.set(i, newLayoutLines[i]);
-    }
-    lines.length = newLayout.length;
-}
-exports.reflowLargerApplyNewLayout = reflowLargerApplyNewLayout;
-function reflowSmallerGetNewLineLengths(wrappedLines, oldCols, newCols) {
-    var newLineLengths = [];
-    var cellsNeeded = wrappedLines.map(function (l, i) { return getWrappedLineTrimmedLength(wrappedLines, i, oldCols); }).reduce(function (p, c) { return p + c; });
-    var srcCol = 0;
-    var srcLine = 0;
-    var cellsAvailable = 0;
-    while (cellsAvailable < cellsNeeded) {
-        if (cellsNeeded - cellsAvailable < newCols) {
-            newLineLengths.push(cellsNeeded - cellsAvailable);
-            break;
-        }
-        srcCol += newCols;
-        var oldTrimmedLength = getWrappedLineTrimmedLength(wrappedLines, srcLine, oldCols);
-        if (srcCol > oldTrimmedLength) {
-            srcCol -= oldTrimmedLength;
-            srcLine++;
-        }
-        var endsWithWide = wrappedLines[srcLine].getWidth(srcCol - 1) === 2;
-        if (endsWithWide) {
-            srcCol--;
-        }
-        var lineLength = endsWithWide ? newCols - 1 : newCols;
-        newLineLengths.push(lineLength);
-        cellsAvailable += lineLength;
-    }
-    return newLineLengths;
-}
-exports.reflowSmallerGetNewLineLengths = reflowSmallerGetNewLineLengths;
-function getWrappedLineTrimmedLength(lines, i, cols) {
-    if (i === lines.length - 1) {
-        return lines[i].getTrimmedLength();
-    }
-    var endsInNull = !(lines[i].hasContent(cols - 1)) && lines[i].getWidth(cols - 1) === 1;
-    var followingLineStartsWithWide = lines[i + 1].getWidth(0) === 2;
-    if (endsInNull && followingLineStartsWithWide) {
-        return cols - 1;
-    }
-    return cols;
-}
-exports.getWrappedLineTrimmedLength = getWrappedLineTrimmedLength;
-
-},{}],5:[function(require,module,exports){
+},{"./common/CircularList":20,"./core/buffer/BufferLine":29,"./core/buffer/BufferReflow":30,"./core/buffer/Marker":31}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Buffer_1 = require("./Buffer");
@@ -1404,7 +791,7 @@ var BufferSet = (function () {
 }());
 exports.BufferSet = BufferSet;
 
-},{"./Buffer":2,"./common/EventEmitter2":25}],6:[function(require,module,exports){
+},{"./Buffer":2,"./common/EventEmitter2":23}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EventEmitter2_1 = require("./common/EventEmitter2");
@@ -1456,7 +843,7 @@ var CharMeasure = (function () {
 }());
 exports.CharMeasure = CharMeasure;
 
-},{"./common/EventEmitter2":25}],7:[function(require,module,exports){
+},{"./common/EventEmitter2":23}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TypedArrayUtils_1 = require("./common/TypedArrayUtils");
@@ -1599,7 +986,7 @@ function getStringCellWidth(s) {
 }
 exports.getStringCellWidth = getStringCellWidth;
 
-},{"./common/TypedArrayUtils":28}],8:[function(require,module,exports){
+},{"./common/TypedArrayUtils":26}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function prepareTextForTerminal(text) {
@@ -1679,7 +1066,7 @@ function rightClickHandler(ev, term, selectionManager, shouldSelectWord) {
 }
 exports.rightClickHandler = rightClickHandler;
 
-},{}],9:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CompositionHelper = (function () {
@@ -1802,7 +1189,7 @@ var CompositionHelper = (function () {
 }());
 exports.CompositionHelper = CompositionHelper;
 
-},{}],10:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -2326,7 +1713,7 @@ var EscapeSequenceParser = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EscapeSequenceParser = EscapeSequenceParser;
 
-},{"./common/Lifecycle":26,"./core/input/TextDecoder":32}],11:[function(require,module,exports){
+},{"./common/Lifecycle":24,"./core/input/TextDecoder":34}],9:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -2344,13 +1731,12 @@ var __extends = (this && this.__extends) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("./common/data/EscapeSequences");
 var Charsets_1 = require("./core/data/Charsets");
-var Buffer_1 = require("./Buffer");
 var CharWidth_1 = require("./CharWidth");
 var EscapeSequenceParser_1 = require("./EscapeSequenceParser");
 var Lifecycle_1 = require("./common/Lifecycle");
 var TypedArrayUtils_1 = require("./common/TypedArrayUtils");
 var TextDecoder_1 = require("./core/input/TextDecoder");
-var BufferLine_1 = require("./BufferLine");
+var BufferLine_1 = require("./core/buffer/BufferLine");
 var EventEmitter2_1 = require("./common/EventEmitter2");
 var GLEVEL = { '(': 0, ')': 1, '*': 2, '+': 3, '-': 1, '.': 2 };
 var DECRQSS = (function () {
@@ -2399,6 +1785,7 @@ var InputHandler = (function (_super) {
         _this._parser = _parser;
         _this._parseBuffer = new Uint32Array(4096);
         _this._stringDecoder = new TextDecoder_1.StringToUtf32();
+        _this._utf8Decoder = new TextDecoder_1.Utf8ToUtf32();
         _this._workCell = new BufferLine_1.CellData();
         _this._onCursorMove = new EventEmitter2_1.EventEmitter2();
         _this._onData = new EventEmitter2_1.EventEmitter2();
@@ -2547,6 +1934,25 @@ var InputHandler = (function (_super) {
             this._onCursorMove.fire();
         }
     };
+    InputHandler.prototype.parseUtf8 = function (data) {
+        if (!this._terminal) {
+            return;
+        }
+        var buffer = this._terminal.buffer;
+        var cursorStartX = buffer.x;
+        var cursorStartY = buffer.y;
+        if (this._terminal.debug) {
+            this._terminal.log('data: ' + data);
+        }
+        if (this._parseBuffer.length < data.length) {
+            this._parseBuffer = new Uint32Array(data.length);
+        }
+        this._parser.parse(this._parseBuffer, this._utf8Decoder.decode(data, this._parseBuffer));
+        buffer = this._terminal.buffer;
+        if (buffer.x !== cursorStartX || buffer.y !== cursorStartY) {
+            this._terminal.emit('cursormove');
+        }
+    };
     InputHandler.prototype.print = function (data, start, end) {
         var code;
         var chWidth;
@@ -2602,7 +2008,7 @@ var InputHandler = (function (_super) {
             if (insertMode) {
                 bufferRow.insertCells(buffer.x, chWidth, buffer.getNullCell(curAttr));
                 if (bufferRow.getWidth(cols - 1) === 2) {
-                    bufferRow.setCellFromCodePoint(cols - 1, Buffer_1.NULL_CELL_CODE, Buffer_1.NULL_CELL_WIDTH, curAttr.fg, curAttr.bg);
+                    bufferRow.setCellFromCodePoint(cols - 1, BufferLine_1.NULL_CELL_CODE, BufferLine_1.NULL_CELL_WIDTH, curAttr.fg, curAttr.bg);
                 }
             }
             bufferRow.setCellFromCodePoint(buffer.x++, code, chWidth, curAttr.fg, curAttr.bg);
@@ -2878,7 +2284,7 @@ var InputHandler = (function (_super) {
         var buffer = this._terminal.buffer;
         while (param--) {
             buffer.lines.splice(buffer.ybase + buffer.scrollTop, 1);
-            buffer.lines.splice(buffer.ybase + buffer.scrollBottom, 0, buffer.getBlankLine(Buffer_1.DEFAULT_ATTR_DATA));
+            buffer.lines.splice(buffer.ybase + buffer.scrollBottom, 0, buffer.getBlankLine(BufferLine_1.DEFAULT_ATTR_DATA));
         }
         this._terminal.updateRange(buffer.scrollTop);
         this._terminal.updateRange(buffer.scrollBottom);
@@ -2889,7 +2295,7 @@ var InputHandler = (function (_super) {
             var buffer = this._terminal.buffer;
             while (param--) {
                 buffer.lines.splice(buffer.ybase + buffer.scrollBottom, 1);
-                buffer.lines.splice(buffer.ybase + buffer.scrollTop, 0, buffer.getBlankLine(Buffer_1.DEFAULT_ATTR_DATA));
+                buffer.lines.splice(buffer.ybase + buffer.scrollTop, 0, buffer.getBlankLine(BufferLine_1.DEFAULT_ATTR_DATA));
             }
             this._terminal.updateRange(buffer.scrollTop);
             this._terminal.updateRange(buffer.scrollBottom);
@@ -2929,7 +2335,7 @@ var InputHandler = (function (_super) {
         var buffer = this._terminal.buffer;
         var line = buffer.lines.get(buffer.ybase + buffer.y);
         line.loadCell(buffer.x - 1, this._workCell);
-        line.replaceCells(buffer.x, buffer.x + (params[0] || 1), (this._workCell.content !== undefined) ? this._workCell : buffer.getNullCell(Buffer_1.DEFAULT_ATTR_DATA));
+        line.replaceCells(buffer.x, buffer.x + (params[0] || 1), (this._workCell.content !== undefined) ? this._workCell : buffer.getNullCell(BufferLine_1.DEFAULT_ATTR_DATA));
     };
     InputHandler.prototype.sendDeviceAttributes = function (params, collect) {
         if (params[0] > 0) {
@@ -3197,8 +2603,8 @@ var InputHandler = (function (_super) {
     };
     InputHandler.prototype.charAttributes = function (params) {
         if (params.length === 1 && params[0] === 0) {
-            this._terminal.curAttrData.fg = Buffer_1.DEFAULT_ATTR_DATA.fg;
-            this._terminal.curAttrData.bg = Buffer_1.DEFAULT_ATTR_DATA.bg;
+            this._terminal.curAttrData.fg = BufferLine_1.DEFAULT_ATTR_DATA.fg;
+            this._terminal.curAttrData.bg = BufferLine_1.DEFAULT_ATTR_DATA.bg;
             return;
         }
         var l = params.length;
@@ -3223,8 +2629,8 @@ var InputHandler = (function (_super) {
                 attr.bg |= 16777216 | (p - 100) | 8;
             }
             else if (p === 0) {
-                attr.fg = Buffer_1.DEFAULT_ATTR_DATA.fg;
-                attr.bg = Buffer_1.DEFAULT_ATTR_DATA.bg;
+                attr.fg = BufferLine_1.DEFAULT_ATTR_DATA.fg;
+                attr.bg = BufferLine_1.DEFAULT_ATTR_DATA.bg;
             }
             else if (p === 1) {
                 attr.fg |= 134217728;
@@ -3268,11 +2674,11 @@ var InputHandler = (function (_super) {
             }
             else if (p === 39) {
                 attr.fg &= ~(50331648 | 16777215);
-                attr.fg |= Buffer_1.DEFAULT_ATTR_DATA.fg & (255 | 16777215);
+                attr.fg |= BufferLine_1.DEFAULT_ATTR_DATA.fg & (255 | 16777215);
             }
             else if (p === 49) {
                 attr.bg &= ~(50331648 | 16777215);
-                attr.bg |= Buffer_1.DEFAULT_ATTR_DATA.bg & (255 | 16777215);
+                attr.bg |= BufferLine_1.DEFAULT_ATTR_DATA.bg & (255 | 16777215);
             }
             else if (p === 38) {
                 if (params[i + 1] === 2) {
@@ -3285,7 +2691,7 @@ var InputHandler = (function (_super) {
                 else if (params[i + 1] === 5) {
                     i += 2;
                     p = params[i] & 0xff;
-                    attr.fg &= ~255;
+                    attr.fg &= ~(50331648 | 255);
                     attr.fg |= 33554432 | p;
                 }
             }
@@ -3300,15 +2706,15 @@ var InputHandler = (function (_super) {
                 else if (params[i + 1] === 5) {
                     i += 2;
                     p = params[i] & 0xff;
-                    attr.bg &= ~255;
+                    attr.bg &= ~(50331648 | 255);
                     attr.bg |= 33554432 | p;
                 }
             }
             else if (p === 100) {
                 attr.fg &= ~(50331648 | 16777215);
-                attr.fg |= Buffer_1.DEFAULT_ATTR_DATA.fg & (255 | 16777215);
+                attr.fg |= BufferLine_1.DEFAULT_ATTR_DATA.fg & (255 | 16777215);
                 attr.bg &= ~(50331648 | 16777215);
-                attr.bg |= Buffer_1.DEFAULT_ATTR_DATA.bg & (255 | 16777215);
+                attr.bg |= BufferLine_1.DEFAULT_ATTR_DATA.bg & (255 | 16777215);
             }
             else {
                 this._terminal.error('Unknown SGR attribute: %d.', p);
@@ -3359,7 +2765,7 @@ var InputHandler = (function (_super) {
             this._terminal.applicationCursor = false;
             this._terminal.buffer.scrollTop = 0;
             this._terminal.buffer.scrollBottom = this._terminal.rows - 1;
-            this._terminal.curAttrData = Buffer_1.DEFAULT_ATTR_DATA;
+            this._terminal.curAttrData = BufferLine_1.DEFAULT_ATTR_DATA;
             this._terminal.buffer.x = this._terminal.buffer.y = 0;
             this._terminal.charset = null;
             this._terminal.glevel = 0;
@@ -3464,7 +2870,7 @@ var InputHandler = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.InputHandler = InputHandler;
 
-},{"./Buffer":2,"./BufferLine":3,"./CharWidth":7,"./EscapeSequenceParser":10,"./common/EventEmitter2":25,"./common/Lifecycle":26,"./common/TypedArrayUtils":28,"./common/data/EscapeSequences":29,"./core/data/Charsets":30,"./core/input/TextDecoder":32}],12:[function(require,module,exports){
+},{"./CharWidth":5,"./EscapeSequenceParser":8,"./common/EventEmitter2":23,"./common/Lifecycle":24,"./common/TypedArrayUtils":26,"./common/data/EscapeSequences":28,"./core/buffer/BufferLine":29,"./core/data/Charsets":32,"./core/input/TextDecoder":34}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var MouseZoneManager_1 = require("./MouseZoneManager");
@@ -3676,16 +3082,13 @@ var Linkifier = (function () {
 }());
 exports.Linkifier = Linkifier;
 
-},{"./CharWidth":7,"./MouseZoneManager":14,"./common/EventEmitter2":25}],13:[function(require,module,exports){
+},{"./CharWidth":5,"./MouseZoneManager":12,"./common/EventEmitter2":23}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var MouseHelper = (function () {
-    function MouseHelper(_renderer) {
-        this._renderer = _renderer;
+    function MouseHelper(_renderCoordinator) {
+        this._renderCoordinator = _renderCoordinator;
     }
-    MouseHelper.prototype.setRenderer = function (renderer) {
-        this._renderer = renderer;
-    };
     MouseHelper.getCoordsRelativeToElement = function (event, element) {
         var rect = element.getBoundingClientRect();
         return [event.clientX - rect.left, event.clientY - rect.top];
@@ -3698,8 +3101,8 @@ var MouseHelper = (function () {
         if (!coords) {
             return null;
         }
-        coords[0] = Math.ceil((coords[0] + (isSelection ? this._renderer.dimensions.actualCellWidth / 2 : 0)) / this._renderer.dimensions.actualCellWidth);
-        coords[1] = Math.ceil(coords[1] / this._renderer.dimensions.actualCellHeight);
+        coords[0] = Math.ceil((coords[0] + (isSelection ? this._renderCoordinator.dimensions.actualCellWidth / 2 : 0)) / this._renderCoordinator.dimensions.actualCellWidth);
+        coords[1] = Math.ceil(coords[1] / this._renderCoordinator.dimensions.actualCellHeight);
         coords[0] = Math.min(Math.max(coords[0], 1), colCount + (isSelection ? 1 : 0));
         coords[1] = Math.min(Math.max(coords[1], 1), rowCount);
         return coords;
@@ -3716,7 +3119,7 @@ var MouseHelper = (function () {
 }());
 exports.MouseHelper = MouseHelper;
 
-},{}],14:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -3910,14 +3313,14 @@ var MouseZone = (function () {
 }());
 exports.MouseZone = MouseZone;
 
-},{"./common/Lifecycle":26,"./ui/Lifecycle":55}],15:[function(require,module,exports){
+},{"./common/Lifecycle":24,"./ui/Lifecycle":59}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var MouseHelper_1 = require("./MouseHelper");
 var Browser = require("./common/Platform");
 var SelectionModel_1 = require("./SelectionModel");
 var AltClickHandler_1 = require("./handlers/AltClickHandler");
-var BufferLine_1 = require("./BufferLine");
+var BufferLine_1 = require("./core/buffer/BufferLine");
 var EventEmitter2_1 = require("./common/EventEmitter2");
 var DRAG_SCROLL_MAX_THRESHOLD = 50;
 var DRAG_SCROLL_MAX_SPEED = 15;
@@ -4058,6 +3461,7 @@ var SelectionManager = (function () {
         this._model.clearSelection();
         this._removeMouseDownListeners();
         this.refresh();
+        this._onSelectionChange.fire();
     };
     SelectionManager.prototype.refresh = function (isLinuxMouseSelection) {
         var _this = this;
@@ -4490,7 +3894,7 @@ var SelectionManager = (function () {
 }());
 exports.SelectionManager = SelectionManager;
 
-},{"./BufferLine":3,"./MouseHelper":13,"./SelectionModel":16,"./common/EventEmitter2":25,"./common/Platform":27,"./handlers/AltClickHandler":33}],16:[function(require,module,exports){
+},{"./MouseHelper":11,"./SelectionModel":14,"./common/EventEmitter2":23,"./common/Platform":25,"./core/buffer/BufferLine":29,"./handlers/AltClickHandler":35}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var SelectionModel = (function () {
@@ -4570,7 +3974,7 @@ var SelectionModel = (function () {
 }());
 exports.SelectionModel = SelectionModel;
 
-},{}],17:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_BELL_SOUND = 'data:audio/wav;base64,UklGRigBAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQBAADpAFgCwAMlBZoG/wdmCcoKRAypDQ8PbRDBEQQTOxRtFYcWlBePGIUZXhoiG88bcBz7HHIdzh0WHlMeZx51HmkeUx4WHs8dah0AHXwc3hs9G4saxRnyGBIYGBcQFv8U4RPAEoYRQBACD70NWwwHC6gJOwjWBloF7gOBAhABkf8b/qv8R/ve+Xf4Ife79W/0JfPZ8Z/wde9N7ijtE+wU6xvqM+lb6H7nw+YX5mrlxuQz5Mzje+Ma49fioeKD4nXiYeJy4pHitOL04j/jn+MN5IPkFOWs5U3mDefM55/ogOl36m7rdOyE7abuyu8D8Unyj/Pg9D/2qfcb+Yn6/vuK/Qj/lAAlAg==';
@@ -4622,14 +4026,14 @@ var SoundManager = (function () {
 }());
 exports.SoundManager = SoundManager;
 
-},{}],18:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.blankLine = 'Blank line';
 exports.promptLabel = 'Terminal input';
 exports.tooMuchOutput = 'Too much output to announce, navigate to rows manually to read';
 
-},{}],19:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -4664,16 +4068,19 @@ var MouseHelper_1 = require("./MouseHelper");
 var SoundManager_1 = require("./SoundManager");
 var MouseZoneManager_1 = require("./MouseZoneManager");
 var AccessibilityManager_1 = require("./AccessibilityManager");
-var ScreenDprMonitor_1 = require("./ui/ScreenDprMonitor");
 var CharAtlasCache_1 = require("./renderer/atlas/CharAtlasCache");
 var DomRenderer_1 = require("./renderer/dom/DomRenderer");
 var Keyboard_1 = require("./core/input/Keyboard");
 var Clone_1 = require("./common/Clone");
 var EventEmitter2_1 = require("./common/EventEmitter2");
+var BufferLine_1 = require("./core/buffer/BufferLine");
 var WindowsMode_1 = require("./WindowsMode");
+var ColorManager_1 = require("./ui/ColorManager");
+var RenderCoordinator_1 = require("./renderer/RenderCoordinator");
 var document = (typeof window !== 'undefined') ? window.document : null;
 var WRITE_BUFFER_PAUSE_THRESHOLD = 5;
 var WRITE_TIMEOUT_MS = 12;
+var WRITE_BUFFER_LENGTH_THRESHOLD = 50;
 var MINIMUM_COLS = 2;
 var MINIMUM_ROWS = 1;
 var CONSTRUCTOR_ONLY_OPTIONS = ['cols', 'rows'];
@@ -4706,7 +4113,7 @@ var DEFAULT_OPTIONS = {
     useFlowControl: false,
     allowTransparency: false,
     tabStopWidth: 8,
-    theme: null,
+    theme: undefined,
     rightClickSelectsWord: Browser.isMac,
     rendererType: 'canvas',
     windowsMode: false
@@ -4828,11 +4235,12 @@ var Terminal = (function (_super) {
         this.gcharset = null;
         this.glevel = 0;
         this.charsets = [null];
-        this.curAttrData = Buffer_1.DEFAULT_ATTR_DATA.clone();
-        this._eraseAttrData = Buffer_1.DEFAULT_ATTR_DATA.clone();
+        this.curAttrData = BufferLine_1.DEFAULT_ATTR_DATA.clone();
+        this._eraseAttrData = BufferLine_1.DEFAULT_ATTR_DATA.clone();
         this.params = [];
         this.currentParam = 0;
         this.writeBuffer = [];
+        this.writeBufferUtf8 = [];
         this._writeInProgress = false;
         this._xoffSentToCatchUp = false;
         this._userScrolling = false;
@@ -4841,7 +4249,6 @@ var Terminal = (function (_super) {
         this._inputHandler.onLineFeed(function () { return _this._onLineFeed.fire(); });
         this._inputHandler.onData(function (e) { return _this._onData.fire(e); });
         this.register(this._inputHandler);
-        this.renderer = this.renderer || null;
         this.selectionManager = this.selectionManager || null;
         this.linkifier = this.linkifier || new Linkifier_1.Linkifier(this);
         this._mouseZoneManager = this._mouseZoneManager || null;
@@ -4933,10 +4340,7 @@ var Terminal = (function (_super) {
                 }
                 break;
             case 'theme':
-                if (this.renderer) {
-                    this._setTheme(value);
-                    return;
-                }
+                this._setTheme(value);
                 break;
             case 'scrollback':
                 value = Math.min(value, Buffer_1.MAX_BUFFER_SIZE);
@@ -4963,8 +4367,8 @@ var Terminal = (function (_super) {
         switch (key) {
             case 'fontFamily':
             case 'fontSize':
-                if (this.renderer) {
-                    this.renderer.clear();
+                if (this._renderCoordinator) {
+                    this._renderCoordinator.clear();
                     this.charMeasure.measure(this.options);
                 }
                 break;
@@ -4975,24 +4379,16 @@ var Terminal = (function (_super) {
             case 'lineHeight':
             case 'fontWeight':
             case 'fontWeightBold':
-                if (this.renderer) {
-                    this.renderer.clear();
-                    this.renderer.onResize(this.cols, this.rows);
+                if (this._renderCoordinator) {
+                    this._renderCoordinator.clear();
+                    this._renderCoordinator.onResize(this.cols, this.rows);
                     this.refresh(0, this.rows - 1);
                 }
                 break;
             case 'rendererType':
-                if (this.renderer) {
-                    this.unregister(this.renderer);
-                    this.renderer.dispose();
-                    this.renderer = null;
+                if (this._renderCoordinator) {
+                    this._renderCoordinator.setRenderer(this._createRenderer());
                 }
-                this._setupRenderer();
-                this.renderer.onCharSizeChanged();
-                if (this._theme) {
-                    this.renderer.setTheme(this._theme);
-                }
-                this.mouseHelper.setRenderer(this.renderer);
                 break;
             case 'scrollback':
                 this.buffers.resize(this.cols, this.rows);
@@ -5002,8 +4398,8 @@ var Terminal = (function (_super) {
                 break;
             case 'screenReaderMode':
                 if (value) {
-                    if (!this._accessibilityManager) {
-                        this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this);
+                    if (!this._accessibilityManager && this._renderCoordinator) {
+                        this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this, this._renderCoordinator.dimensions);
                     }
                 }
                 else {
@@ -5030,8 +4426,8 @@ var Terminal = (function (_super) {
                 }
                 break;
         }
-        if (this.renderer) {
-            this.renderer.onOptionsChanged();
+        if (this._renderCoordinator) {
+            this._renderCoordinator.onOptionsChanged();
         }
     };
     Terminal.prototype._onTextAreaFocus = function (ev) {
@@ -5124,9 +4520,6 @@ var Terminal = (function (_super) {
         }
         this._context = this._parent.ownerDocument.defaultView;
         this._document = this._parent.ownerDocument;
-        this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
-        this._screenDprMonitor.setListener(function () { return _this.emit('dprchange', window.devicePixelRatio); });
-        this.register(this._screenDprMonitor);
         this.element = this._document.createElement('div');
         this.element.dir = 'ltr';
         this.element.classList.add('terminal');
@@ -5167,24 +4560,27 @@ var Terminal = (function (_super) {
         this._helperContainer.appendChild(this._compositionView);
         this.charMeasure = new CharMeasure_1.CharMeasure(document, this._helperContainer);
         this.element.appendChild(fragment);
-        this._setupRenderer();
         this._theme = this.options.theme;
         this.options.theme = null;
-        this.viewport = new Viewport_1.Viewport(this, this._viewportElement, this._viewportScrollArea, this.charMeasure);
-        this.viewport.onThemeChanged(this.renderer.colorManager.colors);
+        this._colorManager = new ColorManager_1.ColorManager(document, this.options.allowTransparency);
+        this._colorManager.setTheme(this._theme);
+        var renderer = this._createRenderer();
+        this._renderCoordinator = new RenderCoordinator_1.RenderCoordinator(renderer, this.rows, this.screenElement);
+        this._renderCoordinator.onRender(function (e) { return _this._onRender.fire(e); });
+        this.onResize(function (e) { return _this._renderCoordinator.resize(e.cols, e.rows); });
+        this.viewport = new Viewport_1.Viewport(this, this._viewportElement, this._viewportScrollArea, this.charMeasure, this._renderCoordinator.dimensions);
+        this.viewport.onThemeChange(this._colorManager.colors);
         this.register(this.viewport);
-        this.register(this.onCursorMove(function () { return _this.renderer.onCursorMove(); }));
-        this.register(this.onResize(function () { return _this.renderer.onResize(_this.cols, _this.rows); }));
-        this.register(this.addDisposableListener('blur', function () { return _this.renderer.onBlur(); }));
-        this.register(this.addDisposableListener('focus', function () { return _this.renderer.onFocus(); }));
-        this.register(this.addDisposableListener('dprchange', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); }));
-        this.register(Lifecycle_1.addDisposableDomListener(window, 'resize', function () { return _this.renderer.onWindowResize(window.devicePixelRatio); }));
-        this.register(this.charMeasure.onCharSizeChanged(function () { return _this.renderer.onCharSizeChanged(); }));
-        this.register(this.renderer.onCanvasResize(function () { return _this.viewport.syncScrollArea(); }));
+        this.register(this.onCursorMove(function () { return _this._renderCoordinator.onCursorMove(); }));
+        this.register(this.onResize(function () { return _this._renderCoordinator.onResize(_this.cols, _this.rows); }));
+        this.register(this.addDisposableListener('blur', function () { return _this._renderCoordinator.onBlur(); }));
+        this.register(this.addDisposableListener('focus', function () { return _this._renderCoordinator.onFocus(); }));
+        this.register(this.charMeasure.onCharSizeChanged(function () { return _this._renderCoordinator.onCharSizeChanged(); }));
+        this.register(this._renderCoordinator.onDimensionsChange(function () { return _this.viewport.syncScrollArea(); }));
         this.selectionManager = new SelectionManager_1.SelectionManager(this, this.charMeasure);
         this.register(this.selectionManager.onSelectionChange(function () { return _this._onSelectionChange.fire(); }));
         this.register(Lifecycle_1.addDisposableDomListener(this.element, 'mousedown', function (e) { return _this.selectionManager.onMouseDown(e); }));
-        this.register(this.selectionManager.onRedrawRequest(function (e) { return _this.renderer.onSelectionChanged(e.start, e.end, e.columnSelectMode); }));
+        this.register(this.selectionManager.onRedrawRequest(function (e) { return _this._renderCoordinator.onSelectionChanged(e.start, e.end, e.columnSelectMode); }));
         this.register(this.selectionManager.onLinuxMouseSelection(function (text) {
             _this.textarea.value = text;
             _this.textarea.focus();
@@ -5195,7 +4591,7 @@ var Terminal = (function (_super) {
             _this.selectionManager.refresh();
         }));
         this.register(Lifecycle_1.addDisposableDomListener(this._viewportElement, 'scroll', function () { return _this.selectionManager.refresh(); }));
-        this.mouseHelper = new MouseHelper_1.MouseHelper(this.renderer);
+        this.mouseHelper = new MouseHelper_1.MouseHelper(this._renderCoordinator);
         this.element.classList.toggle('enable-mouse-events', this.mouseEvents);
         if (this.mouseEvents) {
             this.selectionManager.disable();
@@ -5204,32 +4600,33 @@ var Terminal = (function (_super) {
             this.selectionManager.enable();
         }
         if (this.options.screenReaderMode) {
-            this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this);
+            this._accessibilityManager = new AccessibilityManager_1.AccessibilityManager(this, this._renderCoordinator.dimensions);
+            this._accessibilityManager.register(this._renderCoordinator.onDimensionsChange(function (e) { return _this._accessibilityManager.setDimensions(e); }));
         }
         this.charMeasure.measure(this.options);
         this.refresh(0, this.rows - 1);
         this._initGlobal();
         this.bindMouse();
     };
-    Terminal.prototype._setupRenderer = function () {
-        var _this = this;
+    Terminal.prototype._createRenderer = function () {
         switch (this.options.rendererType) {
             case 'canvas':
-                this.renderer = new Renderer_1.Renderer(this, this.options.theme);
+                return new Renderer_1.Renderer(this, this._colorManager.colors);
                 break;
             case 'dom':
-                this.renderer = new DomRenderer_1.DomRenderer(this, this.options.theme);
+                return new DomRenderer_1.DomRenderer(this, this._colorManager.colors);
                 break;
             default: throw new Error("Unrecognized rendererType \"" + this.options.rendererType + "\"");
         }
-        this.renderer.onRender(function (e) { return _this._onRender.fire(e); });
-        this.register(this.renderer);
     };
     Terminal.prototype._setTheme = function (theme) {
         this._theme = theme;
-        var colors = this.renderer.setTheme(theme);
+        this._colorManager.setTheme(theme);
+        if (this._renderCoordinator) {
+            this._renderCoordinator.setColors(this._colorManager.colors);
+        }
         if (this.viewport) {
-            this.viewport.onThemeChanged(colors);
+            this.viewport.onThemeChange(this._colorManager.colors);
         }
     };
     Terminal.prototype.bindMouse = function () {
@@ -5474,8 +4871,8 @@ var Terminal = (function (_super) {
         }));
     };
     Terminal.prototype.refresh = function (start, end) {
-        if (this.renderer) {
-            this.renderer.refreshRows(start, end);
+        if (this._renderCoordinator) {
+            this._renderCoordinator.refreshRows(start, end);
         }
     };
     Terminal.prototype._queueLinkification = function (start, end) {
@@ -5581,6 +4978,61 @@ var Terminal = (function (_super) {
             this.scrollLines(scrollAmount);
         }
     };
+    Terminal.prototype.writeUtf8 = function (data) {
+        var _this = this;
+        if (this._isDisposed) {
+            return;
+        }
+        if (!data) {
+            return;
+        }
+        this.writeBufferUtf8.push(data);
+        if (this.options.useFlowControl && !this._xoffSentToCatchUp && this.writeBufferUtf8.length >= WRITE_BUFFER_PAUSE_THRESHOLD) {
+            this.handler(EscapeSequences_1.C0.DC3);
+            this._xoffSentToCatchUp = true;
+        }
+        if (!this._writeInProgress && this.writeBufferUtf8.length > 0) {
+            this._writeInProgress = true;
+            setTimeout(function () {
+                _this._innerWriteUtf8();
+            });
+        }
+    };
+    Terminal.prototype._innerWriteUtf8 = function (bufferOffset) {
+        var _this = this;
+        if (bufferOffset === void 0) { bufferOffset = 0; }
+        if (this._isDisposed) {
+            this.writeBufferUtf8 = [];
+        }
+        var startTime = Date.now();
+        while (this.writeBufferUtf8.length > bufferOffset) {
+            var data = this.writeBufferUtf8[bufferOffset];
+            bufferOffset++;
+            if (this._xoffSentToCatchUp && this.writeBufferUtf8.length === bufferOffset) {
+                this.handler(EscapeSequences_1.C0.DC1);
+                this._xoffSentToCatchUp = false;
+            }
+            this._refreshStart = this.buffer.y;
+            this._refreshEnd = this.buffer.y;
+            this._inputHandler.parseUtf8(data);
+            this.updateRange(this.buffer.y);
+            this.refresh(this._refreshStart, this._refreshEnd);
+            if (Date.now() - startTime >= WRITE_TIMEOUT_MS) {
+                break;
+            }
+        }
+        if (this.writeBufferUtf8.length > bufferOffset) {
+            if (bufferOffset > WRITE_BUFFER_LENGTH_THRESHOLD) {
+                this.writeBufferUtf8 = this.writeBufferUtf8.slice(bufferOffset);
+                bufferOffset = 0;
+            }
+            setTimeout(function () { return _this._innerWriteUtf8(bufferOffset); }, 0);
+        }
+        else {
+            this._writeInProgress = false;
+            this.writeBufferUtf8 = [];
+        }
+    };
     Terminal.prototype.write = function (data) {
         var _this = this;
         if (this._isDisposed) {
@@ -5625,6 +5077,10 @@ var Terminal = (function (_super) {
             }
         }
         if (this.writeBuffer.length > bufferOffset) {
+            if (bufferOffset > WRITE_BUFFER_LENGTH_THRESHOLD) {
+                this.writeBuffer = this.writeBuffer.slice(bufferOffset);
+                bufferOffset = 0;
+            }
             setTimeout(function () { return _this._innerWrite(bufferOffset); }, 0);
         }
         else {
@@ -5655,12 +5111,12 @@ var Terminal = (function (_super) {
         }
     };
     Terminal.prototype.registerCharacterJoiner = function (handler) {
-        var joinerId = this.renderer.registerCharacterJoiner(handler);
+        var joinerId = this._renderCoordinator.registerCharacterJoiner(handler);
         this.refresh(0, this.rows - 1);
         return joinerId;
     };
     Terminal.prototype.deregisterCharacterJoiner = function (joinerId) {
-        if (this.renderer.deregisterCharacterJoiner(joinerId)) {
+        if (this._renderCoordinator.deregisterCharacterJoiner(joinerId)) {
             this.refresh(0, this.rows - 1);
         }
     };
@@ -5680,8 +5136,22 @@ var Terminal = (function (_super) {
     Terminal.prototype.hasSelection = function () {
         return this.selectionManager ? this.selectionManager.hasSelection : false;
     };
+    Terminal.prototype.select = function (column, row, length) {
+        this.selectionManager.setSelection(column, row, length);
+    };
     Terminal.prototype.getSelection = function () {
         return this.selectionManager ? this.selectionManager.selectionText : '';
+    };
+    Terminal.prototype.getSelectionPosition = function () {
+        if (!this.selectionManager.hasSelection) {
+            return undefined;
+        }
+        return {
+            startColumn: this.selectionManager.selectionStart[0],
+            startRow: this.selectionManager.selectionStart[1],
+            endColumn: this.selectionManager.selectionEnd[0],
+            endRow: this.selectionManager.selectionEnd[1]
+        };
     };
     Terminal.prototype.clearSelection = function () {
         if (this.selectionManager) {
@@ -5858,7 +5328,7 @@ var Terminal = (function (_super) {
         this.buffer.ybase = 0;
         this.buffer.y = 0;
         for (var i = 1; i < this.rows; i++) {
-            this.buffer.lines.push(this.buffer.getBlankLine(Buffer_1.DEFAULT_ATTR_DATA));
+            this.buffer.lines.push(this.buffer.getBlankLine(BufferLine_1.DEFAULT_ATTR_DATA));
         }
         this.refresh(0, this.rows - 1);
         this._onScroll.fire(this.buffer.ydisp);
@@ -5909,10 +5379,20 @@ var Terminal = (function (_super) {
         var customKeyEventHandler = this._customKeyEventHandler;
         var inputHandler = this._inputHandler;
         var cursorState = this.cursorState;
+        var writeBuffer = this.writeBuffer;
+        var writeBufferUtf8 = this.writeBufferUtf8;
+        var writeInProgress = this._writeInProgress;
+        var xoffSentToCatchUp = this._xoffSentToCatchUp;
+        var userScrolling = this._userScrolling;
         this._setup();
         this._customKeyEventHandler = customKeyEventHandler;
         this._inputHandler = inputHandler;
         this.cursorState = cursorState;
+        this.writeBuffer = writeBuffer;
+        this.writeBufferUtf8 = writeBufferUtf8;
+        this._writeInProgress = writeInProgress;
+        this._xoffSentToCatchUp = xoffSentToCatchUp;
+        this._userScrolling = userScrolling;
         this.refresh(0, this.rows - 1);
         if (this.viewport) {
             this.viewport.syncScrollArea();
@@ -5944,7 +5424,7 @@ function wasModifierKeyOnlyEvent(ev) {
         ev.keyCode === 18;
 }
 
-},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":5,"./CharMeasure":6,"./Clipboard":8,"./CompositionHelper":9,"./InputHandler":11,"./Linkifier":12,"./MouseHelper":13,"./MouseZoneManager":14,"./SelectionManager":15,"./SoundManager":17,"./Strings":18,"./Viewport":20,"./WindowsMode":21,"./common/Clone":23,"./common/EventEmitter":24,"./common/EventEmitter2":25,"./common/Platform":27,"./common/data/EscapeSequences":29,"./core/input/Keyboard":31,"./renderer/Renderer":41,"./renderer/atlas/CharAtlasCache":45,"./renderer/dom/DomRenderer":53,"./ui/Lifecycle":55,"./ui/ScreenDprMonitor":57}],20:[function(require,module,exports){
+},{"./AccessibilityManager":1,"./Buffer":2,"./BufferSet":3,"./CharMeasure":4,"./Clipboard":6,"./CompositionHelper":7,"./InputHandler":9,"./Linkifier":10,"./MouseHelper":11,"./MouseZoneManager":12,"./SelectionManager":13,"./SoundManager":15,"./Strings":16,"./Viewport":18,"./WindowsMode":19,"./common/Clone":21,"./common/EventEmitter":22,"./common/EventEmitter2":23,"./common/Platform":25,"./common/data/EscapeSequences":28,"./core/buffer/BufferLine":29,"./core/input/Keyboard":33,"./renderer/RenderCoordinator":43,"./renderer/Renderer":44,"./renderer/atlas/CharAtlasCache":48,"./renderer/dom/DomRenderer":56,"./ui/ColorManager":58,"./ui/Lifecycle":59}],18:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -5965,12 +5445,13 @@ var Lifecycle_2 = require("./ui/Lifecycle");
 var FALLBACK_SCROLL_BAR_WIDTH = 15;
 var Viewport = (function (_super) {
     __extends(Viewport, _super);
-    function Viewport(_terminal, _viewportElement, _scrollArea, _charMeasure) {
+    function Viewport(_terminal, _viewportElement, _scrollArea, _charMeasure, _dimensions) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
         _this._viewportElement = _viewportElement;
         _this._scrollArea = _scrollArea;
         _this._charMeasure = _charMeasure;
+        _this._dimensions = _dimensions;
         _this.scrollBarWidth = 0;
         _this._currentRowHeight = 0;
         _this._lastRecordedBufferLength = 0;
@@ -5985,7 +5466,10 @@ var Viewport = (function (_super) {
         setTimeout(function () { return _this.syncScrollArea(); }, 0);
         return _this;
     }
-    Viewport.prototype.onThemeChanged = function (colors) {
+    Viewport.prototype.onDimensionsChance = function (dimensions) {
+        this._dimensions = dimensions;
+    };
+    Viewport.prototype.onThemeChange = function (colors) {
         this._viewportElement.style.backgroundColor = colors.background.css;
     };
     Viewport.prototype._refresh = function () {
@@ -5996,9 +5480,9 @@ var Viewport = (function (_super) {
     };
     Viewport.prototype._innerRefresh = function () {
         if (this._charMeasure.height > 0) {
-            this._currentRowHeight = this._terminal.renderer.dimensions.scaledCellHeight / window.devicePixelRatio;
+            this._currentRowHeight = this._dimensions.scaledCellHeight / window.devicePixelRatio;
             this._lastRecordedViewportHeight = this._viewportElement.offsetHeight;
-            var newBufferHeight = Math.round(this._currentRowHeight * this._lastRecordedBufferLength) + (this._lastRecordedViewportHeight - this._terminal.renderer.dimensions.canvasHeight);
+            var newBufferHeight = Math.round(this._currentRowHeight * this._lastRecordedBufferLength) + (this._lastRecordedViewportHeight - this._dimensions.canvasHeight);
             if (this._lastRecordedBufferHeight !== newBufferHeight) {
                 this._lastRecordedBufferHeight = newBufferHeight;
                 this._scrollArea.style.height = this._lastRecordedBufferHeight + 'px';
@@ -6017,7 +5501,7 @@ var Viewport = (function (_super) {
             this._refresh();
             return;
         }
-        if (this._lastRecordedViewportHeight !== this._terminal.renderer.dimensions.canvasHeight) {
+        if (this._lastRecordedViewportHeight !== this._dimensions.canvasHeight) {
             this._refresh();
             return;
         }
@@ -6030,7 +5514,7 @@ var Viewport = (function (_super) {
             this._refresh();
             return;
         }
-        if (this._terminal.renderer.dimensions.scaledCellHeight / window.devicePixelRatio !== this._currentRowHeight) {
+        if (this._dimensions.scaledCellHeight / window.devicePixelRatio !== this._currentRowHeight) {
             this._refresh();
             return;
         }
@@ -6101,15 +5585,15 @@ var Viewport = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.Viewport = Viewport;
 
-},{"./common/Lifecycle":26,"./ui/Lifecycle":55}],21:[function(require,module,exports){
+},{"./common/Lifecycle":24,"./ui/Lifecycle":59}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Buffer_1 = require("./Buffer");
+var BufferLine_1 = require("./core/buffer/BufferLine");
 function applyWindowsMode(terminal) {
     return terminal.onLineFeed(function () {
         var line = terminal.buffer.lines.get(terminal.buffer.ybase + terminal.buffer.y - 1);
         var lastChar = line.get(terminal.cols - 1);
-        if (lastChar[Buffer_1.CHAR_DATA_CODE_INDEX] !== Buffer_1.NULL_CELL_CODE && lastChar[Buffer_1.CHAR_DATA_CODE_INDEX] !== Buffer_1.WHITESPACE_CELL_CODE) {
+        if (lastChar[BufferLine_1.CHAR_DATA_CODE_INDEX] !== BufferLine_1.NULL_CELL_CODE && lastChar[BufferLine_1.CHAR_DATA_CODE_INDEX] !== BufferLine_1.WHITESPACE_CELL_CODE) {
             var nextLine = terminal.buffer.lines.get(terminal.buffer.ybase + terminal.buffer.y);
             nextLine.isWrapped = true;
         }
@@ -6117,7 +5601,7 @@ function applyWindowsMode(terminal) {
 }
 exports.applyWindowsMode = applyWindowsMode;
 
-},{"./Buffer":2}],22:[function(require,module,exports){
+},{"./core/buffer/BufferLine":29}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EventEmitter2_1 = require("./EventEmitter2");
@@ -6286,7 +5770,7 @@ var CircularList = (function () {
 }());
 exports.CircularList = CircularList;
 
-},{"./EventEmitter2":25}],23:[function(require,module,exports){
+},{"./EventEmitter2":23}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function clone(val, depth) {
@@ -6305,7 +5789,7 @@ function clone(val, depth) {
 }
 exports.clone = clone;
 
-},{}],24:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -6405,7 +5889,7 @@ var EventEmitter = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.EventEmitter = EventEmitter;
 
-},{"./Lifecycle":26}],25:[function(require,module,exports){
+},{"./Lifecycle":24}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EventEmitter2 = (function () {
@@ -6449,7 +5933,7 @@ var EventEmitter2 = (function () {
 }());
 exports.EventEmitter2 = EventEmitter2;
 
-},{}],26:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Disposable = (function () {
@@ -6475,7 +5959,7 @@ var Disposable = (function () {
 }());
 exports.Disposable = Disposable;
 
-},{}],27:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var isNode = (typeof navigator === 'undefined') ? true : false;
@@ -6493,7 +5977,7 @@ function contains(arr, el) {
     return arr.indexOf(el) >= 0;
 }
 
-},{}],28:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function fill(array, value, start, end) {
@@ -6530,7 +6014,12 @@ function concat(a, b) {
 }
 exports.concat = concat;
 
-},{}],29:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_COLOR = 256;
+
+},{}],28:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var C0;
@@ -6606,7 +6095,629 @@ var C1;
     C1.APC = '\x9f';
 })(C1 = exports.C1 || (exports.C1 = {}));
 
-},{}],30:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var TextDecoder_1 = require("../input/TextDecoder");
+var Types_1 = require("../../common/Types");
+exports.DEFAULT_ATTR = (0 << 18) | (Types_1.DEFAULT_COLOR << 9) | (256 << 0);
+exports.CHAR_DATA_ATTR_INDEX = 0;
+exports.CHAR_DATA_CHAR_INDEX = 1;
+exports.CHAR_DATA_WIDTH_INDEX = 2;
+exports.CHAR_DATA_CODE_INDEX = 3;
+exports.NULL_CELL_CHAR = '';
+exports.NULL_CELL_WIDTH = 1;
+exports.NULL_CELL_CODE = 0;
+exports.WHITESPACE_CELL_CHAR = ' ';
+exports.WHITESPACE_CELL_WIDTH = 1;
+exports.WHITESPACE_CELL_CODE = 32;
+var CELL_SIZE = 3;
+var AttributeData = (function () {
+    function AttributeData() {
+        this.fg = 0;
+        this.bg = 0;
+    }
+    AttributeData.toColorRGB = function (value) {
+        return [
+            value >>> 16 & 255,
+            value >>> 8 & 255,
+            value & 255
+        ];
+    };
+    AttributeData.fromColorRGB = function (value) {
+        return (value[0] & 255) << 16 | (value[1] & 255) << 8 | value[2] & 255;
+    };
+    AttributeData.prototype.clone = function () {
+        var newObj = new AttributeData();
+        newObj.fg = this.fg;
+        newObj.bg = this.bg;
+        return newObj;
+    };
+    AttributeData.prototype.isInverse = function () { return this.fg & 67108864; };
+    AttributeData.prototype.isBold = function () { return this.fg & 134217728; };
+    AttributeData.prototype.isUnderline = function () { return this.fg & 268435456; };
+    AttributeData.prototype.isBlink = function () { return this.fg & 536870912; };
+    AttributeData.prototype.isInvisible = function () { return this.fg & 1073741824; };
+    AttributeData.prototype.isItalic = function () { return this.bg & 67108864; };
+    AttributeData.prototype.isDim = function () { return this.bg & 134217728; };
+    AttributeData.prototype.getFgColorMode = function () { return this.fg & 50331648; };
+    AttributeData.prototype.getBgColorMode = function () { return this.bg & 50331648; };
+    AttributeData.prototype.isFgRGB = function () { return (this.fg & 50331648) === 50331648; };
+    AttributeData.prototype.isBgRGB = function () { return (this.bg & 50331648) === 50331648; };
+    AttributeData.prototype.isFgPalette = function () { return (this.fg & 50331648) === 16777216 || (this.fg & 50331648) === 33554432; };
+    AttributeData.prototype.isBgPalette = function () { return (this.bg & 50331648) === 16777216 || (this.bg & 50331648) === 33554432; };
+    AttributeData.prototype.isFgDefault = function () { return (this.fg & 50331648) === 0; };
+    AttributeData.prototype.isBgDefault = function () { return (this.bg & 50331648) === 0; };
+    AttributeData.prototype.getFgColor = function () {
+        switch (this.fg & 50331648) {
+            case 16777216:
+            case 33554432: return this.fg & 255;
+            case 50331648: return this.fg & 16777215;
+            default: return -1;
+        }
+    };
+    AttributeData.prototype.getBgColor = function () {
+        switch (this.bg & 50331648) {
+            case 16777216:
+            case 33554432: return this.bg & 255;
+            case 50331648: return this.bg & 16777215;
+            default: return -1;
+        }
+    };
+    return AttributeData;
+}());
+exports.AttributeData = AttributeData;
+exports.DEFAULT_ATTR_DATA = new AttributeData();
+var CellData = (function (_super) {
+    __extends(CellData, _super);
+    function CellData() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.content = 0;
+        _this.fg = 0;
+        _this.bg = 0;
+        _this.combinedData = '';
+        return _this;
+    }
+    CellData.fromCharData = function (value) {
+        var obj = new CellData();
+        obj.setFromCharData(value);
+        return obj;
+    };
+    CellData.prototype.isCombined = function () {
+        return this.content & 2097152;
+    };
+    CellData.prototype.getWidth = function () {
+        return this.content >> 22;
+    };
+    CellData.prototype.getChars = function () {
+        if (this.content & 2097152) {
+            return this.combinedData;
+        }
+        if (this.content & 2097151) {
+            return TextDecoder_1.stringFromCodePoint(this.content & 2097151);
+        }
+        return '';
+    };
+    CellData.prototype.getCode = function () {
+        return (this.isCombined())
+            ? this.combinedData.charCodeAt(this.combinedData.length - 1)
+            : this.content & 2097151;
+    };
+    CellData.prototype.setFromCharData = function (value) {
+        this.fg = value[exports.CHAR_DATA_ATTR_INDEX];
+        this.bg = 0;
+        var combined = false;
+        if (value[exports.CHAR_DATA_CHAR_INDEX].length > 2) {
+            combined = true;
+        }
+        else if (value[exports.CHAR_DATA_CHAR_INDEX].length === 2) {
+            var code = value[exports.CHAR_DATA_CHAR_INDEX].charCodeAt(0);
+            if (0xD800 <= code && code <= 0xDBFF) {
+                var second = value[exports.CHAR_DATA_CHAR_INDEX].charCodeAt(1);
+                if (0xDC00 <= second && second <= 0xDFFF) {
+                    this.content = ((code - 0xD800) * 0x400 + second - 0xDC00 + 0x10000) | (value[exports.CHAR_DATA_WIDTH_INDEX] << 22);
+                }
+                else {
+                    combined = true;
+                }
+            }
+            else {
+                combined = true;
+            }
+        }
+        else {
+            this.content = value[exports.CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[exports.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+        if (combined) {
+            this.combinedData = value[exports.CHAR_DATA_CHAR_INDEX];
+            this.content = 2097152 | (value[exports.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+    };
+    CellData.prototype.getAsCharData = function () {
+        return [this.fg, this.getChars(), this.getWidth(), this.getCode()];
+    };
+    return CellData;
+}(AttributeData));
+exports.CellData = CellData;
+var BufferLine = (function () {
+    function BufferLine(cols, fillCellData, isWrapped) {
+        if (isWrapped === void 0) { isWrapped = false; }
+        this.isWrapped = isWrapped;
+        this._combined = {};
+        this._data = new Uint32Array(cols * CELL_SIZE);
+        var cell = fillCellData || CellData.fromCharData([0, exports.NULL_CELL_CHAR, exports.NULL_CELL_WIDTH, exports.NULL_CELL_CODE]);
+        for (var i = 0; i < cols; ++i) {
+            this.setCell(i, cell);
+        }
+        this.length = cols;
+    }
+    BufferLine.prototype.get = function (index) {
+        var content = this._data[index * CELL_SIZE + 0];
+        var cp = content & 2097151;
+        return [
+            this._data[index * CELL_SIZE + 1],
+            (content & 2097152)
+                ? this._combined[index]
+                : (cp) ? TextDecoder_1.stringFromCodePoint(cp) : '',
+            content >> 22,
+            (content & 2097152)
+                ? this._combined[index].charCodeAt(this._combined[index].length - 1)
+                : cp
+        ];
+    };
+    BufferLine.prototype.set = function (index, value) {
+        this._data[index * CELL_SIZE + 1] = value[exports.CHAR_DATA_ATTR_INDEX];
+        if (value[exports.CHAR_DATA_CHAR_INDEX].length > 1) {
+            this._combined[index] = value[1];
+            this._data[index * CELL_SIZE + 0] = index | 2097152 | (value[exports.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+        else {
+            this._data[index * CELL_SIZE + 0] = value[exports.CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[exports.CHAR_DATA_WIDTH_INDEX] << 22);
+        }
+    };
+    BufferLine.prototype.getWidth = function (index) {
+        return this._data[index * CELL_SIZE + 0] >> 22;
+    };
+    BufferLine.prototype.hasWidth = function (index) {
+        return this._data[index * CELL_SIZE + 0] & 12582912;
+    };
+    BufferLine.prototype.getFg = function (index) {
+        return this._data[index * CELL_SIZE + 1];
+    };
+    BufferLine.prototype.getBg = function (index) {
+        return this._data[index * CELL_SIZE + 2];
+    };
+    BufferLine.prototype.hasContent = function (index) {
+        return this._data[index * CELL_SIZE + 0] & 4194303;
+    };
+    BufferLine.prototype.getCodePoint = function (index) {
+        var content = this._data[index * CELL_SIZE + 0];
+        if (content & 2097152) {
+            return this._combined[index].charCodeAt(this._combined[index].length - 1);
+        }
+        return content & 2097151;
+    };
+    BufferLine.prototype.isCombined = function (index) {
+        return this._data[index * CELL_SIZE + 0] & 2097152;
+    };
+    BufferLine.prototype.getString = function (index) {
+        var content = this._data[index * CELL_SIZE + 0];
+        if (content & 2097152) {
+            return this._combined[index];
+        }
+        if (content & 2097151) {
+            return TextDecoder_1.stringFromCodePoint(content & 2097151);
+        }
+        return '';
+    };
+    BufferLine.prototype.loadCell = function (index, cell) {
+        var startIndex = index * CELL_SIZE;
+        cell.content = this._data[startIndex + 0];
+        cell.fg = this._data[startIndex + 1];
+        cell.bg = this._data[startIndex + 2];
+        if (cell.content & 2097152) {
+            cell.combinedData = this._combined[index];
+        }
+        return cell;
+    };
+    BufferLine.prototype.setCell = function (index, cell) {
+        if (cell.content & 2097152) {
+            this._combined[index] = cell.combinedData;
+        }
+        this._data[index * CELL_SIZE + 0] = cell.content;
+        this._data[index * CELL_SIZE + 1] = cell.fg;
+        this._data[index * CELL_SIZE + 2] = cell.bg;
+    };
+    BufferLine.prototype.setCellFromCodePoint = function (index, codePoint, width, fg, bg) {
+        this._data[index * CELL_SIZE + 0] = codePoint | (width << 22);
+        this._data[index * CELL_SIZE + 1] = fg;
+        this._data[index * CELL_SIZE + 2] = bg;
+    };
+    BufferLine.prototype.addCodepointToCell = function (index, codePoint) {
+        var content = this._data[index * CELL_SIZE + 0];
+        if (content & 2097152) {
+            this._combined[index] += TextDecoder_1.stringFromCodePoint(codePoint);
+        }
+        else {
+            if (content & 2097151) {
+                this._combined[index] = TextDecoder_1.stringFromCodePoint(content & 2097151) + TextDecoder_1.stringFromCodePoint(codePoint);
+                content &= ~2097151;
+                content |= 2097152;
+            }
+            else {
+                content = codePoint | (1 << 22);
+            }
+            this._data[index * CELL_SIZE + 0] = content;
+        }
+    };
+    BufferLine.prototype.insertCells = function (pos, n, fillCellData) {
+        pos %= this.length;
+        if (n < this.length - pos) {
+            var cell = new CellData();
+            for (var i = this.length - pos - n - 1; i >= 0; --i) {
+                this.setCell(pos + n + i, this.loadCell(pos + i, cell));
+            }
+            for (var i = 0; i < n; ++i) {
+                this.setCell(pos + i, fillCellData);
+            }
+        }
+        else {
+            for (var i = pos; i < this.length; ++i) {
+                this.setCell(i, fillCellData);
+            }
+        }
+    };
+    BufferLine.prototype.deleteCells = function (pos, n, fillCellData) {
+        pos %= this.length;
+        if (n < this.length - pos) {
+            var cell = new CellData();
+            for (var i = 0; i < this.length - pos - n; ++i) {
+                this.setCell(pos + i, this.loadCell(pos + n + i, cell));
+            }
+            for (var i = this.length - n; i < this.length; ++i) {
+                this.setCell(i, fillCellData);
+            }
+        }
+        else {
+            for (var i = pos; i < this.length; ++i) {
+                this.setCell(i, fillCellData);
+            }
+        }
+    };
+    BufferLine.prototype.replaceCells = function (start, end, fillCellData) {
+        while (start < end && start < this.length) {
+            this.setCell(start++, fillCellData);
+        }
+    };
+    BufferLine.prototype.resize = function (cols, fillCellData) {
+        if (cols === this.length) {
+            return;
+        }
+        if (cols > this.length) {
+            var data = new Uint32Array(cols * CELL_SIZE);
+            if (this.length) {
+                if (cols * CELL_SIZE < this._data.length) {
+                    data.set(this._data.subarray(0, cols * CELL_SIZE));
+                }
+                else {
+                    data.set(this._data);
+                }
+            }
+            this._data = data;
+            for (var i = this.length; i < cols; ++i) {
+                this.setCell(i, fillCellData);
+            }
+        }
+        else {
+            if (cols) {
+                var data = new Uint32Array(cols * CELL_SIZE);
+                data.set(this._data.subarray(0, cols * CELL_SIZE));
+                this._data = data;
+                var keys = Object.keys(this._combined);
+                for (var i = 0; i < keys.length; i++) {
+                    var key = parseInt(keys[i], 10);
+                    if (key >= cols) {
+                        delete this._combined[key];
+                    }
+                }
+            }
+            else {
+                this._data = new Uint32Array(0);
+                this._combined = {};
+            }
+        }
+        this.length = cols;
+    };
+    BufferLine.prototype.fill = function (fillCellData) {
+        this._combined = {};
+        for (var i = 0; i < this.length; ++i) {
+            this.setCell(i, fillCellData);
+        }
+    };
+    BufferLine.prototype.copyFrom = function (line) {
+        if (this.length !== line.length) {
+            this._data = new Uint32Array(line._data);
+        }
+        else {
+            this._data.set(line._data);
+        }
+        this.length = line.length;
+        this._combined = {};
+        for (var el in line._combined) {
+            this._combined[el] = line._combined[el];
+        }
+        this.isWrapped = line.isWrapped;
+    };
+    BufferLine.prototype.clone = function () {
+        var newLine = new BufferLine(0);
+        newLine._data = new Uint32Array(this._data);
+        newLine.length = this.length;
+        for (var el in this._combined) {
+            newLine._combined[el] = this._combined[el];
+        }
+        newLine.isWrapped = this.isWrapped;
+        return newLine;
+    };
+    BufferLine.prototype.getTrimmedLength = function () {
+        for (var i = this.length - 1; i >= 0; --i) {
+            if ((this._data[i * CELL_SIZE + 0] & 4194303)) {
+                return i + (this._data[i * CELL_SIZE + 0] >> 22);
+            }
+        }
+        return 0;
+    };
+    BufferLine.prototype.copyCellsFrom = function (src, srcCol, destCol, length, applyInReverse) {
+        var srcData = src._data;
+        if (applyInReverse) {
+            for (var cell = length - 1; cell >= 0; cell--) {
+                for (var i = 0; i < CELL_SIZE; i++) {
+                    this._data[(destCol + cell) * CELL_SIZE + i] = srcData[(srcCol + cell) * CELL_SIZE + i];
+                }
+            }
+        }
+        else {
+            for (var cell = 0; cell < length; cell++) {
+                for (var i = 0; i < CELL_SIZE; i++) {
+                    this._data[(destCol + cell) * CELL_SIZE + i] = srcData[(srcCol + cell) * CELL_SIZE + i];
+                }
+            }
+        }
+        var srcCombinedKeys = Object.keys(src._combined);
+        for (var i = 0; i < srcCombinedKeys.length; i++) {
+            var key = parseInt(srcCombinedKeys[i], 10);
+            if (key >= srcCol) {
+                this._combined[key - srcCol + destCol] = src._combined[key];
+            }
+        }
+    };
+    BufferLine.prototype.translateToString = function (trimRight, startCol, endCol) {
+        if (trimRight === void 0) { trimRight = false; }
+        if (startCol === void 0) { startCol = 0; }
+        if (endCol === void 0) { endCol = this.length; }
+        if (trimRight) {
+            endCol = Math.min(endCol, this.getTrimmedLength());
+        }
+        var result = '';
+        while (startCol < endCol) {
+            var content = this._data[startCol * CELL_SIZE + 0];
+            var cp = content & 2097151;
+            result += (content & 2097152) ? this._combined[startCol] : (cp) ? TextDecoder_1.stringFromCodePoint(cp) : exports.WHITESPACE_CELL_CHAR;
+            startCol += (content >> 22) || 1;
+        }
+        return result;
+    };
+    return BufferLine;
+}());
+exports.BufferLine = BufferLine;
+
+},{"../../common/Types":27,"../input/TextDecoder":34}],30:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+function reflowLargerGetLinesToRemove(lines, oldCols, newCols, bufferAbsoluteY, nullCell) {
+    var toRemove = [];
+    for (var y = 0; y < lines.length - 1; y++) {
+        var i = y;
+        var nextLine = lines.get(++i);
+        if (!nextLine.isWrapped) {
+            continue;
+        }
+        var wrappedLines = [lines.get(y)];
+        while (i < lines.length && nextLine.isWrapped) {
+            wrappedLines.push(nextLine);
+            nextLine = lines.get(++i);
+        }
+        if (bufferAbsoluteY >= y && bufferAbsoluteY < i) {
+            y += wrappedLines.length - 1;
+            continue;
+        }
+        var destLineIndex = 0;
+        var destCol = getWrappedLineTrimmedLength(wrappedLines, destLineIndex, oldCols);
+        var srcLineIndex = 1;
+        var srcCol = 0;
+        while (srcLineIndex < wrappedLines.length) {
+            var srcTrimmedTineLength = getWrappedLineTrimmedLength(wrappedLines, srcLineIndex, oldCols);
+            var srcRemainingCells = srcTrimmedTineLength - srcCol;
+            var destRemainingCells = newCols - destCol;
+            var cellsToCopy = Math.min(srcRemainingCells, destRemainingCells);
+            wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[srcLineIndex], srcCol, destCol, cellsToCopy, false);
+            destCol += cellsToCopy;
+            if (destCol === newCols) {
+                destLineIndex++;
+                destCol = 0;
+            }
+            srcCol += cellsToCopy;
+            if (srcCol === srcTrimmedTineLength) {
+                srcLineIndex++;
+                srcCol = 0;
+            }
+            if (destCol === 0 && destLineIndex !== 0) {
+                if (wrappedLines[destLineIndex - 1].getWidth(newCols - 1) === 2) {
+                    wrappedLines[destLineIndex].copyCellsFrom(wrappedLines[destLineIndex - 1], newCols - 1, destCol++, 1, false);
+                    wrappedLines[destLineIndex - 1].setCell(newCols - 1, nullCell);
+                }
+            }
+        }
+        wrappedLines[destLineIndex].replaceCells(destCol, newCols, nullCell);
+        var countToRemove = 0;
+        for (var i_1 = wrappedLines.length - 1; i_1 > 0; i_1--) {
+            if (i_1 > destLineIndex || wrappedLines[i_1].getTrimmedLength() === 0) {
+                countToRemove++;
+            }
+            else {
+                break;
+            }
+        }
+        if (countToRemove > 0) {
+            toRemove.push(y + wrappedLines.length - countToRemove);
+            toRemove.push(countToRemove);
+        }
+        y += wrappedLines.length - 1;
+    }
+    return toRemove;
+}
+exports.reflowLargerGetLinesToRemove = reflowLargerGetLinesToRemove;
+function reflowLargerCreateNewLayout(lines, toRemove) {
+    var layout = [];
+    var nextToRemoveIndex = 0;
+    var nextToRemoveStart = toRemove[nextToRemoveIndex];
+    var countRemovedSoFar = 0;
+    for (var i = 0; i < lines.length; i++) {
+        if (nextToRemoveStart === i) {
+            var countToRemove = toRemove[++nextToRemoveIndex];
+            lines.onDeleteEmitter.fire({
+                index: i - countRemovedSoFar,
+                amount: countToRemove
+            });
+            i += countToRemove - 1;
+            countRemovedSoFar += countToRemove;
+            nextToRemoveStart = toRemove[++nextToRemoveIndex];
+        }
+        else {
+            layout.push(i);
+        }
+    }
+    return {
+        layout: layout,
+        countRemoved: countRemovedSoFar
+    };
+}
+exports.reflowLargerCreateNewLayout = reflowLargerCreateNewLayout;
+function reflowLargerApplyNewLayout(lines, newLayout) {
+    var newLayoutLines = [];
+    for (var i = 0; i < newLayout.length; i++) {
+        newLayoutLines.push(lines.get(newLayout[i]));
+    }
+    for (var i = 0; i < newLayoutLines.length; i++) {
+        lines.set(i, newLayoutLines[i]);
+    }
+    lines.length = newLayout.length;
+}
+exports.reflowLargerApplyNewLayout = reflowLargerApplyNewLayout;
+function reflowSmallerGetNewLineLengths(wrappedLines, oldCols, newCols) {
+    var newLineLengths = [];
+    var cellsNeeded = wrappedLines.map(function (l, i) { return getWrappedLineTrimmedLength(wrappedLines, i, oldCols); }).reduce(function (p, c) { return p + c; });
+    var srcCol = 0;
+    var srcLine = 0;
+    var cellsAvailable = 0;
+    while (cellsAvailable < cellsNeeded) {
+        if (cellsNeeded - cellsAvailable < newCols) {
+            newLineLengths.push(cellsNeeded - cellsAvailable);
+            break;
+        }
+        srcCol += newCols;
+        var oldTrimmedLength = getWrappedLineTrimmedLength(wrappedLines, srcLine, oldCols);
+        if (srcCol > oldTrimmedLength) {
+            srcCol -= oldTrimmedLength;
+            srcLine++;
+        }
+        var endsWithWide = wrappedLines[srcLine].getWidth(srcCol - 1) === 2;
+        if (endsWithWide) {
+            srcCol--;
+        }
+        var lineLength = endsWithWide ? newCols - 1 : newCols;
+        newLineLengths.push(lineLength);
+        cellsAvailable += lineLength;
+    }
+    return newLineLengths;
+}
+exports.reflowSmallerGetNewLineLengths = reflowSmallerGetNewLineLengths;
+function getWrappedLineTrimmedLength(lines, i, cols) {
+    if (i === lines.length - 1) {
+        return lines[i].getTrimmedLength();
+    }
+    var endsInNull = !(lines[i].hasContent(cols - 1)) && lines[i].getWidth(cols - 1) === 1;
+    var followingLineStartsWithWide = lines[i + 1].getWidth(0) === 2;
+    if (endsInNull && followingLineStartsWithWide) {
+        return cols - 1;
+    }
+    return cols;
+}
+exports.getWrappedLineTrimmedLength = getWrappedLineTrimmedLength;
+
+},{}],31:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter2_1 = require("../../common/EventEmitter2");
+var Lifecycle_1 = require("../../common/Lifecycle");
+var Marker = (function (_super) {
+    __extends(Marker, _super);
+    function Marker(line) {
+        var _this = _super.call(this) || this;
+        _this.line = line;
+        _this._id = Marker._nextId++;
+        _this.isDisposed = false;
+        _this._onDispose = new EventEmitter2_1.EventEmitter2();
+        return _this;
+    }
+    Object.defineProperty(Marker.prototype, "id", {
+        get: function () { return this._id; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(Marker.prototype, "onDispose", {
+        get: function () { return this._onDispose.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Marker.prototype.dispose = function () {
+        if (this.isDisposed) {
+            return;
+        }
+        this.isDisposed = true;
+        this._onDispose.fire();
+    };
+    Marker._nextId = 1;
+    return Marker;
+}(Lifecycle_1.Disposable));
+exports.Marker = Marker;
+
+},{"../../common/EventEmitter2":23,"../../common/Lifecycle":24}],32:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHARSETS = {};
@@ -6767,7 +6878,7 @@ exports.CHARSETS['='] = {
     '~': 'û'
 };
 
-},{}],31:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../../common/data/EscapeSequences");
@@ -7120,9 +7231,34 @@ function evaluateKeyboardEvent(ev, applicationCursorMode, isMac, macOptionIsMeta
 }
 exports.evaluateKeyboardEvent = evaluateKeyboardEvent;
 
-},{"../../common/data/EscapeSequences":29}],32:[function(require,module,exports){
+},{"../../common/data/EscapeSequences":28}],34:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+function stringFromCodePoint(codePoint) {
+    if (codePoint > 0xFFFF) {
+        codePoint -= 0x10000;
+        return String.fromCharCode((codePoint >> 10) + 0xD800) + String.fromCharCode((codePoint % 0x400) + 0xDC00);
+    }
+    return String.fromCharCode(codePoint);
+}
+exports.stringFromCodePoint = stringFromCodePoint;
+function utf32ToString(data, start, end) {
+    if (start === void 0) { start = 0; }
+    if (end === void 0) { end = data.length; }
+    var result = '';
+    for (var i = start; i < end; ++i) {
+        var codepoint = data[i];
+        if (codepoint > 0xFFFF) {
+            codepoint -= 0x10000;
+            result += String.fromCharCode((codepoint >> 10) + 0xD800) + String.fromCharCode((codepoint % 0x400) + 0xDC00);
+        }
+        else {
+            result += String.fromCharCode(codepoint);
+        }
+    }
+    return result;
+}
+exports.utf32ToString = utf32ToString;
 var StringToUtf32 = (function () {
     function StringToUtf32() {
         this._interim = 0;
@@ -7172,33 +7308,187 @@ var StringToUtf32 = (function () {
     return StringToUtf32;
 }());
 exports.StringToUtf32 = StringToUtf32;
-function stringFromCodePoint(codePoint) {
-    if (codePoint > 0xFFFF) {
-        codePoint -= 0x10000;
-        return String.fromCharCode((codePoint >> 10) + 0xD800) + String.fromCharCode((codePoint % 0x400) + 0xDC00);
+var Utf8ToUtf32 = (function () {
+    function Utf8ToUtf32() {
+        this.interim = new Uint8Array(3);
     }
-    return String.fromCharCode(codePoint);
-}
-exports.stringFromCodePoint = stringFromCodePoint;
-function utf32ToString(data, start, end) {
-    if (start === void 0) { start = 0; }
-    if (end === void 0) { end = data.length; }
-    var result = '';
-    for (var i = start; i < end; ++i) {
-        var codepoint = data[i];
-        if (codepoint > 0xFFFF) {
-            codepoint -= 0x10000;
-            result += String.fromCharCode((codepoint >> 10) + 0xD800) + String.fromCharCode((codepoint % 0x400) + 0xDC00);
+    Utf8ToUtf32.prototype.clear = function () {
+        this.interim.fill(0);
+    };
+    Utf8ToUtf32.prototype.decode = function (input, target) {
+        var length = input.length;
+        if (!length) {
+            return 0;
         }
-        else {
-            result += String.fromCharCode(codepoint);
+        var size = 0;
+        var byte1;
+        var byte2;
+        var byte3;
+        var byte4;
+        var codepoint = 0;
+        var startPos = 0;
+        if (this.interim[0]) {
+            var discardInterim = false;
+            var cp = this.interim[0];
+            cp &= ((((cp & 0xE0) === 0xC0)) ? 0x1F : (((cp & 0xF0) === 0xE0)) ? 0x0F : 0x07);
+            var pos = 0;
+            var tmp = void 0;
+            while ((tmp = this.interim[++pos] & 0x3F) && pos < 4) {
+                cp <<= 6;
+                cp |= tmp;
+            }
+            var type = (((this.interim[0] & 0xE0) === 0xC0)) ? 2 : (((this.interim[0] & 0xF0) === 0xE0)) ? 3 : 4;
+            var missing = type - pos;
+            while (startPos < missing) {
+                if (startPos >= length) {
+                    return 0;
+                }
+                tmp = input[startPos++];
+                if ((tmp & 0xC0) !== 0x80) {
+                    startPos--;
+                    discardInterim = true;
+                    break;
+                }
+                else {
+                    this.interim[pos++] = tmp;
+                    cp <<= 6;
+                    cp |= tmp & 0x3F;
+                }
+            }
+            if (!discardInterim) {
+                if (type === 2) {
+                    if (cp < 0x80) {
+                        startPos--;
+                    }
+                    else {
+                        target[size++] = cp;
+                    }
+                }
+                else if (type === 3) {
+                    if (cp < 0x0800 || (cp >= 0xD800 && cp <= 0xDFFF)) {
+                    }
+                    else {
+                        target[size++] = cp;
+                    }
+                }
+                else {
+                    if (codepoint < 0x010000 || codepoint > 0x10FFFF) {
+                    }
+                    else {
+                        target[size++] = cp;
+                    }
+                }
+            }
+            this.interim.fill(0);
         }
-    }
-    return result;
-}
-exports.utf32ToString = utf32ToString;
+        var fourStop = length - 4;
+        var i = startPos;
+        while (i < length) {
+            while (i < fourStop
+                && !((byte1 = input[i]) & 0x80)
+                && !((byte2 = input[i + 1]) & 0x80)
+                && !((byte3 = input[i + 2]) & 0x80)
+                && !((byte4 = input[i + 3]) & 0x80)) {
+                target[size++] = byte1;
+                target[size++] = byte2;
+                target[size++] = byte3;
+                target[size++] = byte4;
+                i += 4;
+            }
+            byte1 = input[i++];
+            if (byte1 < 0x80) {
+                target[size++] = byte1;
+            }
+            else if ((byte1 & 0xE0) === 0xC0) {
+                if (i >= length) {
+                    this.interim[0] = byte1;
+                    return size;
+                }
+                byte2 = input[i++];
+                if ((byte2 & 0xC0) !== 0x80) {
+                    i--;
+                    continue;
+                }
+                codepoint = (byte1 & 0x1F) << 6 | (byte2 & 0x3F);
+                if (codepoint < 0x80) {
+                    i--;
+                    continue;
+                }
+                target[size++] = codepoint;
+            }
+            else if ((byte1 & 0xF0) === 0xE0) {
+                if (i >= length) {
+                    this.interim[0] = byte1;
+                    return size;
+                }
+                byte2 = input[i++];
+                if ((byte2 & 0xC0) !== 0x80) {
+                    i--;
+                    continue;
+                }
+                if (i >= length) {
+                    this.interim[0] = byte1;
+                    this.interim[1] = byte2;
+                    return size;
+                }
+                byte3 = input[i++];
+                if ((byte3 & 0xC0) !== 0x80) {
+                    i--;
+                    continue;
+                }
+                codepoint = (byte1 & 0x0F) << 12 | (byte2 & 0x3F) << 6 | (byte3 & 0x3F);
+                if (codepoint < 0x0800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+                    continue;
+                }
+                target[size++] = codepoint;
+            }
+            else if ((byte1 & 0xF8) === 0xF0) {
+                if (i >= length) {
+                    this.interim[0] = byte1;
+                    return size;
+                }
+                byte2 = input[i++];
+                if ((byte2 & 0xC0) !== 0x80) {
+                    i--;
+                    continue;
+                }
+                if (i >= length) {
+                    this.interim[0] = byte1;
+                    this.interim[1] = byte2;
+                    return size;
+                }
+                byte3 = input[i++];
+                if ((byte3 & 0xC0) !== 0x80) {
+                    i--;
+                    continue;
+                }
+                if (i >= length) {
+                    this.interim[0] = byte1;
+                    this.interim[1] = byte2;
+                    this.interim[2] = byte3;
+                    return size;
+                }
+                byte4 = input[i++];
+                if ((byte4 & 0xC0) !== 0x80) {
+                    i--;
+                    continue;
+                }
+                codepoint = (byte1 & 0x07) << 18 | (byte2 & 0x3F) << 12 | (byte3 & 0x3F) << 6 | (byte4 & 0x3F);
+                if (codepoint < 0x010000 || codepoint > 0x10FFFF) {
+                    continue;
+                }
+                target[size++] = codepoint;
+            }
+            else {
+            }
+        }
+        return size;
+    };
+    return Utf8ToUtf32;
+}());
+exports.Utf8ToUtf32 = Utf8ToUtf32;
 
-},{}],33:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var EscapeSequences_1 = require("../common/data/EscapeSequences");
@@ -7337,14 +7627,61 @@ function repeat(count, str) {
     return rpt;
 }
 
-},{"../common/data/EscapeSequences":29}],34:[function(require,module,exports){
+},{"../common/data/EscapeSequences":28}],36:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var AddonManager = (function () {
+    function AddonManager() {
+        this._addons = [];
+    }
+    AddonManager.prototype.dispose = function () {
+        for (var i = this._addons.length - 1; i >= 0; i--) {
+            this._addons[i].instance.dispose();
+        }
+    };
+    AddonManager.prototype.loadAddon = function (terminal, instance) {
+        var _this = this;
+        var loadedAddon = {
+            instance: instance,
+            dispose: instance.dispose,
+            isDisposed: false
+        };
+        this._addons.push(loadedAddon);
+        instance.dispose = function () { return _this._wrappedAddonDispose(loadedAddon); };
+        instance.activate(terminal);
+    };
+    AddonManager.prototype._wrappedAddonDispose = function (loadedAddon) {
+        if (loadedAddon.isDisposed) {
+            return;
+        }
+        var index = -1;
+        for (var i = 0; i < this._addons.length; i++) {
+            if (this._addons[i] === loadedAddon) {
+                index = i;
+                break;
+            }
+        }
+        if (index === -1) {
+            throw new Error('Could not dispose an addon that has not been loaded');
+        }
+        loadedAddon.isDisposed = true;
+        loadedAddon.dispose.apply(loadedAddon.instance);
+        this._addons.splice(index, 1);
+    };
+    return AddonManager;
+}());
+exports.AddonManager = AddonManager;
+
+},{}],37:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("../Terminal");
 var Strings = require("../Strings");
+var AddonManager_1 = require("./AddonManager");
 var Terminal = (function () {
     function Terminal(options) {
         this._core = new Terminal_1.Terminal(options);
+        this._addonManager = new AddonManager_1.AddonManager();
     }
     Object.defineProperty(Terminal.prototype, "onCursorMove", {
         get: function () { return this._core.onCursorMove; },
@@ -7411,6 +7748,11 @@ var Terminal = (function () {
         enumerable: true,
         configurable: true
     });
+    Object.defineProperty(Terminal.prototype, "buffer", {
+        get: function () { return new BufferApiView(this._core.buffer); },
+        enumerable: true,
+        configurable: true
+    });
     Object.defineProperty(Terminal.prototype, "markers", {
         get: function () { return this._core.markers; },
         enumerable: true,
@@ -7470,8 +7812,14 @@ var Terminal = (function () {
     Terminal.prototype.hasSelection = function () {
         return this._core.hasSelection();
     };
+    Terminal.prototype.select = function (column, row, length) {
+        this._core.select(column, row, length);
+    };
     Terminal.prototype.getSelection = function () {
         return this._core.getSelection();
+    };
+    Terminal.prototype.getSelectionPosition = function () {
+        return this._core.getSelectionPosition();
     };
     Terminal.prototype.clearSelection = function () {
         this._core.clearSelection();
@@ -7483,6 +7831,7 @@ var Terminal = (function () {
         this._core.selectLines(start, end);
     };
     Terminal.prototype.dispose = function () {
+        this._addonManager.dispose();
         this._core.dispose();
     };
     Terminal.prototype.destroy = function () {
@@ -7509,6 +7858,9 @@ var Terminal = (function () {
     Terminal.prototype.write = function (data) {
         this._core.write(data);
     };
+    Terminal.prototype.writeUtf8 = function (data) {
+        this._core.writeUtf8(data);
+    };
     Terminal.prototype.getOption = function (key) {
         return this._core.getOption(key);
     };
@@ -7524,6 +7876,9 @@ var Terminal = (function () {
     Terminal.applyAddon = function (addon) {
         addon.apply(Terminal);
     };
+    Terminal.prototype.loadAddon = function (addon) {
+        return this._addonManager.loadAddon(this, addon);
+    };
     Object.defineProperty(Terminal, "strings", {
         get: function () {
             return Strings;
@@ -7534,15 +7889,89 @@ var Terminal = (function () {
     return Terminal;
 }());
 exports.Terminal = Terminal;
+var BufferApiView = (function () {
+    function BufferApiView(_buffer) {
+        this._buffer = _buffer;
+    }
+    Object.defineProperty(BufferApiView.prototype, "cursorY", {
+        get: function () { return this._buffer.y; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(BufferApiView.prototype, "cursorX", {
+        get: function () { return this._buffer.x; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(BufferApiView.prototype, "viewportY", {
+        get: function () { return this._buffer.ydisp; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(BufferApiView.prototype, "baseY", {
+        get: function () { return this._buffer.ybase; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(BufferApiView.prototype, "length", {
+        get: function () { return this._buffer.lines.length; },
+        enumerable: true,
+        configurable: true
+    });
+    BufferApiView.prototype.getLine = function (y) {
+        var line = this._buffer.lines.get(y);
+        if (!line) {
+            return undefined;
+        }
+        return new BufferLineApiView(line);
+    };
+    return BufferApiView;
+}());
+var BufferLineApiView = (function () {
+    function BufferLineApiView(_line) {
+        this._line = _line;
+    }
+    Object.defineProperty(BufferLineApiView.prototype, "isWrapped", {
+        get: function () { return this._line.isWrapped; },
+        enumerable: true,
+        configurable: true
+    });
+    BufferLineApiView.prototype.getCell = function (x) {
+        if (x < 0 || x >= this._line.length) {
+            return undefined;
+        }
+        return new BufferCellApiView(this._line, x);
+    };
+    BufferLineApiView.prototype.translateToString = function (trimRight, startColumn, endColumn) {
+        return this._line.translateToString(trimRight, startColumn, endColumn);
+    };
+    return BufferLineApiView;
+}());
+var BufferCellApiView = (function () {
+    function BufferCellApiView(_line, _x) {
+        this._line = _line;
+        this._x = _x;
+    }
+    Object.defineProperty(BufferCellApiView.prototype, "char", {
+        get: function () { return this._line.getString(this._x); },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(BufferCellApiView.prototype, "width", {
+        get: function () { return this._line.getWidth(this._x); },
+        enumerable: true,
+        configurable: true
+    });
+    return BufferCellApiView;
+}());
 
-},{"../Strings":18,"../Terminal":19}],35:[function(require,module,exports){
+},{"../Strings":16,"../Terminal":17,"./AddonManager":36}],38:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Types_1 = require("./atlas/Types");
+var Types_1 = require("../common/Types");
+var Types_2 = require("./atlas/Types");
 var CharAtlasCache_1 = require("./atlas/CharAtlasCache");
-var BufferLine_1 = require("../BufferLine");
-var Buffer_1 = require("../Buffer");
-var CharacterJoinerRegistry_1 = require("./CharacterJoinerRegistry");
+var BufferLine_1 = require("../core/buffer/BufferLine");
 var BaseRenderLayer = (function () {
     function BaseRenderLayer(_container, id, zIndex, _alpha, _colors) {
         this._container = _container;
@@ -7589,7 +8018,7 @@ var BaseRenderLayer = (function () {
     BaseRenderLayer.prototype.onSelectionChanged = function (terminal, start, end, columnSelectMode) {
         if (columnSelectMode === void 0) { columnSelectMode = false; }
     };
-    BaseRenderLayer.prototype.onThemeChanged = function (terminal, colorSet) {
+    BaseRenderLayer.prototype.setColors = function (terminal, colorSet) {
         this._refreshCharAtlas(terminal, colorSet);
     };
     BaseRenderLayer.prototype.setTransparency = function (terminal, alpha) {
@@ -7666,24 +8095,24 @@ var BaseRenderLayer = (function () {
         this._ctx.fillText(cell.getChars(), x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop + this._scaledCharHeight / 2);
     };
     BaseRenderLayer.prototype.drawChars = function (terminal, cell, x, y) {
-        if (cell.isFgRGB() || cell.isBgRGB() || cell instanceof CharacterJoinerRegistry_1.JoinedCellData) {
+        if (cell.isFgRGB() || cell.isBgRGB()) {
             this._drawUncachedChars(terminal, cell, x, y);
             return;
         }
         var fg;
         var bg;
         if (cell.isInverse()) {
-            fg = (cell.isBgDefault()) ? Types_1.INVERTED_DEFAULT_COLOR : cell.getBgColor();
-            bg = (cell.isFgDefault()) ? Types_1.INVERTED_DEFAULT_COLOR : cell.getFgColor();
+            fg = (cell.isBgDefault()) ? Types_2.INVERTED_DEFAULT_COLOR : cell.getBgColor();
+            bg = (cell.isFgDefault()) ? Types_2.INVERTED_DEFAULT_COLOR : cell.getFgColor();
         }
         else {
             bg = (cell.isBgDefault()) ? Types_1.DEFAULT_COLOR : cell.getBgColor();
             fg = (cell.isFgDefault()) ? Types_1.DEFAULT_COLOR : cell.getFgColor();
         }
-        var drawInBrightColor = terminal.options.drawBoldTextInBrightColors && cell.isBold() && fg < 8 && fg !== Types_1.INVERTED_DEFAULT_COLOR;
+        var drawInBrightColor = terminal.options.drawBoldTextInBrightColors && cell.isBold() && fg < 8 && fg !== Types_2.INVERTED_DEFAULT_COLOR;
         fg += drawInBrightColor ? 8 : 0;
-        this._currentGlyphIdentifier.chars = cell.getChars() || Buffer_1.WHITESPACE_CELL_CHAR;
-        this._currentGlyphIdentifier.code = cell.getCode() || Buffer_1.WHITESPACE_CELL_CODE;
+        this._currentGlyphIdentifier.chars = cell.getChars() || BufferLine_1.WHITESPACE_CELL_CHAR;
+        this._currentGlyphIdentifier.code = cell.getCode() || BufferLine_1.WHITESPACE_CELL_CODE;
         this._currentGlyphIdentifier.bg = bg;
         this._currentGlyphIdentifier.fg = fg;
         this._currentGlyphIdentifier.bold = cell.isBold() && terminal.options.enableBold;
@@ -7726,7 +8155,7 @@ var BaseRenderLayer = (function () {
         }
         this._clipRow(terminal, y);
         if (cell.isDim()) {
-            this._ctx.globalAlpha = Types_1.DIM_OPACITY;
+            this._ctx.globalAlpha = Types_2.DIM_OPACITY;
         }
         this._ctx.fillText(cell.getChars(), x * this._scaledCellWidth + this._scaledCharLeft, y * this._scaledCellHeight + this._scaledCharTop + this._scaledCharHeight / 2);
         this._ctx.restore();
@@ -7745,7 +8174,7 @@ var BaseRenderLayer = (function () {
 }());
 exports.BaseRenderLayer = BaseRenderLayer;
 
-},{"../Buffer":2,"../BufferLine":3,"./CharacterJoinerRegistry":36,"./atlas/CharAtlasCache":45,"./atlas/Types":52}],36:[function(require,module,exports){
+},{"../common/Types":27,"../core/buffer/BufferLine":29,"./atlas/CharAtlasCache":48,"./atlas/Types":55}],39:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -7761,8 +8190,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var BufferLine_1 = require("../BufferLine");
-var Buffer_1 = require("../Buffer");
+var BufferLine_1 = require("../core/buffer/BufferLine");
 var JoinedCellData = (function (_super) {
     __extends(JoinedCellData, _super);
     function JoinedCellData(firstCell, chars, width) {
@@ -7852,7 +8280,7 @@ var CharacterJoinerRegistry = (function () {
                 rangeAttrFG = this._workCell.fg;
                 rangeAttrBG = this._workCell.bg;
             }
-            currentStringIndex += this._workCell.getChars().length || Buffer_1.WHITESPACE_CELL_CHAR.length;
+            currentStringIndex += this._workCell.getChars().length || BufferLine_1.WHITESPACE_CELL_CHAR.length;
         }
         if (this._terminal.cols - rangeStartColumn > 1) {
             var joinedRanges = this._getJoinedRanges(lineStr, rangeStartStringIndex, currentStringIndex, line, rangeStartColumn);
@@ -7884,7 +8312,7 @@ var CharacterJoinerRegistry = (function () {
         }
         for (var x = startCol; x < this._terminal.cols; x++) {
             var width = line.getWidth(x);
-            var length_1 = line.getString(x).length || Buffer_1.WHITESPACE_CELL_CHAR.length;
+            var length_1 = line.getString(x).length || BufferLine_1.WHITESPACE_CELL_CHAR.length;
             if (width === 0) {
                 continue;
             }
@@ -7958,135 +8386,7 @@ var CharacterJoinerRegistry = (function () {
 }());
 exports.CharacterJoinerRegistry = CharacterJoinerRegistry;
 
-},{"../Buffer":2,"../BufferLine":3}],37:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var DEFAULT_FOREGROUND = fromHex('#ffffff');
-var DEFAULT_BACKGROUND = fromHex('#000000');
-var DEFAULT_CURSOR = fromHex('#ffffff');
-var DEFAULT_CURSOR_ACCENT = fromHex('#000000');
-var DEFAULT_SELECTION = {
-    css: 'rgba(255, 255, 255, 0.3)',
-    rgba: 0xFFFFFF77
-};
-exports.DEFAULT_ANSI_COLORS = (function () {
-    var colors = [
-        fromHex('#2e3436'),
-        fromHex('#cc0000'),
-        fromHex('#4e9a06'),
-        fromHex('#c4a000'),
-        fromHex('#3465a4'),
-        fromHex('#75507b'),
-        fromHex('#06989a'),
-        fromHex('#d3d7cf'),
-        fromHex('#555753'),
-        fromHex('#ef2929'),
-        fromHex('#8ae234'),
-        fromHex('#fce94f'),
-        fromHex('#729fcf'),
-        fromHex('#ad7fa8'),
-        fromHex('#34e2e2'),
-        fromHex('#eeeeec')
-    ];
-    var v = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff];
-    for (var i = 0; i < 216; i++) {
-        var r = v[(i / 36) % 6 | 0];
-        var g = v[(i / 6) % 6 | 0];
-        var b = v[i % 6];
-        colors.push({
-            css: "#" + toPaddedHex(r) + toPaddedHex(g) + toPaddedHex(b),
-            rgba: ((r << 24) | (g << 16) | (b << 8) | 0xFF) >>> 0
-        });
-    }
-    for (var i = 0; i < 24; i++) {
-        var c = 8 + i * 10;
-        var ch = toPaddedHex(c);
-        colors.push({
-            css: "#" + ch + ch + ch,
-            rgba: ((c << 24) | (c << 16) | (c << 8) | 0xFF) >>> 0
-        });
-    }
-    return colors;
-})();
-function fromHex(css) {
-    return {
-        css: css,
-        rgba: parseInt(css.slice(1), 16) << 8 | 0xFF
-    };
-}
-function toPaddedHex(c) {
-    var s = c.toString(16);
-    return s.length < 2 ? '0' + s : s;
-}
-var ColorManager = (function () {
-    function ColorManager(document, allowTransparency) {
-        this.allowTransparency = allowTransparency;
-        var canvas = document.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        this._ctx = canvas.getContext('2d');
-        this._ctx.globalCompositeOperation = 'copy';
-        this._litmusColor = this._ctx.createLinearGradient(0, 0, 1, 1);
-        this.colors = {
-            foreground: DEFAULT_FOREGROUND,
-            background: DEFAULT_BACKGROUND,
-            cursor: DEFAULT_CURSOR,
-            cursorAccent: DEFAULT_CURSOR_ACCENT,
-            selection: DEFAULT_SELECTION,
-            ansi: exports.DEFAULT_ANSI_COLORS.slice()
-        };
-    }
-    ColorManager.prototype.setTheme = function (theme) {
-        this.colors.foreground = this._parseColor(theme.foreground, DEFAULT_FOREGROUND);
-        this.colors.background = this._parseColor(theme.background, DEFAULT_BACKGROUND);
-        this.colors.cursor = this._parseColor(theme.cursor, DEFAULT_CURSOR, true);
-        this.colors.cursorAccent = this._parseColor(theme.cursorAccent, DEFAULT_CURSOR_ACCENT, true);
-        this.colors.selection = this._parseColor(theme.selection, DEFAULT_SELECTION, true);
-        this.colors.ansi[0] = this._parseColor(theme.black, exports.DEFAULT_ANSI_COLORS[0]);
-        this.colors.ansi[1] = this._parseColor(theme.red, exports.DEFAULT_ANSI_COLORS[1]);
-        this.colors.ansi[2] = this._parseColor(theme.green, exports.DEFAULT_ANSI_COLORS[2]);
-        this.colors.ansi[3] = this._parseColor(theme.yellow, exports.DEFAULT_ANSI_COLORS[3]);
-        this.colors.ansi[4] = this._parseColor(theme.blue, exports.DEFAULT_ANSI_COLORS[4]);
-        this.colors.ansi[5] = this._parseColor(theme.magenta, exports.DEFAULT_ANSI_COLORS[5]);
-        this.colors.ansi[6] = this._parseColor(theme.cyan, exports.DEFAULT_ANSI_COLORS[6]);
-        this.colors.ansi[7] = this._parseColor(theme.white, exports.DEFAULT_ANSI_COLORS[7]);
-        this.colors.ansi[8] = this._parseColor(theme.brightBlack, exports.DEFAULT_ANSI_COLORS[8]);
-        this.colors.ansi[9] = this._parseColor(theme.brightRed, exports.DEFAULT_ANSI_COLORS[9]);
-        this.colors.ansi[10] = this._parseColor(theme.brightGreen, exports.DEFAULT_ANSI_COLORS[10]);
-        this.colors.ansi[11] = this._parseColor(theme.brightYellow, exports.DEFAULT_ANSI_COLORS[11]);
-        this.colors.ansi[12] = this._parseColor(theme.brightBlue, exports.DEFAULT_ANSI_COLORS[12]);
-        this.colors.ansi[13] = this._parseColor(theme.brightMagenta, exports.DEFAULT_ANSI_COLORS[13]);
-        this.colors.ansi[14] = this._parseColor(theme.brightCyan, exports.DEFAULT_ANSI_COLORS[14]);
-        this.colors.ansi[15] = this._parseColor(theme.brightWhite, exports.DEFAULT_ANSI_COLORS[15]);
-    };
-    ColorManager.prototype._parseColor = function (css, fallback, allowTransparency) {
-        if (allowTransparency === void 0) { allowTransparency = this.allowTransparency; }
-        if (!css) {
-            return fallback;
-        }
-        this._ctx.fillStyle = this._litmusColor;
-        this._ctx.fillStyle = css;
-        if (typeof this._ctx.fillStyle !== 'string') {
-            console.warn("Color: " + css + " is invalid using fallback " + fallback.css);
-            return fallback;
-        }
-        this._ctx.fillRect(0, 0, 1, 1);
-        var data = this._ctx.getImageData(0, 0, 1, 1).data;
-        if (!allowTransparency && data[3] !== 0xFF) {
-            console.warn("Color: " + css + " is using transparency, but allowTransparency is false. " +
-                ("Using fallback " + fallback.css + "."));
-            return fallback;
-        }
-        return {
-            css: css,
-            rgba: (data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]) >>> 0
-        };
-    };
-    return ColorManager;
-}());
-exports.ColorManager = ColorManager;
-
-},{}],38:[function(require,module,exports){
+},{"../core/buffer/BufferLine":29}],40:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8103,7 +8403,7 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var BaseRenderLayer_1 = require("./BaseRenderLayer");
-var BufferLine_1 = require("../BufferLine");
+var BufferLine_1 = require("../core/buffer/BufferLine");
 var BLINK_INTERVAL = 600;
 var CursorRenderLayer = (function (_super) {
     __extends(CursorRenderLayer, _super);
@@ -8377,7 +8677,7 @@ var CursorBlinkStateManager = (function () {
     return CursorBlinkStateManager;
 }());
 
-},{"../BufferLine":3,"./BaseRenderLayer":35}],39:[function(require,module,exports){
+},{"../core/buffer/BufferLine":29,"./BaseRenderLayer":38}],41:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var GridCache = (function () {
@@ -8407,7 +8707,7 @@ var GridCache = (function () {
 }());
 exports.GridCache = GridCache;
 
-},{}],40:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8482,7 +8782,160 @@ var LinkRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.LinkRenderLayer = LinkRenderLayer;
 
-},{"./BaseRenderLayer":35,"./atlas/CharAtlasUtils":47,"./atlas/Types":52}],41:[function(require,module,exports){
+},{"./BaseRenderLayer":38,"./atlas/CharAtlasUtils":50,"./atlas/Types":55}],43:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var RenderDebouncer_1 = require("../ui/RenderDebouncer");
+var EventEmitter2_1 = require("../common/EventEmitter2");
+var Lifecycle_1 = require("../common/Lifecycle");
+var ScreenDprMonitor_1 = require("../ui/ScreenDprMonitor");
+var Lifecycle_2 = require("../ui/Lifecycle");
+var RenderCoordinator = (function (_super) {
+    __extends(RenderCoordinator, _super);
+    function RenderCoordinator(_renderer, _rowCount, screenElement) {
+        var _this = _super.call(this) || this;
+        _this._renderer = _renderer;
+        _this._rowCount = _rowCount;
+        _this._isPaused = false;
+        _this._needsFullRefresh = false;
+        _this._canvasWidth = 0;
+        _this._canvasHeight = 0;
+        _this._onDimensionsChange = new EventEmitter2_1.EventEmitter2();
+        _this._onRender = new EventEmitter2_1.EventEmitter2();
+        _this._onRefreshRequest = new EventEmitter2_1.EventEmitter2();
+        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(function (start, end) { return _this._renderRows(start, end); });
+        _this.register(_this._renderDebouncer);
+        _this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
+        _this._screenDprMonitor.setListener(function () { return _this._renderer.onDevicePixelRatioChange(); });
+        _this.register(_this._screenDprMonitor);
+        _this.register(Lifecycle_2.addDisposableDomListener(window, 'resize', function () { return _this._renderer.onDevicePixelRatioChange(); }));
+        if ('IntersectionObserver' in window) {
+            var observer_1 = new IntersectionObserver(function (e) { return _this._onIntersectionChange(e[e.length - 1]); }, { threshold: 0 });
+            observer_1.observe(screenElement);
+            _this.register({ dispose: function () { return observer_1.disconnect(); } });
+        }
+        return _this;
+    }
+    Object.defineProperty(RenderCoordinator.prototype, "onDimensionsChange", {
+        get: function () { return this._onDimensionsChange.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(RenderCoordinator.prototype, "onRender", {
+        get: function () { return this._onRender.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(RenderCoordinator.prototype, "onRefreshRequest", {
+        get: function () { return this._onRefreshRequest.event; },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(RenderCoordinator.prototype, "dimensions", {
+        get: function () { return this._renderer.dimensions; },
+        enumerable: true,
+        configurable: true
+    });
+    RenderCoordinator.prototype._onIntersectionChange = function (entry) {
+        this._isPaused = entry.intersectionRatio === 0;
+        if (!this._isPaused && this._needsFullRefresh) {
+            this.refreshRows(0, this._rowCount - 1);
+            this._needsFullRefresh = false;
+        }
+    };
+    RenderCoordinator.prototype.refreshRows = function (start, end) {
+        if (this._isPaused) {
+            this._needsFullRefresh = true;
+            return;
+        }
+        this._renderDebouncer.refresh(start, end, this._rowCount);
+    };
+    RenderCoordinator.prototype._renderRows = function (start, end) {
+        this._renderer.renderRows(start, end);
+        this._onRender.fire({ start: start, end: end });
+    };
+    RenderCoordinator.prototype.resize = function (cols, rows) {
+        this._rowCount = rows;
+        this._fireOnCanvasResize();
+    };
+    RenderCoordinator.prototype.changeOptions = function () {
+        this._renderer.onOptionsChanged();
+        this._fireOnCanvasResize();
+    };
+    RenderCoordinator.prototype._fireOnCanvasResize = function () {
+        if (this._renderer.dimensions.canvasWidth === this._canvasWidth && this._renderer.dimensions.canvasHeight === this._canvasHeight) {
+            return;
+        }
+        this._onDimensionsChange.fire(this._renderer.dimensions);
+    };
+    RenderCoordinator.prototype.setRenderer = function (renderer) {
+        this._renderer.dispose();
+        this._renderer = renderer;
+    };
+    RenderCoordinator.prototype._fullRefresh = function () {
+        if (this._isPaused) {
+            this._needsFullRefresh = true;
+        }
+        else {
+            this.refreshRows(0, this._rowCount);
+        }
+    };
+    RenderCoordinator.prototype.setColors = function (colors) {
+        this._renderer.setColors(colors);
+        this._fullRefresh();
+    };
+    RenderCoordinator.prototype.onDevicePixelRatioChange = function () {
+        this._renderer.onDevicePixelRatioChange();
+    };
+    RenderCoordinator.prototype.onResize = function (cols, rows) {
+        this._renderer.onResize(cols, rows);
+        this._fullRefresh();
+    };
+    RenderCoordinator.prototype.onCharSizeChanged = function () {
+        this._renderer.onCharSizeChanged();
+    };
+    RenderCoordinator.prototype.onBlur = function () {
+        this._renderer.onBlur();
+    };
+    RenderCoordinator.prototype.onFocus = function () {
+        this._renderer.onFocus();
+    };
+    RenderCoordinator.prototype.onSelectionChanged = function (start, end, columnSelectMode) {
+        this._renderer.onSelectionChanged(start, end, columnSelectMode);
+    };
+    RenderCoordinator.prototype.onCursorMove = function () {
+        this._renderer.onCursorMove();
+    };
+    RenderCoordinator.prototype.onOptionsChanged = function () {
+        this._renderer.onOptionsChanged();
+    };
+    RenderCoordinator.prototype.clear = function () {
+        this._renderer.clear();
+    };
+    RenderCoordinator.prototype.registerCharacterJoiner = function (handler) {
+        return this._renderer.registerCharacterJoiner(handler);
+    };
+    RenderCoordinator.prototype.deregisterCharacterJoiner = function (joinerId) {
+        return this._renderer.deregisterCharacterJoiner(joinerId);
+    };
+    return RenderCoordinator;
+}(Lifecycle_1.Disposable));
+exports.RenderCoordinator = RenderCoordinator;
+
+},{"../common/EventEmitter2":23,"../common/Lifecycle":24,"../ui/Lifecycle":59,"../ui/RenderDebouncer":60,"../ui/ScreenDprMonitor":61}],44:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8501,33 +8954,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var TextRenderLayer_1 = require("./TextRenderLayer");
 var SelectionRenderLayer_1 = require("./SelectionRenderLayer");
 var CursorRenderLayer_1 = require("./CursorRenderLayer");
-var ColorManager_1 = require("./ColorManager");
 var LinkRenderLayer_1 = require("./LinkRenderLayer");
-var RenderDebouncer_1 = require("../ui/RenderDebouncer");
-var ScreenDprMonitor_1 = require("../ui/ScreenDprMonitor");
 var CharacterJoinerRegistry_1 = require("../renderer/CharacterJoinerRegistry");
-var EventEmitter2_1 = require("../common/EventEmitter2");
 var Lifecycle_1 = require("../common/Lifecycle");
 var Renderer = (function (_super) {
     __extends(Renderer, _super);
-    function Renderer(_terminal, theme) {
+    function Renderer(_terminal, _colors) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
-        _this._isPaused = false;
-        _this._needsFullRefresh = false;
-        _this._onCanvasResize = new EventEmitter2_1.EventEmitter2();
-        _this._onRender = new EventEmitter2_1.EventEmitter2();
+        _this._colors = _colors;
         var allowTransparency = _this._terminal.options.allowTransparency;
-        _this.colorManager = new ColorManager_1.ColorManager(document, allowTransparency);
         _this._characterJoinerRegistry = new CharacterJoinerRegistry_1.CharacterJoinerRegistry(_terminal);
-        if (theme) {
-            _this.colorManager.setTheme(theme);
-        }
         _this._renderLayers = [
-            new TextRenderLayer_1.TextRenderLayer(_this._terminal.screenElement, 0, _this.colorManager.colors, _this._characterJoinerRegistry, allowTransparency),
-            new SelectionRenderLayer_1.SelectionRenderLayer(_this._terminal.screenElement, 1, _this.colorManager.colors),
-            new LinkRenderLayer_1.LinkRenderLayer(_this._terminal.screenElement, 2, _this.colorManager.colors, _this._terminal),
-            new CursorRenderLayer_1.CursorRenderLayer(_this._terminal.screenElement, 3, _this.colorManager.colors)
+            new TextRenderLayer_1.TextRenderLayer(_this._terminal.screenElement, 0, _this._colors, _this._characterJoinerRegistry, allowTransparency),
+            new SelectionRenderLayer_1.SelectionRenderLayer(_this._terminal.screenElement, 1, _this._colors),
+            new LinkRenderLayer_1.LinkRenderLayer(_this._terminal.screenElement, 2, _this._colors, _this._terminal),
+            new CursorRenderLayer_1.CursorRenderLayer(_this._terminal.screenElement, 3, _this._colors)
         ];
         _this.dimensions = {
             scaledCharWidth: null,
@@ -8546,75 +8988,32 @@ var Renderer = (function (_super) {
         _this._devicePixelRatio = window.devicePixelRatio;
         _this._updateDimensions();
         _this.onOptionsChanged();
-        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._renderRows.bind(_this));
-        _this._screenDprMonitor = new ScreenDprMonitor_1.ScreenDprMonitor();
-        _this._screenDprMonitor.setListener(function () { return _this.onWindowResize(window.devicePixelRatio); });
-        _this.register(_this._screenDprMonitor);
-        if ('IntersectionObserver' in window) {
-            var observer_1 = new IntersectionObserver(function (e) { return _this.onIntersectionChange(e[e.length - 1]); }, { threshold: 0 });
-            observer_1.observe(_this._terminal.element);
-            _this.register({ dispose: function () { return observer_1.disconnect(); } });
-        }
         return _this;
     }
-    Object.defineProperty(Renderer.prototype, "onCanvasResize", {
-        get: function () { return this._onCanvasResize.event; },
-        enumerable: true,
-        configurable: true
-    });
-    Object.defineProperty(Renderer.prototype, "onRender", {
-        get: function () { return this._onRender.event; },
-        enumerable: true,
-        configurable: true
-    });
     Renderer.prototype.dispose = function () {
         _super.prototype.dispose.call(this);
         this._renderLayers.forEach(function (l) { return l.dispose(); });
     };
-    Renderer.prototype.onIntersectionChange = function (entry) {
-        this._isPaused = entry.intersectionRatio === 0;
-        if (!this._isPaused && this._needsFullRefresh) {
-            this._terminal.refresh(0, this._terminal.rows - 1);
-            this._needsFullRefresh = false;
-        }
-    };
-    Renderer.prototype.onWindowResize = function (devicePixelRatio) {
-        if (this._devicePixelRatio !== devicePixelRatio) {
-            this._devicePixelRatio = devicePixelRatio;
+    Renderer.prototype.onDevicePixelRatioChange = function () {
+        if (this._devicePixelRatio !== window.devicePixelRatio) {
+            this._devicePixelRatio = window.devicePixelRatio;
             this.onResize(this._terminal.cols, this._terminal.rows);
         }
     };
-    Renderer.prototype.setTheme = function (theme) {
+    Renderer.prototype.setColors = function (colors) {
         var _this = this;
-        this.colorManager.setTheme(theme);
+        this._colors = colors;
         this._renderLayers.forEach(function (l) {
-            l.onThemeChanged(_this._terminal, _this.colorManager.colors);
+            l.setColors(_this._terminal, _this._colors);
             l.reset(_this._terminal);
         });
-        if (this._isPaused) {
-            this._needsFullRefresh = true;
-        }
-        else {
-            this._terminal.refresh(0, this._terminal.rows - 1);
-        }
-        return this.colorManager.colors;
     };
     Renderer.prototype.onResize = function (cols, rows) {
         var _this = this;
         this._updateDimensions();
         this._renderLayers.forEach(function (l) { return l.resize(_this._terminal, _this.dimensions); });
-        if (this._isPaused) {
-            this._needsFullRefresh = true;
-        }
-        else {
-            this._terminal.refresh(0, this._terminal.rows - 1);
-        }
         this._terminal.screenElement.style.width = this.dimensions.canvasWidth + "px";
         this._terminal.screenElement.style.height = this.dimensions.canvasHeight + "px";
-        this._onCanvasResize.fire({
-            width: this.dimensions.canvasWidth,
-            height: this.dimensions.canvasHeight
-        });
     };
     Renderer.prototype.onCharSizeChanged = function () {
         this.onResize(this._terminal.cols, this._terminal.rows);
@@ -8638,7 +9037,6 @@ var Renderer = (function (_super) {
     };
     Renderer.prototype.onOptionsChanged = function () {
         var _this = this;
-        this.colorManager.allowTransparency = this._terminal.options.allowTransparency;
         this._runOperation(function (l) { return l.onOptionsChanged(_this._terminal); });
     };
     Renderer.prototype.clear = function () {
@@ -8646,24 +9044,11 @@ var Renderer = (function (_super) {
         this._runOperation(function (l) { return l.reset(_this._terminal); });
     };
     Renderer.prototype._runOperation = function (operation) {
-        if (this._isPaused) {
-            this._needsFullRefresh = true;
-        }
-        else {
-            this._renderLayers.forEach(function (l) { return operation(l); });
-        }
+        this._renderLayers.forEach(function (l) { return operation(l); });
     };
-    Renderer.prototype.refreshRows = function (start, end) {
-        if (this._isPaused) {
-            this._needsFullRefresh = true;
-            return;
-        }
-        this._renderDebouncer.refresh(start, end, this._terminal.rows);
-    };
-    Renderer.prototype._renderRows = function (start, end) {
+    Renderer.prototype.renderRows = function (start, end) {
         var _this = this;
         this._renderLayers.forEach(function (l) { return l.onGridChanged(_this._terminal, start, end); });
-        this._onRender.fire({ start: start, end: end });
     };
     Renderer.prototype._updateDimensions = function () {
         if (!this._terminal.charMeasure.width || !this._terminal.charMeasure.height) {
@@ -8692,7 +9077,7 @@ var Renderer = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.Renderer = Renderer;
 
-},{"../common/EventEmitter2":25,"../common/Lifecycle":26,"../renderer/CharacterJoinerRegistry":36,"../ui/RenderDebouncer":56,"../ui/ScreenDprMonitor":57,"./ColorManager":37,"./CursorRenderLayer":38,"./LinkRenderLayer":40,"./SelectionRenderLayer":42,"./TextRenderLayer":43}],42:[function(require,module,exports){
+},{"../common/Lifecycle":24,"../renderer/CharacterJoinerRegistry":39,"./CursorRenderLayer":40,"./LinkRenderLayer":42,"./SelectionRenderLayer":45,"./TextRenderLayer":46}],45:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8789,7 +9174,7 @@ var SelectionRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.SelectionRenderLayer = SelectionRenderLayer;
 
-},{"./BaseRenderLayer":35}],43:[function(require,module,exports){
+},{"./BaseRenderLayer":38}],46:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -8805,10 +9190,9 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var Buffer_1 = require("../Buffer");
 var GridCache_1 = require("./GridCache");
 var BaseRenderLayer_1 = require("./BaseRenderLayer");
-var BufferLine_1 = require("../BufferLine");
+var BufferLine_1 = require("../core/buffer/BufferLine");
 var CharacterJoinerRegistry_1 = require("./CharacterJoinerRegistry");
 var TextRenderLayer = (function (_super) {
     __extends(TextRenderLayer, _super);
@@ -8855,7 +9239,7 @@ var TextRenderLayer = (function (_super) {
                     lastCharX = range[1] - 1;
                 }
                 if (!isJoined && this._isOverlapping(cell)) {
-                    if (lastCharX < line.length - 1 && line.getCodePoint(lastCharX + 1) === Buffer_1.NULL_CELL_CODE) {
+                    if (lastCharX < line.length - 1 && line.getCodePoint(lastCharX + 1) === BufferLine_1.NULL_CELL_CODE) {
                         cell.content &= ~12582912;
                         cell.content |= 2 << 22;
                     }
@@ -8922,6 +9306,7 @@ var TextRenderLayer = (function (_super) {
             if (cell.isInvisible()) {
                 return;
             }
+            _this.drawChars(terminal, cell, x, y);
             if (cell.isUnderline()) {
                 _this._ctx.save();
                 if (cell.isInverse()) {
@@ -8953,7 +9338,6 @@ var TextRenderLayer = (function (_super) {
                 _this.fillBottomLineAtCells(x, y, cell.getWidth());
                 _this._ctx.restore();
             }
-            _this.drawChars(terminal, cell, x, y);
         });
     };
     TextRenderLayer.prototype.onGridChanged = function (terminal, firstRow, lastRow) {
@@ -8992,7 +9376,7 @@ var TextRenderLayer = (function (_super) {
 }(BaseRenderLayer_1.BaseRenderLayer));
 exports.TextRenderLayer = TextRenderLayer;
 
-},{"../Buffer":2,"../BufferLine":3,"./BaseRenderLayer":35,"./CharacterJoinerRegistry":36,"./GridCache":39}],44:[function(require,module,exports){
+},{"../core/buffer/BufferLine":29,"./BaseRenderLayer":38,"./CharacterJoinerRegistry":39,"./GridCache":41}],47:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var BaseCharAtlas = (function () {
@@ -9012,7 +9396,7 @@ var BaseCharAtlas = (function () {
 }());
 exports.default = BaseCharAtlas;
 
-},{}],45:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CharAtlasUtils_1 = require("./CharAtlasUtils");
@@ -9077,7 +9461,7 @@ function removeTerminalFromCache(terminal) {
 }
 exports.removeTerminalFromCache = removeTerminalFromCache;
 
-},{"./CharAtlasUtils":47,"./DynamicCharAtlas":48,"./NoneCharAtlas":50,"./StaticCharAtlas":51}],46:[function(require,module,exports){
+},{"./CharAtlasUtils":50,"./DynamicCharAtlas":51,"./NoneCharAtlas":53,"./StaticCharAtlas":54}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Platform_1 = require("../../common/Platform");
@@ -9169,10 +9553,10 @@ function getFont(fontWeight, config) {
     return fontWeight + " " + config.fontSize * config.devicePixelRatio + "px " + config.fontFamily;
 }
 
-},{"../../common/Platform":27,"./Types":52}],47:[function(require,module,exports){
+},{"../../common/Platform":25,"./Types":55}],50:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Types_1 = require("./Types");
+var Types_1 = require("../../common/Types");
 function generateConfig(scaledCharWidth, scaledCharHeight, terminal, colors) {
     var clonedColors = {
         foreground: colors.foreground,
@@ -9220,7 +9604,7 @@ function is256Color(colorCode) {
 }
 exports.is256Color = is256Color;
 
-},{"./Types":52}],48:[function(require,module,exports){
+},{"../../common/Types":27}],51:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9238,7 +9622,7 @@ var __extends = (this && this.__extends) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 var Types_1 = require("./Types");
 var BaseCharAtlas_1 = require("./BaseCharAtlas");
-var ColorManager_1 = require("../ColorManager");
+var ColorManager_1 = require("../../ui/ColorManager");
 var CharAtlasGenerator_1 = require("./CharAtlasGenerator");
 var LRUMap_1 = require("./LRUMap");
 var Platform_1 = require("../../common/Platform");
@@ -9422,7 +9806,7 @@ var DynamicCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = DynamicCharAtlas;
 
-},{"../../common/Platform":27,"../ColorManager":37,"./BaseCharAtlas":44,"./CharAtlasGenerator":46,"./LRUMap":49,"./Types":52}],49:[function(require,module,exports){
+},{"../../common/Platform":25,"../../ui/ColorManager":58,"./BaseCharAtlas":47,"./CharAtlasGenerator":49,"./LRUMap":52,"./Types":55}],52:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var LRUMap = (function () {
@@ -9532,7 +9916,7 @@ var LRUMap = (function () {
 }());
 exports.default = LRUMap;
 
-},{}],50:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9561,7 +9945,7 @@ var NoneCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = NoneCharAtlas;
 
-},{"./BaseCharAtlas":44}],51:[function(require,module,exports){
+},{"./BaseCharAtlas":47}],54:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9581,6 +9965,7 @@ var Types_1 = require("./Types");
 var CharAtlasGenerator_1 = require("./CharAtlasGenerator");
 var BaseCharAtlas_1 = require("./BaseCharAtlas");
 var CharAtlasUtils_1 = require("./CharAtlasUtils");
+var Types_2 = require("../../common/Types");
 var StaticCharAtlas = (function (_super) {
     __extends(StaticCharAtlas, _super);
     function StaticCharAtlas(_document, _config) {
@@ -9610,8 +9995,8 @@ var StaticCharAtlas = (function (_super) {
     StaticCharAtlas.prototype._isCached = function (glyph, colorIndex) {
         var isAscii = glyph.code < 256;
         var isBasicColor = glyph.fg < 16;
-        var isDefaultColor = glyph.fg === Types_1.DEFAULT_COLOR;
-        var isDefaultBackground = glyph.bg === Types_1.DEFAULT_COLOR;
+        var isDefaultColor = glyph.fg === Types_2.DEFAULT_COLOR;
+        var isDefaultBackground = glyph.bg === Types_2.DEFAULT_COLOR;
         return isAscii && (isBasicColor || isDefaultColor) && isDefaultBackground && !glyph.italic;
     };
     StaticCharAtlas.prototype.draw = function (ctx, glyph, x, y) {
@@ -9622,7 +10007,7 @@ var StaticCharAtlas = (function (_super) {
         if (CharAtlasUtils_1.is256Color(glyph.fg)) {
             colorIndex = 2 + glyph.fg + (glyph.bold ? 16 : 0);
         }
-        else if (glyph.fg === Types_1.DEFAULT_COLOR) {
+        else if (glyph.fg === Types_2.DEFAULT_COLOR) {
             if (glyph.bold) {
                 colorIndex = 1;
             }
@@ -9644,15 +10029,14 @@ var StaticCharAtlas = (function (_super) {
 }(BaseCharAtlas_1.default));
 exports.default = StaticCharAtlas;
 
-},{"./BaseCharAtlas":44,"./CharAtlasGenerator":46,"./CharAtlasUtils":47,"./Types":52}],52:[function(require,module,exports){
+},{"../../common/Types":27,"./BaseCharAtlas":47,"./CharAtlasGenerator":49,"./CharAtlasUtils":50,"./Types":55}],55:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_COLOR = 256;
 exports.INVERTED_DEFAULT_COLOR = 257;
 exports.DIM_OPACITY = 0.5;
 exports.CHAR_ATLAS_CELL_SPACING = 1;
 
-},{}],53:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -9668,11 +10052,8 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-var ColorManager_1 = require("../ColorManager");
-var RenderDebouncer_1 = require("../../ui/RenderDebouncer");
 var DomRendererRowFactory_1 = require("./DomRendererRowFactory");
 var Types_1 = require("../atlas/Types");
-var EventEmitter2_1 = require("../../common/EventEmitter2");
 var Lifecycle_1 = require("../../common/Lifecycle");
 var TERMINAL_CLASS_PREFIX = 'xterm-dom-renderer-owner-';
 var ROW_CONTAINER_CLASS = 'xterm-rows';
@@ -9683,16 +10064,12 @@ var SELECTION_CLASS = 'xterm-selection';
 var nextTerminalId = 1;
 var DomRenderer = (function (_super) {
     __extends(DomRenderer, _super);
-    function DomRenderer(_terminal, theme) {
+    function DomRenderer(_terminal, _colors) {
         var _this = _super.call(this) || this;
         _this._terminal = _terminal;
+        _this._colors = _colors;
         _this._terminalClass = nextTerminalId++;
         _this._rowElements = [];
-        _this._onCanvasResize = new EventEmitter2_1.EventEmitter2();
-        _this._onRender = new EventEmitter2_1.EventEmitter2();
-        var allowTransparency = _this._terminal.options.allowTransparency;
-        _this.colorManager = new ColorManager_1.ColorManager(document, allowTransparency);
-        _this.setTheme(theme);
         _this._rowContainer = document.createElement('div');
         _this._rowContainer.classList.add(ROW_CONTAINER_CLASS);
         _this._rowContainer.style.lineHeight = 'normal';
@@ -9716,7 +10093,7 @@ var DomRenderer = (function (_super) {
             actualCellHeight: null
         };
         _this._updateDimensions();
-        _this._renderDebouncer = new RenderDebouncer_1.RenderDebouncer(_this._renderRows.bind(_this));
+        _this._injectCss();
         _this._rowFactory = new DomRendererRowFactory_1.DomRendererRowFactory(_terminal.options, document);
         _this._terminal.element.classList.add(TERMINAL_CLASS_PREFIX + _this._terminalClass);
         _this._terminal.screenElement.appendChild(_this._rowContainer);
@@ -9725,16 +10102,6 @@ var DomRenderer = (function (_super) {
         _this._terminal.linkifier.onLinkLeave(function (e) { return _this._onLinkLeave(e); });
         return _this;
     }
-    Object.defineProperty(DomRenderer.prototype, "onCanvasResize", {
-        get: function () { return this._onCanvasResize.event; },
-        enumerable: true,
-        configurable: true
-    });
-    Object.defineProperty(DomRenderer.prototype, "onRender", {
-        get: function () { return this._onRender.event; },
-        enumerable: true,
-        configurable: true
-    });
     DomRenderer.prototype.dispose = function () {
         this._terminal.element.classList.remove(TERMINAL_CLASS_PREFIX + this._terminalClass);
         this._terminal.screenElement.removeChild(this._rowContainer);
@@ -9745,7 +10112,7 @@ var DomRenderer = (function (_super) {
     };
     DomRenderer.prototype._updateDimensions = function () {
         var _this = this;
-        this.dimensions.scaledCharWidth = Math.floor(this._terminal.charMeasure.width * window.devicePixelRatio);
+        this.dimensions.scaledCharWidth = this._terminal.charMeasure.width * window.devicePixelRatio;
         this.dimensions.scaledCharHeight = Math.ceil(this._terminal.charMeasure.height * window.devicePixelRatio);
         this.dimensions.scaledCellWidth = this.dimensions.scaledCharWidth + Math.round(this._terminal.options.letterSpacing);
         this.dimensions.scaledCellHeight = Math.floor(this.dimensions.scaledCharHeight * this._terminal.options.lineHeight);
@@ -9778,20 +10145,21 @@ var DomRenderer = (function (_super) {
         this._terminal.screenElement.style.width = this.dimensions.canvasWidth + "px";
         this._terminal.screenElement.style.height = this.dimensions.canvasHeight + "px";
     };
-    DomRenderer.prototype.setTheme = function (theme) {
+    DomRenderer.prototype.setColors = function (colors) {
+        this._colors = colors;
+        this._injectCss();
+    };
+    DomRenderer.prototype._injectCss = function () {
         var _this = this;
-        if (theme) {
-            this.colorManager.setTheme(theme);
-        }
         if (!this._themeStyleElement) {
             this._themeStyleElement = document.createElement('style');
             this._terminal.screenElement.appendChild(this._themeStyleElement);
         }
         var styles = this._terminalSelector + " ." + ROW_CONTAINER_CLASS + " {" +
-            (" color: " + this.colorManager.colors.foreground.css + ";") +
-            (" background-color: " + this.colorManager.colors.background.css + ";") +
-            (" font-family: " + this._terminal.getOption('fontFamily') + ";") +
-            (" font-size: " + this._terminal.getOption('fontSize') + "px;") +
+            (" color: " + this._colors.foreground.css + ";") +
+            (" background-color: " + this._colors.background.css + ";") +
+            (" font-family: " + this._terminal.options.fontFamily + ";") +
+            (" font-size: " + this._terminal.options.fontSize + "px;") +
             "}";
         styles +=
             this._terminalSelector + " span:not(." + DomRendererRowFactory_1.BOLD_CLASS + ") {" +
@@ -9811,21 +10179,21 @@ var DomRenderer = (function (_super) {
                 "}";
         styles +=
             this._terminalSelector + " ." + ROW_CONTAINER_CLASS + ":not(." + FOCUS_CLASS + ") ." + DomRendererRowFactory_1.CURSOR_CLASS + " {" +
-                (" outline: 1px solid " + this.colorManager.colors.cursor.css + ";") +
+                (" outline: 1px solid " + this._colors.cursor.css + ";") +
                 " outline-offset: -1px;" +
                 "}" +
                 (this._terminalSelector + " ." + ROW_CONTAINER_CLASS + "." + FOCUS_CLASS + " ." + DomRendererRowFactory_1.CURSOR_CLASS + "." + DomRendererRowFactory_1.CURSOR_BLINK_CLASS + " {") +
                 " animation: blink 1s step-end infinite;" +
                 "}" +
                 (this._terminalSelector + " ." + ROW_CONTAINER_CLASS + "." + FOCUS_CLASS + " ." + DomRendererRowFactory_1.CURSOR_CLASS + "." + DomRendererRowFactory_1.CURSOR_STYLE_BLOCK_CLASS + " {") +
-                (" background-color: " + this.colorManager.colors.cursor.css + ";") +
-                (" color: " + this.colorManager.colors.cursorAccent.css + ";") +
+                (" background-color: " + this._colors.cursor.css + ";") +
+                (" color: " + this._colors.cursorAccent.css + ";") +
                 "}" +
                 (this._terminalSelector + " ." + ROW_CONTAINER_CLASS + "." + FOCUS_CLASS + " ." + DomRendererRowFactory_1.CURSOR_CLASS + "." + DomRendererRowFactory_1.CURSOR_STYLE_BAR_CLASS + " {") +
-                (" box-shadow: 1px 0 0 " + this.colorManager.colors.cursor.css + " inset;") +
+                (" box-shadow: 1px 0 0 " + this._colors.cursor.css + " inset;") +
                 "}" +
                 (this._terminalSelector + " ." + ROW_CONTAINER_CLASS + "." + FOCUS_CLASS + " ." + DomRendererRowFactory_1.CURSOR_CLASS + "." + DomRendererRowFactory_1.CURSOR_STYLE_UNDERLINE_CLASS + " {") +
-                (" box-shadow: 0 -1px 0 " + this.colorManager.colors.cursor.css + " inset;") +
+                (" box-shadow: 0 -1px 0 " + this._colors.cursor.css + " inset;") +
                 "}";
         styles +=
             this._terminalSelector + " ." + SELECTION_CLASS + " {" +
@@ -9837,20 +10205,19 @@ var DomRenderer = (function (_super) {
                 "}" +
                 (this._terminalSelector + " ." + SELECTION_CLASS + " div {") +
                 " position: absolute;" +
-                (" background-color: " + this.colorManager.colors.selection.css + ";") +
+                (" background-color: " + this._colors.selection.css + ";") +
                 "}";
-        this.colorManager.colors.ansi.forEach(function (c, i) {
+        this._colors.ansi.forEach(function (c, i) {
             styles +=
                 _this._terminalSelector + " ." + FG_CLASS_PREFIX + i + " { color: " + c.css + "; }" +
                     (_this._terminalSelector + " ." + BG_CLASS_PREFIX + i + " { background-color: " + c.css + "; }");
         });
         styles +=
-            this._terminalSelector + " ." + FG_CLASS_PREFIX + Types_1.INVERTED_DEFAULT_COLOR + " { color: " + this.colorManager.colors.background.css + "; }" +
-                (this._terminalSelector + " ." + BG_CLASS_PREFIX + Types_1.INVERTED_DEFAULT_COLOR + " { background-color: " + this.colorManager.colors.foreground.css + "; }");
+            this._terminalSelector + " ." + FG_CLASS_PREFIX + Types_1.INVERTED_DEFAULT_COLOR + " { color: " + this._colors.background.css + "; }" +
+                (this._terminalSelector + " ." + BG_CLASS_PREFIX + Types_1.INVERTED_DEFAULT_COLOR + " { background-color: " + this._colors.foreground.css + "; }");
         this._themeStyleElement.innerHTML = styles;
-        return this.colorManager.colors;
     };
-    DomRenderer.prototype.onWindowResize = function (devicePixelRatio) {
+    DomRenderer.prototype.onDevicePixelRatioChange = function () {
         this._updateDimensions();
     };
     DomRenderer.prototype._refreshRowElements = function (cols, rows) {
@@ -9866,10 +10233,6 @@ var DomRenderer = (function (_super) {
     DomRenderer.prototype.onResize = function (cols, rows) {
         this._refreshRowElements(cols, rows);
         this._updateDimensions();
-        this._onCanvasResize.fire({
-            width: this.dimensions.canvasWidth,
-            height: this.dimensions.canvasHeight
-        });
     };
     DomRenderer.prototype.onCharSizeChanged = function () {
         this._updateDimensions();
@@ -9924,16 +10287,13 @@ var DomRenderer = (function (_super) {
     };
     DomRenderer.prototype.onOptionsChanged = function () {
         this._updateDimensions();
-        this.setTheme(undefined);
+        this._injectCss();
         this._terminal.refresh(0, this._terminal.rows - 1);
     };
     DomRenderer.prototype.clear = function () {
         this._rowElements.forEach(function (e) { return e.innerHTML = ''; });
     };
-    DomRenderer.prototype.refreshRows = function (start, end) {
-        this._renderDebouncer.refresh(start, end, this._terminal.rows);
-    };
-    DomRenderer.prototype._renderRows = function (start, end) {
+    DomRenderer.prototype.renderRows = function (start, end) {
         var terminal = this._terminal;
         var cursorAbsoluteY = terminal.buffer.ybase + terminal.buffer.y;
         var cursorX = this._terminal.buffer.x;
@@ -9946,7 +10306,6 @@ var DomRenderer = (function (_super) {
             var cursorStyle = terminal.options.cursorStyle;
             rowElement.appendChild(this._rowFactory.createRow(lineData, row === cursorAbsoluteY, cursorStyle, cursorX, cursorBlink, this.dimensions.actualCellWidth, terminal.cols));
         }
-        this._onRender.fire({ start: start, end: end });
     };
     Object.defineProperty(DomRenderer.prototype, "_terminalSelector", {
         get: function () {
@@ -9983,12 +10342,11 @@ var DomRenderer = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.DomRenderer = DomRenderer;
 
-},{"../../common/EventEmitter2":25,"../../common/Lifecycle":26,"../../ui/RenderDebouncer":56,"../ColorManager":37,"../atlas/Types":52,"./DomRendererRowFactory":54}],54:[function(require,module,exports){
+},{"../../common/Lifecycle":24,"../atlas/Types":55,"./DomRendererRowFactory":57}],57:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var Buffer_1 = require("../../Buffer");
 var Types_1 = require("../atlas/Types");
-var BufferLine_1 = require("../../BufferLine");
+var BufferLine_1 = require("../../core/buffer/BufferLine");
 exports.BOLD_CLASS = 'xterm-bold';
 exports.DIM_CLASS = 'xterm-dim';
 exports.ITALIC_CLASS = 'xterm-italic';
@@ -10008,7 +10366,7 @@ var DomRendererRowFactory = (function () {
         var fragment = this._document.createDocumentFragment();
         var lineLength = 0;
         for (var x = Math.min(lineData.length, cols) - 1; x >= 0; x--) {
-            if (lineData.loadCell(x, this._workCell).getCode() !== Buffer_1.NULL_CELL_CODE || (isCursorRow && x === cursorX)) {
+            if (lineData.loadCell(x, this._workCell).getCode() !== BufferLine_1.NULL_CELL_CODE || (isCursorRow && x === cursorX)) {
                 lineLength = x + 1;
                 break;
             }
@@ -10052,7 +10410,7 @@ var DomRendererRowFactory = (function () {
             if (this._workCell.isUnderline()) {
                 charElement.classList.add(exports.UNDERLINE_CLASS);
             }
-            charElement.textContent = this._workCell.getChars() || Buffer_1.WHITESPACE_CELL_CHAR;
+            charElement.textContent = this._workCell.getChars() || BufferLine_1.WHITESPACE_CELL_CHAR;
             var swapColor = this._workCell.isInverse();
             if (this._workCell.isFgRGB()) {
                 var style = charElement.getAttribute('style') || '';
@@ -10089,7 +10447,140 @@ var DomRendererRowFactory = (function () {
 }());
 exports.DomRendererRowFactory = DomRendererRowFactory;
 
-},{"../../Buffer":2,"../../BufferLine":3,"../atlas/Types":52}],55:[function(require,module,exports){
+},{"../../core/buffer/BufferLine":29,"../atlas/Types":55}],58:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var DEFAULT_FOREGROUND = fromHex('#ffffff');
+var DEFAULT_BACKGROUND = fromHex('#000000');
+var DEFAULT_CURSOR = fromHex('#ffffff');
+var DEFAULT_CURSOR_ACCENT = fromHex('#000000');
+var DEFAULT_SELECTION = {
+    css: 'rgba(255, 255, 255, 0.3)',
+    rgba: 0xFFFFFF77
+};
+exports.DEFAULT_ANSI_COLORS = (function () {
+    var colors = [
+        fromHex('#2e3436'),
+        fromHex('#cc0000'),
+        fromHex('#4e9a06'),
+        fromHex('#c4a000'),
+        fromHex('#3465a4'),
+        fromHex('#75507b'),
+        fromHex('#06989a'),
+        fromHex('#d3d7cf'),
+        fromHex('#555753'),
+        fromHex('#ef2929'),
+        fromHex('#8ae234'),
+        fromHex('#fce94f'),
+        fromHex('#729fcf'),
+        fromHex('#ad7fa8'),
+        fromHex('#34e2e2'),
+        fromHex('#eeeeec')
+    ];
+    var v = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff];
+    for (var i = 0; i < 216; i++) {
+        var r = v[(i / 36) % 6 | 0];
+        var g = v[(i / 6) % 6 | 0];
+        var b = v[i % 6];
+        colors.push({
+            css: "#" + toPaddedHex(r) + toPaddedHex(g) + toPaddedHex(b),
+            rgba: ((r << 24) | (g << 16) | (b << 8) | 0xFF) >>> 0
+        });
+    }
+    for (var i = 0; i < 24; i++) {
+        var c = 8 + i * 10;
+        var ch = toPaddedHex(c);
+        colors.push({
+            css: "#" + ch + ch + ch,
+            rgba: ((c << 24) | (c << 16) | (c << 8) | 0xFF) >>> 0
+        });
+    }
+    return colors;
+})();
+function fromHex(css) {
+    return {
+        css: css,
+        rgba: parseInt(css.slice(1), 16) << 8 | 0xFF
+    };
+}
+function toPaddedHex(c) {
+    var s = c.toString(16);
+    return s.length < 2 ? '0' + s : s;
+}
+var ColorManager = (function () {
+    function ColorManager(document, allowTransparency) {
+        this.allowTransparency = allowTransparency;
+        var canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error('Could not get rendering context');
+        }
+        this._ctx = ctx;
+        this._ctx.globalCompositeOperation = 'copy';
+        this._litmusColor = this._ctx.createLinearGradient(0, 0, 1, 1);
+        this.colors = {
+            foreground: DEFAULT_FOREGROUND,
+            background: DEFAULT_BACKGROUND,
+            cursor: DEFAULT_CURSOR,
+            cursorAccent: DEFAULT_CURSOR_ACCENT,
+            selection: DEFAULT_SELECTION,
+            ansi: exports.DEFAULT_ANSI_COLORS.slice()
+        };
+    }
+    ColorManager.prototype.setTheme = function (theme) {
+        if (theme === void 0) { theme = {}; }
+        this.colors.foreground = this._parseColor(theme.foreground, DEFAULT_FOREGROUND);
+        this.colors.background = this._parseColor(theme.background, DEFAULT_BACKGROUND);
+        this.colors.cursor = this._parseColor(theme.cursor, DEFAULT_CURSOR, true);
+        this.colors.cursorAccent = this._parseColor(theme.cursorAccent, DEFAULT_CURSOR_ACCENT, true);
+        this.colors.selection = this._parseColor(theme.selection, DEFAULT_SELECTION, true);
+        this.colors.ansi[0] = this._parseColor(theme.black, exports.DEFAULT_ANSI_COLORS[0]);
+        this.colors.ansi[1] = this._parseColor(theme.red, exports.DEFAULT_ANSI_COLORS[1]);
+        this.colors.ansi[2] = this._parseColor(theme.green, exports.DEFAULT_ANSI_COLORS[2]);
+        this.colors.ansi[3] = this._parseColor(theme.yellow, exports.DEFAULT_ANSI_COLORS[3]);
+        this.colors.ansi[4] = this._parseColor(theme.blue, exports.DEFAULT_ANSI_COLORS[4]);
+        this.colors.ansi[5] = this._parseColor(theme.magenta, exports.DEFAULT_ANSI_COLORS[5]);
+        this.colors.ansi[6] = this._parseColor(theme.cyan, exports.DEFAULT_ANSI_COLORS[6]);
+        this.colors.ansi[7] = this._parseColor(theme.white, exports.DEFAULT_ANSI_COLORS[7]);
+        this.colors.ansi[8] = this._parseColor(theme.brightBlack, exports.DEFAULT_ANSI_COLORS[8]);
+        this.colors.ansi[9] = this._parseColor(theme.brightRed, exports.DEFAULT_ANSI_COLORS[9]);
+        this.colors.ansi[10] = this._parseColor(theme.brightGreen, exports.DEFAULT_ANSI_COLORS[10]);
+        this.colors.ansi[11] = this._parseColor(theme.brightYellow, exports.DEFAULT_ANSI_COLORS[11]);
+        this.colors.ansi[12] = this._parseColor(theme.brightBlue, exports.DEFAULT_ANSI_COLORS[12]);
+        this.colors.ansi[13] = this._parseColor(theme.brightMagenta, exports.DEFAULT_ANSI_COLORS[13]);
+        this.colors.ansi[14] = this._parseColor(theme.brightCyan, exports.DEFAULT_ANSI_COLORS[14]);
+        this.colors.ansi[15] = this._parseColor(theme.brightWhite, exports.DEFAULT_ANSI_COLORS[15]);
+    };
+    ColorManager.prototype._parseColor = function (css, fallback, allowTransparency) {
+        if (allowTransparency === void 0) { allowTransparency = this.allowTransparency; }
+        if (css === undefined) {
+            return fallback;
+        }
+        this._ctx.fillStyle = this._litmusColor;
+        this._ctx.fillStyle = css;
+        if (typeof this._ctx.fillStyle !== 'string') {
+            console.warn("Color: " + css + " is invalid using fallback " + fallback.css);
+            return fallback;
+        }
+        this._ctx.fillRect(0, 0, 1, 1);
+        var data = this._ctx.getImageData(0, 0, 1, 1).data;
+        if (!allowTransparency && data[3] !== 0xFF) {
+            console.warn("Color: " + css + " is using transparency, but allowTransparency is false. " +
+                ("Using fallback " + fallback.css + "."));
+            return fallback;
+        }
+        return {
+            css: css,
+            rgba: (data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]) >>> 0
+        };
+    };
+    return ColorManager;
+}());
+exports.ColorManager = ColorManager;
+
+},{}],59:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 function addDisposableDomListener(node, type, handler, useCapture) {
@@ -10105,7 +10596,7 @@ function addDisposableDomListener(node, type, handler, useCapture) {
 }
 exports.addDisposableDomListener = addDisposableDomListener;
 
-},{}],56:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var RenderDebouncer = (function () {
@@ -10145,7 +10636,7 @@ var RenderDebouncer = (function () {
 }());
 exports.RenderDebouncer = RenderDebouncer;
 
-},{}],57:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -10210,12 +10701,12 @@ var ScreenDprMonitor = (function (_super) {
 }(Lifecycle_1.Disposable));
 exports.ScreenDprMonitor = ScreenDprMonitor;
 
-},{"../common/Lifecycle":26}],58:[function(require,module,exports){
+},{"../common/Lifecycle":24}],62:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Terminal_1 = require("./public/Terminal");
 module.exports = Terminal_1.Terminal;
 
-},{"./public/Terminal":34}]},{},[58])(58)
+},{"./public/Terminal":37}]},{},[62])(62)
 });
 //# sourceMappingURL=xterm.js.map
