@@ -3456,18 +3456,14 @@ class Exec extends Duplex {
       const alive = keepAlive();
       let message, error;
       while (message = yield) {
-        const channel = message[0].toString();
-        message = message.slice(1).toString();
-        switch (channel) {
-          case '1':
-            // An initial ping frame with 0-length data is being sent
-            if (message.length === 0) continue;
-            terminal.write(message);
+        switch (message[0]) {
+          case 1:
+            terminal.term.writeUtf8(message.slice(1));
             break;
-          case '2':
-          case '3':
-            terminal.write(`\r\n\x1b[31m${message}\x1b[m\r\n`);
-            error = message;
+          case 2:
+          case 3:
+            error = message.slice(1).toString();
+            terminal.write(`\r\n\x1b[31m${error}\x1b[m\r\n`);
             break;
           default:
             throw Error('Unsupported message!');
