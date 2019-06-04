@@ -78078,11 +78078,11 @@ function getStream(options, { generator, readable, async = true }) {
         gen.next();
 
         socket
-          .on('data', frame => {
+          .on('data', data => {
             // the server may still be sending some data as the socket
             // is ended, not aborted, on cancel
             if (!clientAbort) {
-              const res = gen.next(frame);
+              const res = gen.next(data);
               if (res.done) {
                 socket.end();
                 response.body = res.value;
@@ -78122,79 +78122,85 @@ function getStream(options, { generator, readable, async = true }) {
 // TODO: handle fragmentation and continuation frame
 function* decode(gen, socket) {
   gen.next();
-  let data, frame, payload, offset;
+  let data, frame;
   while (data = yield) {
-    if (!frame) {
-      frame = decodeFrame(data);
-      // handle connection close in the 'end' event handler
-      if (frame.opcode === 0x8) {
-        socket.end();
-        continue;
-      }
-      if (frame.payload.length === frame.length) {
-        payload = frame.payload;
-        offset = payload.length;
+    do {
+      if (!frame) {
+        frame = decodeFrame(data);
       } else {
-        payload = Buffer.alloc(frame.length);
-        offset = frame.payload.copy(payload);
-      }
-    } else {
-      offset += data.copy(payload, offset);
-    }
-
-    if (offset === frame.length) {
-      // all the payload data has been transmitted
-      try {
-        const res = gen.next(payload);
-        if (res.done) {
-          return res.value;
+        const payload = data.slice(0, frame.length);
+        if (frame.mask) {
+          for (let i = 0; i < payload.length; i++) {
+            payload[i] = payload[i] ^ frame.maskingKey[i % 4];
+          }
         }
-      } finally {
-        frame = undefined;
+        frame.payload = Buffer.concat([frame.payload, payload], frame.payload.length + payload.length);
       }
-    }
+      if (frame.payload && frame.payload.length < frame.length) {
+        // wait for more payload data
+        break;
+      }
+      // the frame is complete
+      switch (frame.opcode) {
+        case 0x1:
+        case 0x2:
+          // text or binary frame
+          const { done, value } = gen.next(frame.payload);
+          if (done) {
+            return value;
+          }
+          break;
+        case 0x8:
+          // handle connection close in the 'end' event handler
+          socket.end();
+          break;
+      }
+      data = data.slice(frame.offset);
+      frame = undefined;
+    } while (data.length > 0);
   }
   return gen.next().value;
 }
 
 // https://tools.ietf.org/html/rfc6455#section-5.2
 // https://tools.ietf.org/html/rfc6455#section-5.7
-function decodeFrame(frame) {
-  const FIN    = frame[0] & 0x80;
-  const RSV1   = frame[0] & 0x40;
-  const RSV2   = frame[0] & 0x20;
-  const RSV3   = frame[0] & 0x10;
-  const opcode = frame[0] & 0x0F;
-  const mask   = frame[1] & 0x80;
-  let length   = frame[1] & 0x7F;
+function decodeFrame(buffer) {
+  const FIN    = buffer[0] & 0x80;
+  const RSV1   = buffer[0] & 0x40;
+  const RSV2   = buffer[0] & 0x20;
+  const RSV3   = buffer[0] & 0x10;
+  const opcode = buffer[0] & 0x0F;
+  const mask   = buffer[1] & 0x80;
+  let length   = buffer[1] & 0x7F;
 
   // just return the opcode on connection close
   if (opcode === 0x8) {
-    return { opcode };
+    return { opcode, offset: 2 };
   }
 
   let nextByte = 2;
   if (length === 126) {
-    length = frame.readUInt16BE(nextByte);
+    length = buffer.readUInt16BE(nextByte);
     nextByte += 2;
   } else if (length === 127) {
-    length = frame.readUInt64BE(nextByte);
+    length = buffer.readUInt64BE(nextByte);
     nextByte += 8;
   }
 
   let maskingKey;
   if (mask) {
-    maskingKey = frame.slice(nextByte, nextByte + 4);
+    maskingKey = buffer.slice(nextByte, nextByte + 4);
     nextByte += 4;
   }
 
-  const payload = frame.slice(nextByte);
+  const offset = nextByte + length;
+  const payload = buffer.slice(nextByte, offset);
   if (maskingKey) {
     for (let i = 0; i < payload.length; i++) {
       payload[i] = payload[i] ^ maskingKey[i % 4];
     }
   }
-  return { FIN, opcode, length, payload };
+  return { FIN, opcode, mask, maskingKey, length, offset, payload };
 }
 
 function encodeFrame(data) {
