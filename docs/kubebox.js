@@ -3451,7 +3451,7 @@ class Exec extends Duplex {
 
     this.setLabel = function (label) {
       terminal.setLabel(label);
-    }
+    };
 
     this.render = function () {
       screen.append(terminal);
@@ -3479,16 +3479,20 @@ class Exec extends Duplex {
           self.pause();
         }
       }, 30 * 1000);
-    }
+    };
+
+    const resize = function () {
+      terminal.term.resize(terminal.width - terminal.iwidth - 1, terminal.height - terminal.iheight);
+      sendResize();
+    };
 
     this.output = function* () {
       // Connection opens
       terminal.term.on('resize', sendResize);
-      terminal.once('render', function () {
-        // In case the terminal was resized while the connection was opening
-        terminal.term.resize(terminal.width - terminal.iwidth - 1, terminal.height - terminal.iheight);
-        sendResize();
-      });
+      // In case the terminal was resized while the connection was opening
+      terminal.once('render', resize);
+      // In case the terminal was resized while being blurred
+      terminal.on('focus', resize);
 
       const onScreenInput = function (data) {
         if (screen.focused !== terminal) return;
