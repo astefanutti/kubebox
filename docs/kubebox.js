@@ -3524,7 +3524,9 @@ class Exec extends Duplex {
       while (message = yield) {
         switch (message[0]) {
           case 1:
-            terminal.term.writeUtf8(message.slice(1));
+            // writeUtf8 and write methods cannot be used concurrently
+            // terminal.term.writeUtf8(message.slice(1));
+            terminal.term.write(message.slice(1).toString());
             break;
           case 2:
           case 3:
@@ -3541,7 +3543,9 @@ class Exec extends Duplex {
       // which is a non-normal state for the command entry. In that case, we still want
       // to dispose the terminal.
       // See: http://tldp.org/LDP/abs/html/exitcodes.html#EXITCODESREF
-      if (error && !error.endsWith('Error executing in Docker Container: 130')) {
+      if (error
+          && !error.endsWith('Error executing in Docker Container: 130')
+          && !error.endsWith('exit status 130')) {
         terminal.write('\x1b[31mDisconnected\x1b[m\r\n');
         terminal.write('Type Ctrl-C to close\r\n');
         terminal.on('key C-c', () => {
