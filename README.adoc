@@ -16,7 +16,7 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
-:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.4.0
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.5.0
 :uri-kubebox-twitter: https://twitter.com/kubebox
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
@@ -66,7 +66,7 @@ $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
 # OSX
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
 # Windows
-$ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows
+$ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows.exe
 --
 
 Then run:
@@ -142,12 +142,12 @@ $ kube-apiserver --cors-allowed-origins .*
 |kbd:[l], kbd:[Ctrl+l]
 |Login
 
-|[kbd:[⇧]\+]kbd:[←], kbd:[→] +
+|[kbd:[⇧]\+]kbd:[◀], kbd:[▶] +
 [kbd:[Alt]+]kbd:[1], ..., kbd:[9]
 |Navigate screens +
 (use kbd:[⇧] or kbd:[Alt] inside exec terminal)
 
-|kbd:[↑], kbd:[↓]
+|kbd:[▲], kbd:[▼]
 |Navigate list / form / log
 
 |kbd:[Enter]
@@ -161,7 +161,7 @@ $ kube-apiserver --cors-allowed-origins .*
 
 2+^.e|Login
 
-|kbd:[←], kbd:[→]
+|kbd:[◀], kbd:[▶]
 |Navigate Kube configurations
 
 2+^.e|Namespace
