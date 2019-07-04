@@ -1522,7 +1522,7 @@ class XTerm extends blessed.ScrollableBox {
 
     const result = [];
     // get first row
-    result.push(buffer.getLine(y1).translateToString(false, x1, y1 == y2 ? x2 + 1 : undefined));
+    result.push(buffer.getLine(y1).translateToString(true, x1, y1 == y2 ? x2 + 1 : undefined));
 
     // get middle rows
     for (let i = y1 + 1; i <= y2 - 1; i++) {
