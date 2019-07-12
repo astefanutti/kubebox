@@ -14,12 +14,9 @@
     "browserify": "browserify -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js -o docs/kubebox.js",
     "browserify-debug": "browserify --debug -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
     "bundle": "browserify index.js -o bundle.js -u pty.js -u term.js -u spawn-sync --node",
-    "executable": "nexe package.json",
-    "executable-linux": "eval \"$(musl-exports)\" && nexe package.json"
-  },
-  "pkg": {
-    "scripts": "node_modules/blessed/lib/widgets/*.js",
-    "assets": "node_modules/blessed/usr/*"
+    "executable-linux": "npm run bundle && npm i --no-save node-musl@0.2.2-beta6 && eval \"$(musl-exports)\" && export CXXFLAGS=\"-O3 -ffunction-sections -fdata-sections\" && export LDFLAGS=\"-Wl,--gc-sections,--strip-all\" && cat bundle.js | nexe -b -c=--fully-static -c=--without-npm -c=--without-dtrace -c=--without-inspector -c=--without-etw -c=--without-perfctr -m=-j$(getconf _NPROCESSORS_ONLN) -t linux-10.16.0 -o kubebox --verbose",
+    "executable-macos": "npm run bundle && cat bundle.js | nexe -t macos-10.16.0 -o kubebox",
+    "executable-windows": "npm run bundle && cat bundle.js | nexe -t win-10.16.0 -o kubebox"
   },
   "repository": {
     "type": "git",
@@ -28,8 +25,7 @@
   "devDependencies": {
     "browserify": "~16.2.3",
     "exorcist": "^0.4.0",
-    "nexe": "~1.1.3",
-    "node-musl": "0.0.6"
+    "nexe": "^3.3.2"
   },
   "dependencies": {
     "blessed": "~0.1.81",
@@ -42,35 +38,5 @@
     "urijs": "~1.18.4",
     "x256": "0.0.2",
     "xterm": "~3.14.1"
-  },
-  "engines": {
-    "node": ">=6.0.0"
-  },
-  "nexe": {
-    "input": "./index.js",
-    "output": "kubebox^$",
-    "temp": ".nexe",
-    "browserify": {
-      "requires": [],
-      "excludes": [
-        "pty.js",
-        "term.js",
-        "spawn-sync"
-      ],
-      "paths": []
-    },
-    "runtime": {
-      "nodeConfigureArgs": [
-        "--fully-static",
-        "--without-dtrace",
-        "--without-npm",
-        "--without-inspector",
-        "--without-etw",
-        "--without-perfctr"
-      ],
-      "framework": "node",
-      "version": "9.4.0",
-      "ignoreFlags": true
-    }
   }
 }
