@@ -32,6 +32,7 @@
     "blessed": "~0.1.81",
     "bresenham": "0.0.4",
     "clipboardy": "~1.2.3",
+    "jsonpath-plus": "~0.20.1",
     "js-yaml": "3.13.1",
     "gl-matrix": "2.1.0",
     "lodash.debounce": "^4.0.8",
