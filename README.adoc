@@ -39,7 +39,7 @@ endif::[]
 
 * [x] Configuration from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
 * [x] Switch contexts interactively
-* [x] Authentication support (token, username / password, private key / cert, OpenID Connect)
+* [x] Authentication support (token, username / password, private key / cert, OpenID Connect, Amazon EKS, Google Kubernetes Engine, Digital Ocean)
 * [x] Namespace selection and pods list watching
 * [x] Container log scrolling / watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
@@ -130,6 +130,27 @@ This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.
 ```sh
 $ kube-apiserver --cors-allowed-origins .*
 ```
+
+== Authentication
+
+We try to support the various authentication strategies supported by https://kubernetes.io/docs/reference/kubectl/overview/[`kubectl`] in order to provide seamless integration with your local setup. Here are the different authentication strategies we support depending on how you're using Kubebox:
+
+[cols="<,^,^,^", options="header"]
+|===
+||Executable|Docker|Online
+
+|OpenID Connect|icon:check[]|icon:check[]|icon:check[]*
+
+|Amazon EKS| icon:check[]||
+
+|Digital Ocean|icon:check[]||
+
+|Google Kubernetes Engine|icon:check[]||
+|===
+*Custom IDP certificate authority files are not supported in Web version.
+
+If the mode you're using isn't marked as supported, you'll have to refresh the authentication token/certs manually and update your configuration file accordingly.
+
 
 == Commands
 
