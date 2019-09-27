@@ -1,4 +1,5 @@
 require=(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+(function (process){
 'use strict';
 
 const { execFile } = require('child_process'),
@@ -35,18 +36,18 @@ class ExecAuth {
       promise = Promise.resolve(this.auth_provider);
     } else {
       promise = new Promise((resolve, reject) => {
-        const env = {};
+        const env = Object.assign({}, process.env);
         if(this.auth_provider.env) {
           this.auth_provider.env.forEach(kvp => env[kvp.name] = kvp.value);
         }
-        const process = execFile(this.auth_provider.command, this.auth_provider.args , { env }, (error, stdout, stderr) => {
+        const exec = execFile(this.auth_provider.command, this.auth_provider.args , { env }, (error, stdout, stderr) => {
           cancel = function (){};
           if (error) {
             reject(error);
           }
           resolve(stdout);
         });
-        cancel = function() { process.kill() };
+        cancel = function() { exec.kill() };
       });
       promise = promise.then( response => {
         const json = JSON.parse(response);
@@ -67,7 +68,8 @@ class ExecAuth {
 }
 
 module.exports = ExecAuth;
-},{"child_process":133,"os":139}],2:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":262,"child_process":133,"os":139}],2:[function(require,module,exports){
 'use strict';
 
 const { execFile } = require('child_process'),
@@ -3516,7 +3518,7 @@ class Dashboard {
       const pod = pods_list.items[i - 1];
       const name = pod.metadata.name;
       const namespace = pod.metadata.namespace;
-      const containers = pod.spec.containers;
+      const containers = pod.spec.containers.concat(pod.spec.initContainers || []);
       let container;
       if (containers.length === 1) {
         if (pod.metadata.uid === pod_selected && container_selected) {
@@ -4568,8 +4570,8 @@ function namespaces_list(screen) {
   return namespaces_list;
 }
 
-function prompt(screen, client, { current_namespace, promptAfterRequest } = { promptAfterRequest : false }) {
-  return new Promise(function(fulfill, reject) {
+function prompt(screen, client, { current_namespace, promptAfterRequest } = { promptAfterRequest: false }) {
+  return new Promise(function (fulfill, reject) {
     const list = namespaces_list(screen);
     const { until } = spinner(screen);
     let namespaces = [], message;
@@ -4577,17 +4579,32 @@ function prompt(screen, client, { current_namespace, promptAfterRequest } = { pr
     // TODO: watch for namespaces changes when the selection list is open
     function request_namespaces() {
       return (client.openshift ? client.projects().get() : client.namespaces().get())
-        .then(response => JSON.parse(response.body.toString('utf8')))
-        .then(response => namespaces = response)
-        .then(namespaces => namespaces.items.length === 0
-          ? list_message('No available namespaces')
-          : list.setItems(namespaces.items.reduce((data, namespace) => {
-            data.push(namespace.metadata.name === current_namespace
-              ? `{blue-fg}${namespace.metadata.name}{/blue-fg}`
-              : namespace.metadata.name);
-            return data;
-            }, [])))
-        .then(() => screen.render());
+        .then(response => {
+          namespaces = JSON.parse(response.body.toString('utf8'));
+          if (namespaces.items.length === 0) {
+            list_message('No available namespaces');
+          } else {
+            let selected;
+            list.setItems(namespaces.items.reduce((data, namespace, index) => {
+              if (namespace.metadata.name === current_namespace) {
+                selected = index;
+                data.push(`{blue-fg}${namespace.metadata.name}{/blue-fg}`);
+              } else {
+                data.push(namespace.metadata.name);
+              }
+              return data;
+            }, []));
+            if (current_namespace) {
+              list.select(selected);
+              if (selected > list.height / 2 - 1) {
+                // Scroll to center the selected item
+                list.childOffset += list.height / 2 - 1 | 0;
+                list.scrollTo(selected);
+              }
+            }
+          }
+          screen.render();
+        });
     }
 
     function prompt_namespaces_list() {
