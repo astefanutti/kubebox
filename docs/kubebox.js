@@ -2153,16 +2153,16 @@ class XTerm extends blessed.ScrollableBox {
       // hacking the scrollbar logic so that it does not scroll when hovering it
       this._scrollingBar = true;
 
-      const buffer = this.term._core.buffer;
+      const buffer = this.term.buffer;
       const xi = this.aleft + this.ileft;
       const yi = this.atop + this.itop;
 
       // start coordinates
-      const [line, index] = getUnwrappedLineCoordinates(this.term, data.x - xi, data.y - yi + buffer.ydisp);
+      const [line, index] = getUnwrappedLineCoordinates(this.term, data.x - xi, data.y - yi + buffer.viewportY);
       this._selection = {
         x1 : index,
         y1 : line,
-        m1 : buffer.addMarker(line),
+        m1 : buffer._buffer.addMarker(line),
       };
       let smd, smu, click = hrtime();
       this.onScreenEvent('mouse', smd = data => {
@@ -2172,11 +2172,11 @@ class XTerm extends blessed.ScrollableBox {
         }
         // end coordinates
         // TODO: scroll vertically when y coordinate is out of current range
-        const [line, index] = getUnwrappedLineCoordinates(this.term, data.x - xi, data.y - yi + buffer.ydisp);
+        const [line, index] = getUnwrappedLineCoordinates(this.term, data.x - xi, data.y - yi + buffer.viewportY);
         Object.assign(this._selection || {}, {
           x2 : index,
           y2 : line,
-          m2 : buffer.addMarker(line),
+          m2 : buffer._buffer.addMarker(line),
         });
         this.screen.render();
       });
@@ -2211,6 +2211,10 @@ class XTerm extends blessed.ScrollableBox {
 
   write(data) {
     this.term.write(data);
+  }
+
+  writeln(data) {
+    this.term.writeln(data);
   }
 
   hasSelection() {
@@ -2275,8 +2279,9 @@ class XTerm extends blessed.ScrollableBox {
     let ret = this._render();
     if (!ret) return;
 
-    const buffer = this.term._core.buffer;
-    const ydisp = buffer.ydisp;
+    const buffer = this.term.buffer;
+    const lines = buffer._buffer.lines;
+    const ydisp = buffer.viewportY;
 
     // determine position
     const xi = ret.xi + this.ileft;
@@ -2307,16 +2312,16 @@ class XTerm extends blessed.ScrollableBox {
     for (let y = Math.max(yi, 0); y < yl; y++) {
       // fetch Blessed Screen and XTerm lines
       let sline = this.screen.lines[y];
-      let tline = buffer.lines.get(ydisp + y - yi);
+      let tline = lines.get(ydisp + y - yi);
       if (!sline || !tline)
         break;
 
       // determine cursor column position
-      if (y === yi + buffer.y
+      if (y === yi + buffer.cursorY
           && this.screen.focused === this
-          && (ydisp === buffer.ybase)
+          && (ydisp === buffer.baseY)
           && !this.term.cursorHidden) {
-        cursor = xi + buffer.x;
+        cursor = xi + buffer.cursorX;
       } else {
         cursor = -1;
       }
@@ -2450,7 +2455,7 @@ class XTerm extends blessed.ScrollableBox {
 }
 
 function getUnwrappedLineCoordinates(terminal, x, y) {
-  const buffer = terminal._core.buffer;
+  const buffer = terminal.buffer._buffer;
   // keep the y coordinate within buffer range
   const l = Math.min(Math.max(0, y), buffer.lines.length - 1);
   const line = buffer.getWrappedRangeForLine(l).first;
@@ -2459,7 +2464,7 @@ function getUnwrappedLineCoordinates(terminal, x, y) {
 };
 
 function getWrappedLineCoordinates(terminal, index, line) {
-  const { first, last } = terminal._core.buffer.getWrappedRangeForLine(line);
+  const { first, last } = terminal.buffer._buffer.getWrappedRangeForLine(line);
 
   const y = first + Math.floor(index / terminal.cols);
   const x = index % terminal.cols;
@@ -4312,9 +4317,7 @@ class Exec extends Duplex {
       while (message = yield) {
         switch (message[0]) {
           case 1:
-            // writeUtf8 and write methods cannot be used concurrently
-            // terminal.term.writeUtf8(message.slice(1));
-            terminal.term.write(message.slice(1).toString());
+            terminal.term.write(message.slice(1));
             break;
           case 2:
           case 3:
@@ -4334,8 +4337,8 @@ class Exec extends Duplex {
       if (error
           && !error.endsWith('Error executing in Docker Container: 130')
           && !error.endsWith('exit status 130')) {
-        terminal.write('\x1b[31mDisconnected\x1b[m\r\n');
-        terminal.write('Type Ctrl-C to close\r\n');
+        terminal.writeln('\x1b[31mDisconnected\x1b[m');
+        terminal.writeln('Type Ctrl-C to close');
         terminal.on('key C-c', () => {
           // enables user to copy instead of closing
           if (!terminal.hasSelection()) {
@@ -4343,7 +4346,7 @@ class Exec extends Duplex {
           }
         });
       } else {
-        terminal.write('Disconnected\r\n');
+        terminal.writeln('Disconnected');
         dispose();
       }
       screen.render();
