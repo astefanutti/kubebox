@@ -5,7 +5,7 @@
   <link rel="stylesheet" href="libs/xterm.css" />
   <script src="libs/fontfaceobserver.js"></script>
   <script src="libs/xterm.js"></script>
-  <script src="libs/fit.js"></script>
+  <script src="libs/xterm-addon-fit.js"></script>
   <script src="kubebox.js"></script>
 
   <style>
@@ -126,22 +126,26 @@
       return this.cols;
     }
   });
-  Terminal.prototype.emit = function () {
-    this._core.emit.apply(this._core, arguments);
-  };
-  // removeListener -> off alias
-  Terminal.prototype.removeListener = function () {
-    this._core.off.apply(this._core, arguments);
-  };
-  // Should ideally be inherited from require('events').EventEmitter
-  Terminal.prototype.listenerCount = function (type) {
-    return this._core.listeners(type).length;
-  };
+
   // By-pass Xterm.js event queue as Blessed expect a single event to be sent
   // to the data handler. This actually happens on iOS with the mouseover and
   // mouseup events.
   Terminal.prototype.send = function (data) {
     this.handler(data);
+  }
+
+  // Bridge Blessed / Xterm.js event handling
+  var EventEmitter = require('events').EventEmitter;
+  Object.assign(Terminal.prototype, EventEmitter.prototype);
+  var _on = Terminal.prototype.on;
+  Terminal.prototype.on = function (event, handler) {
+    if (event === 'data') {
+      this.onData(handler);
+    } else if (event === 'resize') {
+      this.onResize(handler);
+    } else {
+      _on.call(this, event, handler);
+    }
   }
 
   // TODO: add a spinner while loading resources
@@ -158,7 +162,6 @@
       })
   ])
   .then(([ , , server]) => {
-    Terminal.applyAddon(fit);
     var term = new Terminal({
       fontFamily   : 'Hack Braille, Courier New, Courier, monospace',
       fontSize     : 13,
@@ -186,15 +189,17 @@
       },
       macOptionIsMeta : true,
     });
+    var fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
     // Required by blessed
     term.writable = true;
     term.isTTY = true;
     term.open(document.getElementById('terminal'));
     term.focus();
-    term.fit();
+    fitAddon.fit();
 
     window.onresize = function () {
-      term.fit();
+      fitAddon.fit();
     };
 
     var program = blessed.program({ input: term, output: term, tput: false });
