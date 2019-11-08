@@ -6,6 +6,7 @@
   <script src="libs/fontfaceobserver.js"></script>
   <script src="libs/xterm.js"></script>
   <script src="libs/xterm-addon-fit.js"></script>
+  <script src="libs/xterm-addon-webgl.js"></script>
   <script src="kubebox.js"></script>
 
   <style>
@@ -189,19 +190,23 @@
       },
       macOptionIsMeta : true,
     });
+
+    term.open(document.getElementById('terminal'));
+    // WebGL addon
+    term.loadAddon(new WebglAddon.WebglAddon());
+    // Fit addon
     var fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-    // Required by blessed
-    term.writable = true;
-    term.isTTY = true;
-    term.open(document.getElementById('terminal'));
-    term.focus();
     fitAddon.fit();
-
     window.onresize = function () {
       fitAddon.fit();
     };
 
+    term.focus();
+
+    // Required by blessed
+    term.writable = true;
+    term.isTTY = true;
     var program = blessed.program({ input: term, output: term, tput: false });
     var screen = blessed.screen({
       program       : program,
