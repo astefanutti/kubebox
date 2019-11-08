@@ -165,9 +165,10 @@
   ])
   .then(([ , , server]) => {
     var term = new Terminal({
-      fontFamily   : 'Hack Braille, Courier New, Courier, monospace',
-      fontSize     : 13,
-      rendererType : 'canvas',
+      fontFamily      : 'Hack Braille, Courier New, Courier, monospace',
+      fontSize        : 13,
+      rendererType    : 'canvas',
+      macOptionIsMeta : true,
       theme : {
         foreground    : '#d2d2d2',
         background    : '#2b2b2b',
@@ -189,7 +190,6 @@
         brightCyan    : '#37e6e8',
         brightWhite   : '#f1f1f0',
       },
-      macOptionIsMeta : true,
     });
 
     term.open(document.getElementById('terminal'));
@@ -219,6 +219,13 @@
       autoPadding   : true,
       warnings      : true,
     });
+    // Force SGR mouse encoding as Blessed defaults to UTF8 for Xterm, but UTF8 encoding
+    // has been removed from Xterm.js since version 4.2.0
+    program.setMouse({
+      sgrMouse   : true,
+      cellMotion : true,
+      allMotion  : true,
+    }, true);
 
     var kubebox = new Kubebox(screen, server ? Context.getBaseMasterApi(server) : null);
 
