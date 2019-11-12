@@ -13,7 +13,7 @@ spec:
   selector:
     name: kubebox
 ---
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: kubebox
@@ -29,10 +29,8 @@ spec:
         backend:
           serviceName: kubebox
           servicePort: 8080
-    # TO BE UPDATED IF NEEDED
-    # host:
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kubebox
@@ -70,7 +68,7 @@ subjects:
 - kind: ServiceAccount
   name: kubebox
   # TO BE UPDATED IF NEEDED
-  namespace: default
+  namespace: kubebox
 roleRef:
   kind: ClusterRole
   name: kubebox
