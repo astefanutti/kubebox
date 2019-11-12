@@ -194,7 +194,11 @@
 
     term.open(document.getElementById('terminal'));
     // WebGL addon
-    term.loadAddon(new WebglAddon.WebglAddon());
+    try {
+      term.loadAddon(new WebglAddon.WebglAddon());
+    } catch (e) {
+      console.log('Unable to activate the Xterm.js WebGL addon');
+    }
     // Fit addon
     var fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
