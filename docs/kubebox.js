@@ -76420,6 +76420,8 @@ class Context {
     }
     if (user.token) {
       api.headers.Authorization = `Bearer ${user.token}`;
+    } else if (user.username && user.password) {
+      api.headers.Authorization = `Basic ${Buffer.from(`${user.username}:${user.password}`).toString('base64')}`;
     }
     if (user.auth_provider) {
       api.auth_provider = user.auth_provider;
@@ -77430,6 +77432,7 @@ class Encode extends Transform {
 
 }).call(this,require("buffer").Buffer)
 },{"buffer":138,"crypto":162,"http":302,"https":139,"os":140,"stream":301,"urijs":"urijs"}],"kubebox":[function(require,module,exports){
+(function (Buffer){
 'use strict';
 
 // TODO: display uncaught exception in a popup
@@ -77665,6 +77668,8 @@ class Kubebox extends EventEmitter {
       }
       if (isNotEmpty(login.token) && isEmpty(login.password)) {
         client.headers['Authorization'] = `Bearer ${login.token}`;
+      } else if (isNotEmpty(login.username) && isNotEmpty(login.password)) {
+        client.headers['Authorization'] = `Basic ${Buffer.from(`${login.username}:${login.password}`).toString('base64')}`;
       } else {
         delete client.headers['Authorization'];
       }
@@ -77675,7 +77680,8 @@ class Kubebox extends EventEmitter {
 
 module.exports = Kubebox;
 
-},{"./client":4,"./config/config":6,"./error":10,"./promise":12,"./task":"task","./ui/blessed/patches":26,"./ui/debug":32,"./ui/ui":38,"./util":39,"blessed":"blessed","events":"events","os":140,"urijs":"urijs"}],"task":[function(require,module,exports){
+}).call(this,require("buffer").Buffer)
+},{"./client":4,"./config/config":6,"./error":10,"./promise":12,"./task":"task","./ui/blessed/patches":26,"./ui/debug":32,"./ui/ui":38,"./util":39,"blessed":"blessed","buffer":138,"events":"events","os":140,"urijs":"urijs"}],"task":[function(require,module,exports){
 'use strict';
 
 const global = [];

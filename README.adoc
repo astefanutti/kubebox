@@ -41,7 +41,7 @@ endif::[]
 
 * [x] Configuration from _kubeconfig_ files (`KUBECONFIG` environment variable or `$HOME/.kube`)
 * [x] Switch contexts interactively
-* [x] <<authentication,Authentication support>> (token, username / password, private key / cert, OpenID Connect, Amazon EKS, Google Kubernetes Engine, Digital Ocean)
+* [x] <<authentication,Authentication support>> (bearer token, basic auth, private key / cert, OAuth, OpenID Connect, Amazon EKS, Google Kubernetes Engine, Digital Ocean)
 * [x] Namespace selection and pods list watching
 * [x] Container log scrolling / watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
@@ -83,9 +83,7 @@ Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication
 To deploy the server in your Kubernetes cluster, run:
 
 ```sh
-# Make sure to replace the following fields:
-# - The ingress host
-# - The subject service account namespace
+# Make sure to replace the subject service account namespace
 $ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
