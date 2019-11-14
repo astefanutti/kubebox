@@ -247,8 +247,6 @@ const crypto              = require('crypto'),
       GoogleCloudPlatform = require('./auth/gcp'),
       URI                 = require('urijs');
 
-const { error } = require('./error');
-
 class ChainRequest {
 
   constructor(...requests) {
@@ -449,12 +447,6 @@ class Client {
   oauth_authorize({ username, password }) {
     return new ChainRequest(
       () => this.oauth_server_metadata(),
-      {
-        onRejected: err => {
-          return Promise.reject(err.response && [401, 403, 404].includes(err.response.statusCode)
-          ? error(`Authentication failed for ${this.url}, OAuth method unavailable!`)
-          : err)
-      }},
       response => {
         const metadata = JSON.parse(response.body.toString('utf8'));
         const { protocol, hostname, port, path } = URI.parse(metadata.authorization_endpoint);
@@ -479,12 +471,6 @@ class Client {
   oauth_authorize_web({ username, password }) {
     return new ChainRequest(
       () => this.oauth_server_metadata(),
-      {
-        onRejected: err => {
-          return Promise.reject(err.response && [401, 403, 404].includes(err.response.statusCode)
-          ? error(`Authentication failed for ${this.url}, OAuth method unavailable!`)
-          : err)
-      }},
       response => {
         const metadata = JSON.parse(response.body.toString('utf8'));
         const { protocol, hostname, port, path } = URI.parse(metadata.authorization_endpoint);
@@ -581,7 +567,7 @@ function mergeSingle(target, source) {
 
 module.exports = Client;
 
-},{"./auth/exec":1,"./auth/gcp":2,"./auth/oidc":3,"./error":10,"./http-then":"http-then","crypto":162,"urijs":"urijs"}],5:[function(require,module,exports){
+},{"./auth/exec":1,"./auth/gcp":2,"./auth/oidc":3,"./http-then":"http-then","crypto":162,"urijs":"urijs"}],5:[function(require,module,exports){
 'use strict';
 
 const URI = require('urijs');
@@ -77587,7 +77573,7 @@ class Kubebox extends EventEmitter {
                     .fail(s => status.setContent(`${s} Authenticating to {bold}${client.url}{/bold}`))
                   .then(user => log(`{green-fg}Authenticated as {bold}${user.metadata.name}{/bold}{/green-fg}`)
                     .then(() => connect(null, Object.assign({}, options, { user: user }))))
-                  .catch(error => error.response && error.response.statusCode === 401
+                  .catch(error => error.response && [401, 403, 404].includes(error.response.statusCode)
                     ? log(`{red-fg}Authentication failed for ${client.url}{/red-fg}`)
                         // throttle reauthentication
                         .then(wait(100))
