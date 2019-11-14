@@ -20,7 +20,6 @@ metadata:
   annotations:
     kubernetes.io/ingress.allow-http: "true"
     ingress.kubernetes.io/ssl-redirect: "false"
-    ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
   - http:
