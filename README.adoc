@@ -235,6 +235,17 @@ You may also have to provide the path of your cluster container runtime socket, 
 |kbd:[t]
 |Network usage
 
+2+^.e|Resources
+
+|kbd:[e]
+|Show events in current namespace
+
+|kbd:[Ctrl+e]
+|Show events in Cluster
+
+|kbd:[Ctrl+z]
+|Close Resource Tab
+
 2+^.e|Log
 
 |kbd:[g], kbd:[⇧+g]
