@@ -1,9 +1,15 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubebox
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: kubebox
   labels:
     template: kubebox
+  namespace: kubebox
 spec:
   ports:
     - name: kubebox
@@ -20,6 +26,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.allow-http: "true"
     ingress.kubernetes.io/ssl-redirect: "false"
+  namespace: kubebox
 spec:
   rules:
   - http:
@@ -33,6 +40,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kubebox
+  namespace: kubebox
 spec:
   strategy:
     type: Recreate
@@ -58,11 +66,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: kubebox
+  namespace: kubebox
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: kubebox
+  namespace: kubebox
 subjects:
 - kind: ServiceAccount
   name: kubebox
@@ -77,6 +87,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: kubebox
+  namespace: kubebox
 rules:
 - apiGroups:
   - '*'
