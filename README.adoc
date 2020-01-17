@@ -87,6 +87,13 @@ To deploy the server in your Kubernetes cluster, run:
 $ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
+This will create the namespace `kubebox` and bring up all components in there
+
+To shut down all components you can just delete that namespace:
+```bash
+kubectl delete namespace kubebox
+```
+
 For the Ingress resource to work, the cluster must have an Ingress controller running.
 See {uri-ingress-controllers}[Ingress controllers] for more information.
 
