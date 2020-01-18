@@ -87,7 +87,7 @@ To deploy the server in your Kubernetes cluster, run:
 $ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
-To shut down all components you can just delete that namespace:
+To shut down the server, run:
 ```bash
 kubectl delete namespace kubebox
 ```
