@@ -83,13 +83,12 @@ Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication
 To deploy the server in your Kubernetes cluster, run:
 
 ```sh
-# Make sure to replace the subject service account namespace
 $ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
-To shut down the server, run:
-```bash
-kubectl delete namespace kubebox
+To shut down the server and clean-up resources, run:
+```sh
+$ kubectl delete namespace kubebox
 ```
 
 For the Ingress resource to work, the cluster must have an Ingress controller running.

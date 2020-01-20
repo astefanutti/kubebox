@@ -76,7 +76,6 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: kubebox
-  # TO BE UPDATED IF NEEDED
   namespace: kubebox
 roleRef:
   kind: ClusterRole
