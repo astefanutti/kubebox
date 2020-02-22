@@ -194,6 +194,12 @@ If the mode you're using isn't supported, you can refresh the authentication tok
 |kbd:[q], kbd:[Ctrl+q]
 |Exit footnoteref:[online keys, Not available in Web versions.]
 
+|kbd:[o]
+|Navigate to the Logs element.
+
+|kbd:[p]
+|Navigate to the Logs element.
+
 2+^.e|Login
 
 |kbd:[◀], kbd:[▶]
