@@ -25,6 +25,7 @@ endif::[]
 :uri-service-account: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
 :uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 :uri-xterm-js: https://github.com/xtermjs/xterm.js
+:uri-cadvisor: https://github.com/google/cadvisor
 
 {description}
 
@@ -44,7 +45,7 @@ endif::[]
 * [x] <<authentication,Authentication support>> (bearer token, basic auth, private key / cert, OAuth, OpenID Connect, Amazon EKS, Google Kubernetes Engine, Digital Ocean)
 * [x] Namespace selection and pods list watching
 * [x] Container log scrolling / watching
-* [x] Container resources usage (memory, CPU, network charts) footnote:[Currently requires priviledged access / role.]
+* [x] Container resources usage (memory, CPU, network charts) footnote:[Requires {uri-cadvisor}[cAdvisor] to be deployed as a DaemonSet. See the <<cAdvisor>> section for more details.]
 * [x] Container remote exec terminal
 * [ ] Object configuration editor and CRUD operations
 * [ ] Cluster and nodes views / monitoring
@@ -83,7 +84,7 @@ Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication
 To deploy the server in your Kubernetes cluster, run:
 
 ```sh
-$ kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
+$ kubectl apply -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
 To shut down the server and clean-up resources, run:
@@ -127,7 +128,7 @@ $ docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox
 === Online
 
 Kubebox is available online at https://astefanutti.github.com/kubebox.
-Note that this requires this address to match the allowed origins for CORS by the API server.
+Note that it requires this address to match the allowed origins for CORS by the API server.
 This can be achived with the {uri-kube-apiserver}[Kubernetes API server CLI], e.g.:
 
 ```sh
@@ -165,6 +166,21 @@ We try to support the various authentication strategies supported by `kubectl`, 
 
 If the mode you're using isn't supported, you can refresh the authentication token/certs manually and update your _kubeconfig_ file accordingly.
 
+== cAdvisor
+
+Kubebox relies on {uri-cadvisor}[cAdvisor] to retrieve the resource usage metrics.
+Before version 0.8.0, Kubebox used to access the cAdvisor endpoints, that are embedded in the _Kubelet_. However, these endpoints are being deprecated, and will eventually be removed, as discussed in https://github.com/kubernetes/kubernetes/issues/68522[kubernetes#68522].
+
+Starting version 0.8.0, Kubebox expects cAdvisor to be deployed as a https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/[DaemonSet].
+This can be achieved with:
+
+```sh
+$ kubectl apply -f https://raw.github.com/astefanutti/kubebox/master/cadvisor.yaml
+```
+
+It's recommended to use the provided `cadvisor.yaml` file, that's tested to work with Kubebox.
+However, the DaemonSet example, from the {uri-cadvisor}[cAdvisor] project, should also work just fine.
+Note that the cAdvisor containers must run with a _privileged_ security context, so that they can access the container runtime on each node.
 
 == Hotkeys
 
@@ -230,13 +246,17 @@ If the mode you're using isn't supported, you can refresh the authentication tok
 
 * *_Resources usage metrics are unavailable!_*
 +
-** You may face issue https://github.com/kubernetes/kubernetes/issues/56297[#56297] that still affects Kubernetes versions from 1.8.0 to 1.11.x
+** Starting version 0.8.0, Kubebox expects {uri-cadvisor}[cAdvisor] to be deployed as a DaemonSet. See the <<cAdvisor>> section for more details;
 
-** The metrics are retrieved from the embedded cAdvisor `/stats` endpoints, that are accessed by creating a proxy on the node Kubelets, and which requires proper RBAC permission, e.g.:
+** The metrics are retrieved from the REST API, of the cAdvisor pod running on the same node as the container for which the metrics are being requested. That REST API is accessed via the API server proxy, which requires proper RBAC permission, e.g.:
 +
 [source,console]
 ----
-$ kubectl auth can-i get nodes/proxy
+# Permission to list the cAdvisor pods (selected using the `spec.nodeName` field selector)
+$ kubectl auth can-i list pods -n cadvisor
+yes
+# Permission to proxy the selected cAdvisor pod, to call its REST API
+$ kubectl auth can-i get pod --subresource proxy -n cadvisor
 yes
 ----
 
