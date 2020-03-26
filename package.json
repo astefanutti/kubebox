@@ -24,7 +24,7 @@
     "url": "https://github.com/astefanutti/kubebox.git"
   },
   "devDependencies": {
-    "browserify": "~16.2.3",
+    "browserify": "16.5.0",
     "exorcist": "^0.4.0",
     "nexe": "^3.3.2"
   },
