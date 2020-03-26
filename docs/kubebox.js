@@ -1899,14 +1899,16 @@ Line.prototype.setData = function (data) {
   function getMax(v, i) {
     return parseFloat(v);
   }
+
   //for some reason this loop does not properly get the maxY if there are multiple datasets (was doing 4 datasets that differred wildly)
   function getMaxY() {
     var max = 0;
     var setMax = [];
 
     for (var i = 0; i < data.length; i++) {
-      if (data[i].y.length)
+      if (data[i].y.length) {
         setMax[i] = arrayMax(data[i].y, getMax);
+      }
 
       for (var j = 0; j < data[i].y.length; j++) {
         if (data[i].y[j] > max) {
@@ -1917,7 +1919,7 @@ Line.prototype.setData = function (data) {
 
     var m = arrayMax(setMax, getMax);
     max = m * 1.2;
-    max *= 1.2
+    max *= 1.2;
     if (self.options.maxY) {
       return Math.max(max, self.options.maxY);
     }
@@ -1928,18 +1930,30 @@ Line.prototype.setData = function (data) {
   }
 
   function formatYLabel(value, max, min, numLabels, wholeNumbersOnly, abbreviate) {
-    var fixed = (max/numLabels<1 && value!=0 && !wholeNumbersOnly) ? 2 : 0;
+    var fixed = (max / numLabels < 1 && value != 0 && !wholeNumbersOnly) ? 2 : 0;
     var res = value.toFixed(fixed);
-    if (typeof abbreviate === 'function') {;
+    if (typeof abbreviate === 'function') {
       return abbreviate(res);
     } else {
       return res;
     }
   }
 
+  var yLabelIncrement = (getMaxY() - this.options.minY) / this.options.numYLabels;
+  if (this.options.wholeNumbersOnly) yLabelIncrement = Math.floor(yLabelIncrement);
+  //if (getMaxY()>=10) {
+  //  yLabelIncrement = yLabelIncrement + (10 - yLabelIncrement % 10);
+  //}
+  //yLabelIncrement = Math.max(yLabelIncrement, 1); // should not be zero
+  if (yLabelIncrement == 0) yLabelIncrement = 1;
+
   function getMaxXLabelPadding(numLabels, wholeNumbersOnly, abbreviate, min) {
-    var max = getMaxY();
-    return (formatYLabel(max, max, min, numLabels, wholeNumbersOnly, abbreviate).length + 1) * 2;
+    var maxY = getMaxY();
+    var maxLabel = 0;
+    for (var i = min; i < maxY; i += yLabelIncrement) {
+      maxLabel = Math.max(maxLabel, formatYLabel(i, maxY, min, numLabels, wholeNumbersOnly, abbreviate).length);
+    }
+    return 2 * (maxLabel + 1);
   }
 
   var maxPadding = getMaxXLabelPadding(this.options.numYLabels, this.options.wholeNumbersOnly, this.options.abbreviate, this.options.minY);
@@ -1970,7 +1984,7 @@ Line.prototype.setData = function (data) {
   }
 
   function getYPixel(val, minY) {
-    var res = self.canvasSize.height - yPadding - (((self.canvasSize.height - yPadding) / (getMaxY()-minY)) * (val-minY));
+    var res = self.canvasSize.height - yPadding - (((self.canvasSize.height - yPadding) / (getMaxY() - minY)) * (val - minY));
     res -= 2; //to separate the baseline and the data line to separate chars so canvas will show separate colors
     return res;
   }
@@ -1995,18 +2009,7 @@ Line.prototype.setData = function (data) {
   addLegend();
 
   c.fillStyle = this.options.style.text;
-
   c.clearRect(0, 0, this.canvasSize.width, this.canvasSize.height);
-
-  var yLabelIncrement = (getMaxY()-this.options.minY)/this.options.numYLabels;
-  if (this.options.wholeNumbersOnly) yLabelIncrement = Math.floor(yLabelIncrement);
-  //if (getMaxY()>=10) {
-  //  yLabelIncrement = yLabelIncrement + (10 - yLabelIncrement % 10);
-  //}
-
-  //yLabelIncrement = Math.max(yLabelIncrement, 1); // should not be zero
-
-  if (yLabelIncrement == 0) yLabelIncrement = 1;
 
   // Draw the Y value texts
   var maxY = getMaxY();
@@ -3447,7 +3450,7 @@ const blessed  = require('blessed'),
       task     = require('../task'),
       util     = require('../util');
 
-const { humanBytes, humanCores } = util;
+const { humanBytes, humanCores, humanNet } = util;
 
 const { error } = require('../error');
 const { pause } = require('../promise');
@@ -3564,7 +3567,7 @@ class Dashboard {
 
     const memory_graph = new chart(resources, { top: 1, abbreviate: humanBytes });
     const cpu_graph = new chart(resources, { top: 1, abbreviate: humanCores });
-    const net_graph = new chart(resources, { top: 1 });
+    const net_graph = new chart(resources, { top: 1, abbreviate: humanNet });
     const graphs = [memory_graph, cpu_graph, net_graph];
     graphs.slice(1).forEach(g => g.toggle());
 
@@ -5357,6 +5360,10 @@ module.exports.humanCores = function (cores) {
   return c < 1000 ? `${c} m` : `${c / 1000}`;
 }
 
+module.exports.humanNet = function (bytes) {
+  return `${module.exports.humanBytes(bytes, true)}/s`;
+}
+
 module.exports.isLocalStorageAvailable = function () {
   if (os.platform() !== 'browser') {
     return false;
@@ -5383,6 +5390,7 @@ module.exports.isLocalStorageAvailable = function () {
       storage.length !== 0;
   }
 }
+
 },{"os":235}],40:[function(require,module,exports){
 var asn1 = exports;
 
