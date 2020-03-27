@@ -182,6 +182,9 @@ It's recommended to use the provided `cadvisor.yaml` file, that's tested to work
 However, the DaemonSet example, from the {uri-cadvisor}[cAdvisor] project, should also work just fine.
 Note that the cAdvisor containers must run with a _privileged_ security context, so that they can access the container runtime on each node.
 
+You can change the default `--storage_duration` and `--housekeeping_interval` options, added to the cAdvisor container arguments declared in the `cadvisor.yaml` file, to adjust the duration of the storage moving window (default to `5m0s`), and the sampling period (default to `10s`) respectively.
+You may also have to provide the path of your cluster container runtime socket, in case it's not following the usual convention.
+
 == Hotkeys
 
 [cols="1v,2v"]
@@ -250,7 +253,7 @@ Note that the cAdvisor containers must run with a _privileged_ security context,
 
 ** The metrics are retrieved from the REST API, of the cAdvisor pod running on the same node as the container for which the metrics are being requested. That REST API is accessed via the API server proxy, which requires proper RBAC permission, e.g.:
 +
-[source,console]
+[source,shell]
 ----
 # Permission to list the cAdvisor pods (selected using the `spec.nodeName` field selector)
 $ kubectl auth can-i list pods -n cadvisor
