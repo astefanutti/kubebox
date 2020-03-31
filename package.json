@@ -9,6 +9,9 @@
   "bin": {
     "kubebox": "index.js"
   },
+  "engines": {
+    "node": ">=8"
+  },
   "scripts": {
     "start": "node index.js",
     "browserify": "browserify -r events:events -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r urijs -i clipboardy -u pty.js -u xterm -u term.js -o docs/kubebox.js",
