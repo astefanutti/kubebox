@@ -47,6 +47,7 @@ endif::[]
 * [x] Container log scrolling / watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Requires {uri-cadvisor}[cAdvisor] to be deployed as a DaemonSet. See the <<cAdvisor>> section for more details.]
 * [x] Container remote exec terminal
+* [x] Cluster/Namespace Events watching
 * [ ] Object configuration editor and CRUD operations
 * [ ] Cluster and nodes views / monitoring
 * [ ] Port proxying and interactive HTTP client
