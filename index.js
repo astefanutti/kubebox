@@ -17,6 +17,9 @@ const blessed       = require('blessed'),
 const screen = blessed.screen({
   ignoreLocked : ['C-q'],
   fullUnicode  : true,
+  dockBorders  : true,
+  autoPadding  : false,
+  // smartCSR     : true,
 });
 
 screen.key(['q', 'C-q'], (ch, key) => {
