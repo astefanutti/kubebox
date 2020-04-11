@@ -111,12 +111,15 @@
   </div>
 
   <script>
-  var blessed       = require('blessed');
+  var chalk = require('chalk');
+  // Force color mode in the Web browser for cli-highlight
+  chalk.level = 2;
+  var blessed = require('blessed');
   var cancellations = require('task');
-  var Context       = require('context');
-  var get           = require('http-then').get;
-  var Kubebox       = require('kubebox');
-  var URI           = require('urijs');
+  var Context = require('context');
+  var get = require('http-then').get;
+  var Kubebox = require('kubebox');
+  var URI = require('urijs');
 
   window.addEventListener('beforeunload', function (event) {
     cancellations.runAll();
