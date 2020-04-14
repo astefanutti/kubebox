@@ -18,25 +18,24 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
-:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.7.0
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.8.0
 :uri-kubebox-twitter: https://twitter.com/kubebox
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
 :uri-service-account: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
-:uri-terminal-forever: http://www.commitstrip.com/en/2016/12/22/terminal-forever/
 :uri-xterm-js: https://github.com/xtermjs/xterm.js
 :uri-cadvisor: https://github.com/google/cadvisor
 
 {description}
 
-//image::https://astefanutti.github.io/kubebox/kubebox.svg[align="center"]
-++++
-<p align="center">
-  <a href="https://astefanutti.github.io/kubebox/kubebox.svg">
-    <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.svg">
-  </a>
-</p>
-++++
+image::./docs/kubebox.png[kubebox, align="center"]
+// ++++
+// <p align="center">
+//   <a href="https://astefanutti.github.io/kubebox/kubebox.svg">
+//     <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.svg">
+//   </a>
+// </p>
+// ++++
 
 === Features
 
@@ -51,7 +50,7 @@ endif::[]
 * [ ] Object configuration editor and CRUD operations
 * [ ] Cluster and nodes views / monitoring
 
-Follow image:https://img.shields.io/badge/%40kubebox-00ACEE.svg?&logo=twitter&colorA=555&logoColor=fff[link={uri-kubebox-twitter}] for some updates.
+See the <<Screenshots>> section for some examples, and follow image:https://img.shields.io/badge/%40kubebox-00ACEE.svg?&logo=twitter&colorA=555&logoColor=fff[link={uri-kubebox-twitter}] for some updates.
 
 == Run
 
@@ -287,13 +286,25 @@ $ npm install
 $ node index.js
 ```
 
-== Terminal 🚀
+== Screenshots
 
-//image::https://astefanutti.github.io/kubebox/terminal-forever.jpg[align="center", link={uri-terminal-forever}]
 ++++
-<p align="center">
-  <a href="http://www.commitstrip.com/en/2016/12/22/terminal-forever/">
-    <img src="https://astefanutti.github.io/kubebox/terminal-forever.jpg">
-  </a>
-</p>
+<figure align="center">
+  <img src="./docs/events.png">
+  <figcaption>Cluster events</figcaption>
+</figure>
+++++
+
+++++
+<figure align="center">
+  <img src="./docs/exec.png">
+  <figcaption>Shell into containers</figcaption>
+</figure>
+++++
+
+++++
+<figure align="center">
+  <img src="./docs/theme.png">
+  <figcaption>Terminal theme support</figcaption>
+</figure>
 ++++
