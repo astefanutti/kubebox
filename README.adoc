@@ -47,10 +47,9 @@ endif::[]
 * [x] Container log scrolling / watching
 * [x] Container resources usage (memory, CPU, network charts) footnote:[Requires {uri-cadvisor}[cAdvisor] to be deployed as a DaemonSet. See the <<cAdvisor>> section for more details.]
 * [x] Container remote exec terminal
-* [x] Cluster/Namespace Events watching
+* [x] Cluster, namespace, pod events
 * [ ] Object configuration editor and CRUD operations
 * [ ] Cluster and nodes views / monitoring
-* [ ] Port proxying and interactive HTTP client
 
 Follow image:https://img.shields.io/badge/%40kubebox-00ACEE.svg?&logo=twitter&colorA=555&logoColor=fff[link={uri-kubebox-twitter}] for some updates.
 
@@ -197,12 +196,15 @@ You may also have to provide the path of your cluster container runtime socket, 
 |kbd:[l], kbd:[Ctrl+l]
 |Login
 
-|[kbd:[⇧]\+]kbd:[◀], kbd:[▶] +
+|kbd:[n]
+|Change current namespace
+
+|[kbd:[Shift]\+]kbd:[←], kbd:[→] +
 [kbd:[Alt]+]kbd:[1], ..., kbd:[9]
 |Navigate screens +
-(use kbd:[⇧] or kbd:[Alt] inside exec terminal)
+(use kbd:[Shift] or kbd:[Alt] inside exec terminal)
 
-|kbd:[▲], kbd:[▼]
+|kbd:[↑], kbd:[↓]
 |Navigate list / form / log
 
 |kbd:[Enter]
@@ -211,18 +213,21 @@ You may also have to provide the path of your cluster container runtime socket, 
 |kbd:[Esc]
 |Close modal window / cancel form / rewind focus
 
+|kbd:[Ctrl+z]
+|Close current tab
+
 |kbd:[q], kbd:[Ctrl+q]
 |Exit footnoteref:[online keys, Not available in Web versions.]
 
 2+^.e|Login
 
-|kbd:[◀], kbd:[▶]
+|kbd:[←], kbd:[→]
 |Navigate Kube configurations
 
-2+^.e|Namespace
+2+^.e|Pods
 
-|kbd:[n]
-|Change current namespace
+|kbd:[Enter]
+|Select pod / cycle containers
 
 |kbd:[r]
 |Remote shell into container
@@ -236,20 +241,18 @@ You may also have to provide the path of your cluster container runtime socket, 
 |kbd:[t]
 |Network usage
 
-2+^.e|Resources
-
 |kbd:[e]
-|Show events in current namespace
+|Open pod events tab
+
+|kbd:[Shift+e]
+|Open namespace events tab
 
 |kbd:[Ctrl+e]
-|Show events in Cluster
-
-|kbd:[Ctrl+z]
-|Close Resource Tab
+|Open cluster events tab
 
 2+^.e|Log
 
-|kbd:[g], kbd:[⇧+g]
+|kbd:[g], kbd:[Shift+g]
 |Move to top / bottom
 
 |kbd:[Ctrl+u], kbd:[Ctrl+d]
