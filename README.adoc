@@ -28,14 +28,14 @@ endif::[]
 
 {description}
 
-image::./docs/kubebox.png[kubebox, align="center"]
-// ++++
-// <p align="center">
-//   <a href="https://astefanutti.github.io/kubebox/kubebox.svg">
-//     <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.svg">
-//   </a>
-// </p>
-// ++++
+// image::./docs/kubebox.png[kubebox, align="center"]
+++++
+<p align="center">
+  <a href="https://astefanutti.github.io/kubebox/kubebox.png">
+    <img align="center" src="https://astefanutti.github.io/kubebox/kubebox.png">
+  </a>
+</p>
+++++
 
 === Features
 
@@ -288,23 +288,38 @@ $ node index.js
 
 == Screenshots
 
+Cluster events:
 ++++
-<figure align="center">
-  <img src="./docs/events.png">
-  <figcaption>Cluster events</figcaption>
-</figure>
-++++
-
-++++
-<figure align="center">
-  <img src="./docs/exec.png">
-  <figcaption>Shell into containers</figcaption>
-</figure>
+<p align="center">
+  <a href="https://astefanutti.github.io/kubebox/events.png">
+    <img align="center" src="https://astefanutti.github.io/kubebox/events.png">
+  </a>
+</p>
 ++++
 
+Shell into a container:
 ++++
-<figure align="center">
-  <img src="./docs/theme.png">
-  <figcaption>Terminal theme support</figcaption>
-</figure>
+<p align="center">
+  <a href="https://astefanutti.github.io/kubebox/exec.png">
+    <img align="center" src="https://astefanutti.github.io/kubebox/exec.png">
+  </a>
+</p>
+++++
+
+Terminal theme support:
+++++
+<p align="center">
+  <a href="https://astefanutti.github.io/kubebox/theme.png">
+    <img align="center" src="https://astefanutti.github.io/kubebox/theme.png">
+  </a>
+</p>
+++++
+
+Web browser version:
+++++
+<p align="center">
+  <a href="https://astefanutti.github.io/kubebox/web.png">
+    <img align="center" src="https://astefanutti.github.io/kubebox/web.png">
+  </a>
+</p>
 ++++
