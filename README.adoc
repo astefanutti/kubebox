@@ -44,7 +44,7 @@ endif::[]
 * [x] <<authentication,Authentication support>> (bearer token, basic auth, private key / cert, OAuth, OpenID Connect, Amazon EKS, Google Kubernetes Engine, Digital Ocean)
 * [x] Namespace selection and pods list watching
 * [x] Container log scrolling / watching
-* [x] Container resources usage (memory, CPU, network charts) footnote:[Requires {uri-cadvisor}[cAdvisor] to be deployed as a DaemonSet. See the <<cAdvisor>> section for more details.]
+* [x] Container resources usage (memory, CPU, network, file system charts) footnote:[Requires {uri-cadvisor}[cAdvisor] to be deployed as a DaemonSet. See the <<cAdvisor>> section for more details.]
 * [x] Container remote exec terminal
 * [x] Cluster, namespace, pod events
 * [ ] Object configuration editor and CRUD operations
@@ -239,6 +239,9 @@ You may also have to provide the path of your cluster container runtime socket, 
 
 |kbd:[t]
 |Network usage
+
+|kbd:[f]
+|File system usage
 
 |kbd:[e]
 |Open pod events tab
