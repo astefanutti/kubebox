@@ -22,8 +22,10 @@ metadata:
 spec:
   allowedHostPaths:
   - pathPrefix: /
+  - pathPrefix: /var/log
   - pathPrefix: /var/run
   - pathPrefix: /sys
+  - pathPrefix: /var/lib/containers
   - pathPrefix: /var/lib/docker
   - pathPrefix: /dev/disk
   fsGroup:
@@ -120,11 +122,17 @@ spec:
         - mountPath: /rootfs
           name: rootfs
           readOnly: true
+        - mountPath: /var/log
+          name: var-log
+          readOnly: true
         - mountPath: /var/run
           name: var-run
           readOnly: true
         - mountPath: /sys
           name: sys
+          readOnly: true
+        - mountPath: /var/lib/containers
+          name: containers
           readOnly: true
         - mountPath: /var/lib/docker
           name: docker
@@ -139,11 +147,17 @@ spec:
           path: /
         name: rootfs
       - hostPath:
+          path: /var/log
+        name: var-log
+      - hostPath:
           path: /var/run
         name: var-run
       - hostPath:
           path: /sys
         name: sys
+      - hostPath:
+          path: /var/lib/containers
+        name: containers
       - hostPath:
           path: /var/lib/docker
         name: docker
