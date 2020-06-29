@@ -21,15 +21,23 @@ metadata:
   name: cadvisor
 spec:
   allowedHostPaths:
-  - pathPrefix: /
-  - pathPrefix: /var/log
-  - pathPrefix: /var/run
-  - pathPrefix: /sys
-  - pathPrefix: /var/lib/containers
-  - pathPrefix: /var/lib/docker
   - pathPrefix: /dev/disk
+    readOnly: true
+  - pathPrefix: /
+    readOnly: true
+  - pathPrefix: /var/log
+    readOnly: true
+  - pathPrefix: /var/run
+    readOnly: true
+  - pathPrefix: /sys
+    readOnly: true
+  - pathPrefix: /var/lib/containers
+    readOnly: true
+  - pathPrefix: /var/lib/docker
+    readOnly: true
   fsGroup:
     rule: RunAsAny
+  privileged: true
   runAsUser:
     rule: RunAsAny
   seLinux:
@@ -37,7 +45,7 @@ spec:
   supplementalGroups:
     rule: RunAsAny
   volumes:
-  - '*'
+  - hostPath
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
