@@ -21,9 +21,9 @@ metadata:
   name: cadvisor
 spec:
   allowedHostPaths:
-  - pathPrefix: /dev/disk
-    readOnly: true
   - pathPrefix: /
+    readOnly: true
+  - pathPrefix: /dev/disk
     readOnly: true
   - pathPrefix: /var/log
     readOnly: true
@@ -34,6 +34,8 @@ spec:
   - pathPrefix: /var/lib/containers
     readOnly: true
   - pathPrefix: /var/lib/docker
+    readOnly: true
+  - pathPrefix: /run/containerd
     readOnly: true
   fsGroup:
     rule: RunAsAny
