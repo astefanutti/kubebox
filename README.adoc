@@ -203,14 +203,20 @@ You may also have to provide the path of your cluster container runtime socket, 
 |Navigate screens +
 (use kbd:[Shift] or kbd:[Alt] inside exec terminal)
 
+|kbd:[Tab], kbd:[Shift+Tab]
+|Change focus within the active tab
+
 |kbd:[↑], kbd:[↓]
 |Navigate list / form / log
+
+|kbd:[PgUp], kbd:[PgDn]
+|Move one page up / down
 
 |kbd:[Enter]
 |Select item / submit form
 
 |kbd:[Esc]
-|Close modal window / cancel form / rewind focus
+|Close modal window / cancel form
 
 |kbd:[Ctrl+z]
 |Close current tab
@@ -251,14 +257,6 @@ You may also have to provide the path of your cluster container runtime socket, 
 
 |kbd:[Ctrl+e]
 |Open cluster events tab
-
-2+^.e|Log
-
-|kbd:[g], kbd:[Shift+g]
-|Move to top / bottom
-
-|kbd:[Ctrl+u], kbd:[Ctrl+d]
-|Move one page up / down
 
 |===
 
