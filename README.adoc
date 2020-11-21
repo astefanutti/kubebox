@@ -18,7 +18,7 @@ ifndef::env-github[]
 :icon-edit: icon:pencil[fw]
 endif::[]
 // URIs
-:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.8.0
+:uri-kubebox-download: https://github.com/astefanutti/kubebox/releases/download/v0.9.0
 :uri-kubebox-twitter: https://twitter.com/kubebox
 :uri-kube-apiserver: https://kubernetes.io/docs/admin/kube-apiserver/
 :uri-ingress-controllers: https://kubernetes.io/docs/concepts/services-networking/ingress/#ingress-controllers
@@ -204,7 +204,7 @@ You may also have to provide the path of your cluster container runtime socket, 
 (use kbd:[Shift] or kbd:[Alt] inside exec terminal)
 
 |kbd:[Tab], kbd:[Shift+Tab]
-|Change focus within the active tab
+|Change focus within the active screen
 
 |kbd:[↑], kbd:[↓]
 |Navigate list / form / log
@@ -219,10 +219,10 @@ You may also have to provide the path of your cluster container runtime socket, 
 |Close modal window / cancel form
 
 |kbd:[Ctrl+z]
-|Close current tab
+|Close current screen
 
 |kbd:[q], kbd:[Ctrl+q]
-|Exit footnoteref:[online keys, Not available in Web versions.]
+|Exit footnote:[Not available in Web versions.]
 
 2+^.e|Login
 
@@ -250,13 +250,13 @@ You may also have to provide the path of your cluster container runtime socket, 
 |File system usage
 
 |kbd:[e]
-|Open pod events tab
+|Pod events
 
 |kbd:[Shift+e]
-|Open namespace events tab
+|Namespace events
 
 |kbd:[Ctrl+e]
-|Open cluster events tab
+|Cluster events
 
 |===
 
