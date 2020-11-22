@@ -7,8 +7,6 @@
 !/lib/
 !/lib/**/*
 
-# Logs
-*.log
+bundle.js
 
-# Sourcemap
 *.js.map

@@ -16,12 +16,11 @@
     "start": "node index.js",
     "browserify": "browserify -r events:events -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r chalk -r urijs -i clipboardy -u pty.js -u xterm -u term.js -o docs/kubebox.js",
     "browserify-debug": "browserify --debug -r events:events -r ./lib/config/context.js:context -r ./lib/http-then.js:http-then -r ./lib/kubebox.js:kubebox -r ./lib/task.js:task -r blessed -r chalk -r urijs -i clipboardy -u pty.js -u xterm -u term.js | exorcist docs/kubebox.js.map > docs/kubebox.js",
-    "bundle": "browserify index.js -o bundle.js -u pty.js -u term.js -u spawn-sync --node",
+    "bundle": "webpack",
     "executable-linux-x64": "npm run bundle && export CXXFLAGS=\"-O3 -ffunction-sections -fdata-sections\" && export LDFLAGS=\"-Wl,--gc-sections,--strip-all\" && cat bundle.js | nexe -b -c=--fully-static -c=--without-intl -c=--without-npm -c=--without-dtrace -c=--without-inspector -c=--without-etw -m=-j$(getconf _NPROCESSORS_ONLN) -t x64-12.16.2 -o kubebox --verbose",
     "executable-linux-arm": "export CXXFLAGS=\"-O3 -ffunction-sections -fdata-sections\" && export LDFLAGS=\"-Wl,-latomic,--gc-sections,--strip-all\" && cat bundle.js | nexe -b -c=--fully-static -c=--without-intl -c=--without-npm -c=--without-dtrace -c=--without-inspector -c=--without-etw --configure=--with-arm-float-abi=hard --configure=--with-arm-fpu=neon -m=-j$(getconf _NPROCESSORS_ONLN) -t arm-12.16.2 -o kubebox --verbose",
     "executable-macos": "npm run bundle && cat bundle.js | nexe -t macos-x64-12.16.2 -o kubebox",
-    "executable-windows": "npm run bundle && cat bundle.js | nexe -t win-12.16.2 -o kubebox",
-    "webpack": "webpack --display-modules"
+    "executable-windows": "npm run bundle && cat bundle.js | nexe -t win-12.16.2 -o kubebox"
   },
   "repository": {
     "type": "git",
@@ -30,7 +29,11 @@
   "devDependencies": {
     "browserify": "16.5.0",
     "exorcist": "^0.4.0",
-    "nexe": "4.0.0-beta.14"
+    "nexe": "4.0.0-beta.14",
+    "webpack": "5.4.0",
+    "webpack-cli": "4.2.0",
+    "string-replace-loader": "3.0.1",
+    "null-loader": "4.0.1"
   },
   "dependencies": {
     "blessed": "~0.1.81",

@@ -1,17 +1,14 @@
-FROM node:9.5.0-alpine as builder
-
-ENV NODE_ENV production
+FROM node:12.16.2-alpine3.11 as builder
 
 WORKDIR /kubebox
 
 COPY lib lib/
-COPY package.json package-lock.json index.js ./
+COPY package.json package-lock.json index.js webpack.config.js webpack.hjs.language.js ./
 
 RUN npm install
-RUN npm install -g browserify
 RUN npm run bundle
 
-FROM alpine:3.7
+FROM alpine:3.11
 
 ENV TERM xterm-256color
 ENV LANG C.UTF-8
