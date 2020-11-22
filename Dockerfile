@@ -11,7 +11,13 @@ RUN npm run bundle
 FROM alpine:3.11
 
 ENV TERM xterm-256color
+ENV TERMINFO=/lib/terminfo
 ENV LANG C.UTF-8
+
+# Blessed fails to parse Terminfo database from the ncurses-terminfo package,
+# and the ncurses-terminfo-base does not contain xterm-256color. So let's copy
+# from another distribution.
+COPY --from=node:12.16.2-stretch-slim /lib/terminfo /lib/terminfo
 
 # Node.js
 COPY --from=builder /usr/local/bin/node /usr/local/bin/
