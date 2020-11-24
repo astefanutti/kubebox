@@ -3,7 +3,7 @@ FROM node:12.16.2-alpine3.11 as builder
 WORKDIR /kubebox
 
 COPY lib lib/
-COPY package.json package-lock.json index.js webpack.config.js webpack.hjs.language.js ./
+COPY package.json package-lock.json index.js webpack.config.js webpack.hjs.language.js webpack.node.js ./
 
 RUN npm install
 RUN npm run bundle

@@ -4,6 +4,9 @@ const path = require('path');
 module.exports = {
     target: 'node',
     mode: 'production',
+    stats: {
+        logging: 'info',
+    },
     entry: "./index.js",
     output: {
         path: path.resolve(__dirname),
@@ -19,8 +22,15 @@ module.exports = {
         // Keep only YAML from highlight.js languages
         new webpack.NormalModuleReplacementPlugin(
             /languages\/[^y]/,
-            '/webpack.hjs.language.js',
+            require.resolve('./webpack.hjs.language.js'),
         ),
+        new webpack.NormalModuleReplacementPlugin(
+            /widgets\/node/,
+            require.resolve('./webpack.node.js'),
+        ),
+        new webpack.DefinePlugin({
+            WEBPACK: true,
+        }),
     ],
     module: {
         rules: [
@@ -29,13 +39,13 @@ module.exports = {
                 use: 'null-loader',
             },
             {
-                test: /\.(js)$/,
+                test: /index\.js$/,
                 loader: 'string-replace-loader',
                 options: {
                     search: '#!/usr/bin/env node',
                     replace: '',
                 }
             },
-        ]
-    }
+        ],
+    },
 };

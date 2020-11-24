@@ -5,3 +5,4 @@
 !package-lock.json
 !webpack.config.js
 !webpack.hjs.language.js
+!webpack.node.js

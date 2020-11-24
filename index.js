@@ -2,10 +2,35 @@
 
 'use strict';
 
-const terminal = process.env.TERM || (process.platform === 'win32' ? 'windows-ansi' : 'xterm');
+const { theme, TERM } = require('./lib/ui/theme');
 // theming, it has to be the first to hack into blessed Node module
-if (!['xterm-color', 'xterm-16color', 'xterm-256color'].includes(terminal)) {
-  require('./lib/ui/theme');
+if (!['xterm-color', 'xterm-16color', 'xterm-256color'].includes(TERM)) {
+  // skip Blessed Node constructor interception as it is done by Webpack
+  if (!WEBPACK) {
+    const Module = require('module');
+    const _require = Module.prototype.require;
+    Module.prototype.require = function (path) {
+      const module = _require.apply(this, arguments);
+      if (path === './node') {
+        const Node = function (options) {
+          theme(this, options);
+          return module.call(this, options);
+        }
+        Node.prototype = module.prototype;
+        return Node;
+      }
+      return module;
+    }
+  };
+  // override tags parsing
+  const blessed = require('blessed');
+  const _parseTags = blessed.Element.prototype._parseTags;
+  blessed.Element.prototype._parseTags = function (text) {
+    if (!this.parseTags) return text;
+    if (!/{\/?[\w\-,;!#]*}/.test(text)) return text;
+
+    return _parseTags.call(this, text.replace(/\{(\/)?grey-fg\}/g, '{$1white-fg}'));
+  }
 }
 
 const blessed       = require('blessed'),
@@ -19,7 +44,6 @@ const screen = blessed.screen({
   fullUnicode  : true,
   dockBorders  : true,
   autoPadding  : false,
-  // smartCSR     : true,
 });
 
 screen.key(['q', 'C-q'], (ch, key) => {
@@ -37,7 +61,7 @@ if (process.env.KUBERNETES_SERVICE_HOST && process.env.KUBERNETES_SERVICE_PORT) 
   server = Context.getBaseMasterApi(`https://${host}:${port}`);
   server.ca = ca;
   server.headers = {
-    Authorization : `Bearer ${token.toString('ascii')}`,
+    Authorization: `Bearer ${token.toString('ascii')}`,
   };
 }
 
