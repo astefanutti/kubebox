@@ -62,8 +62,10 @@ Download the Kubebox standalone executable for your OS:
 
 --
 [source,shell,subs=attributes+]
-# Linux
+# Linux (x86_64)
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
+# Linux (ARMv7)
+$ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux-arm && chmod +x kubebox
 # OSX
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
 # Windows
