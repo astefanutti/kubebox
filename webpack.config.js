@@ -19,13 +19,19 @@ module.exports = {
         new webpack.IgnorePlugin({
             resourceRegExp: /spawn-sync/,
         }),
+        // Ignore Moment locales
+        new webpack.IgnorePlugin({
+            resourceRegExp: /^\.\/locale$/,
+            contextRegExp: /moment$/,
+        }),
         // Keep only YAML from highlight.js languages
         new webpack.NormalModuleReplacementPlugin(
-            /languages\/[^y]/,
+            /highlight\.js\/lib\/languages\/[^y]/,
             require.resolve('./webpack.hjs.language.js'),
         ),
+        // Replace Node widget constructor for options theming
         new webpack.NormalModuleReplacementPlugin(
-            /widgets\/node/,
+            /blessed\/lib\/widgets\/node/,
             require.resolve('./webpack.node.js'),
         ),
         new webpack.DefinePlugin({
