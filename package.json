@@ -39,7 +39,7 @@
     "blessed": "~0.1.81",
     "bresenham": "0.0.4",
     "chalk": "3.0.0",
-    "cli-highlight": "2.1.4",
+    "cli-highlight": "2.1.9",
     "clipboardy": "~1.2.3",
     "gl-matrix": "2.1.0",
     "js-yaml": "3.13.1",
