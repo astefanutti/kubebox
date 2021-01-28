@@ -10,7 +10,7 @@
     "kubebox": "index.js"
   },
   "engines": {
-    "node": ">=8"
+    "node": ">=12.3.0"
   },
   "scripts": {
     "start": "node index.js",
