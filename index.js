@@ -6,7 +6,7 @@ const { theme, TERM } = require('./lib/ui/theme');
 // theming, it has to be the first to hack into blessed Node module
 if (!['xterm-color', 'xterm-16color', 'xterm-256color'].includes(TERM)) {
   // skip Blessed Node constructor interception as it is done by Webpack
-  if (!WEBPACK) {
+  if (typeof WEBPACK === 'undefined' || !WEBPACK) {
     const Module = require('module');
     const _require = Module.prototype.require;
     Module.prototype.require = function (path) {
