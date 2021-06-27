@@ -176,7 +176,7 @@ Starting version 0.8.0, Kubebox expects cAdvisor to be deployed as a https://kub
 This can be achieved with:
 
 ```sh
-$ kubectl apply -f https://raw.github.com/astefanutti/kubebox/master/cadvisor.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/astefanutti/kubebox/master/cadvisor.yaml
 ```
 
 It's recommended to use the provided `cadvisor.yaml` file, that's tested to work with Kubebox.
