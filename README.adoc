@@ -60,8 +60,8 @@ The following alternatives are available for you to use Kubebox, depending on yo
 
 Download the Kubebox standalone executable for your OS:
 
---
 [source,shell,subs=attributes+]
+----
 # Linux (x86_64)
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux && chmod +x kubebox
 # Linux (ARMv7)
@@ -70,9 +70,10 @@ $ curl -Lo kubebox {uri-kubebox-download}/kubebox-linux-arm && chmod +x kubebox
 $ curl -Lo kubebox {uri-kubebox-download}/kubebox-macos && chmod +x kubebox
 # Windows
 $ curl -Lo kubebox.exe {uri-kubebox-download}/kubebox-windows.exe
---
+----
 
 Then run:
+
 ```sh
 $ ./kubebox
 ```
@@ -84,12 +85,13 @@ Terminal emulation is provided by {uri-xterm-js}[Xterm.js] and the communication
 
 To deploy the server in your Kubernetes cluster, run:
 
-```sh
+```console
 $ kubectl apply -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
 ```
 
 To shut down the server and clean-up resources, run:
-```sh
+
+```console
 $ kubectl delete namespace kubebox
 ```
 
