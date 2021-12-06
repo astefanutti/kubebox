@@ -1,4 +1,5 @@
 const webpack = require('webpack');
+const CopyPlugin = require("copy-webpack-plugin");
 const path = require('path');
 
 module.exports = {
@@ -36,6 +37,11 @@ module.exports = {
         ),
         new webpack.DefinePlugin({
             WEBPACK: true,
+        }),
+        new CopyPlugin({
+            patterns: [
+                { from: "node_modules/blessed/usr/*", to: "usr/", flatten: true },
+            ],
         }),
     ],
     module: {
