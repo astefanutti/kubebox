@@ -10,8 +10,8 @@ module.exports = {
     },
     entry: "./index.js",
     output: {
-        path: path.resolve(__dirname),
-        filename: 'bundle.js',
+        path: path.resolve(__dirname, 'dist'),
+        filename: "js/bundle.js",
     },
     optimization: {
         minimize: false,
