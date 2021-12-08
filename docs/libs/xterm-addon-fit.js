@@ -26,6 +26,9 @@ var FitAddon = (function () {
             return undefined;
         }
         var core = this._terminal._core;
+        if (core._renderService.dimensions.actualCellWidth === 0 || core._renderService.dimensions.actualCellHeight === 0) {
+            return undefined;
+        }
         var parentElementStyle = window.getComputedStyle(this._terminal.element.parentElement);
         var parentElementHeight = parseInt(parentElementStyle.getPropertyValue('height'));
         var parentElementWidth = Math.max(0, parseInt(parentElementStyle.getPropertyValue('width')));
