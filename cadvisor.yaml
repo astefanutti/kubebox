@@ -40,7 +40,7 @@ spec:
         effect: NoSchedule
       automountServiceAccountToken: false
       containers:
-      - image: k8s.gcr.io/cadvisor:v0.36.0
+      - image: gcr.io/cadvisor/cadvisor:v0.47.0
         name: cadvisor
         args:
         - --storage_duration=5m0s
