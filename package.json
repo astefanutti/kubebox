@@ -31,7 +31,7 @@
     "exorcist": "^0.4.0",
     "copy-webpack-plugin": "^6.4.1",
     "nexe": "4.0.0-beta.14",
-    "webpack": "5.4.0",
+    "webpack": "5.76.0",
     "webpack-cli": "4.2.0",
     "string-replace-loader": "3.0.1",
     "null-loader": "4.0.1",
