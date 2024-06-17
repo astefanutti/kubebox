@@ -24,7 +24,7 @@ COPY --from=builder /usr/local/bin/node /usr/local/bin/
 COPY --from=builder /usr/lib/libgcc* /usr/lib/libstdc* /usr/lib/
 
 # Kubebox
-COPY --from=builder /kubebox/bundle.js /kubebox/client.js
+COPY --from=builder /kubebox/dist/js/bundle.js /kubebox/client.js
 
 RUN addgroup -g 1000 node && \
     adduser -u 1000 -G node -s /bin/sh -D node && \
