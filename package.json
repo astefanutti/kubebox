@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "browserify": "16.5.0",
-    "exorcist": "^0.4.0",
+    "exorcist": "^2.0.0",
     "copy-webpack-plugin": "^6.4.1",
     "nexe": "4.0.0-beta.14",
     "webpack": "5.4.0",
